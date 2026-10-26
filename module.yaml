@@ -1,0 +1,37 @@
+id: reviews
+version: 0.1.0
+api: 1
+critical: false
+requires:
+  - id: platform
+    api: 1
+  - id: catalog
+    api: 1
+  - id: moderation
+    api: 1
+optional:
+  - id: profiles
+    api: 1
+  - id: verification
+    api: 1
+  - id: identity
+    api: 1
+capabilities:
+  - reviews.read
+  - reviews.write
+capability_requires: {}
+scenario_tests:
+  ACAD-04:
+    - integration_test.go#TestAnonymousPreviewAndCurrentAccessCannotLeakIdentity
+  ACAD-05:
+    - integration_test.go#TestCourseTermEligibilityAndImmutableTeacherAttribution
+  ACAD-13:
+    - integration_test.go#TestConcurrentCreateReplayAndNewReviewsRemainAllowed
+  ACAD-19:
+    - integration_test.go#TestDiscussionIdentityVotingDraftConflictsAndModeration
+  ACAD-30:
+    - integration_test.go#TestWithdrawalWindowExpiryVotesAndPermanentDeletion
+  ACAD-32:
+    - integration_test.go#TestTeacherEqualCourseWeightsAndBandBoundaries
+  ACAD-34:
+    - integration_test.go#TestCourseTermEligibilityAndImmutableTeacherAttribution

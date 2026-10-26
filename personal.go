@@ -1,0 +1,250 @@
+package reviews
+
+import (
+	"context"
+	"errors"
+	"slices"
+	"strings"
+	"time"
+)
+
+func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in Input, revision int64) (Result, error) {
+	var out Result
+	if p.Subject == "" {
+		return out, ErrForbidden
+	}
+	if !validKey(key) || validate(in, true) != nil || revision < 0 {
+		return out, ErrInput
+	}
+	if id == "" {
+		id = hash([]string{p.Subject, "draft", key})
+	} else if !validID(id) {
+		return out, ErrInput
+	}
+	rk := hash([]string{p.Subject, "save_draft", id, key})
+	h := hash(struct {
+		Input    Input
+		Revision int64
+	}{in, revision})
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		if e := t.Lock("draft:" + id); e != nil {
+			return e
+		}
+		r, ok, e := replay(t, rk, h, s.now())
+		if e != nil {
+			return e
+		}
+		if ok {
+			out = r
+			return nil
+		}
+		old, e := t.Draft(id)
+		if e != nil && !errors.Is(e, ErrNotFound) {
+			return e
+		}
+		if e == nil && old.Owner != p.Subject {
+			return ErrNotFound
+		}
+		if old.Revision != revision {
+			return ErrConflict
+		}
+		v := Draft{ID: id, Revision: old.Revision + 1, Owner: p.Subject, Input: in, UpdatedAt: s.now()}
+		if e = t.SaveDraft(v); e != nil {
+			return e
+		}
+		out = Result{ID: id, State: "draft", Revision: v.Revision}
+		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
+	})
+	return out, err
+}
+func (s *Service) DeleteDraft(ctx context.Context, p Principal, id, key string, revision int64) (Result, error) {
+	var out Result
+	if p.Subject == "" {
+		return out, ErrForbidden
+	}
+	if !validID(id) || !validKey(key) {
+		return out, ErrInput
+	}
+	rk := hash([]string{p.Subject, "delete_draft", id, key})
+	h := hash(revision)
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		if e := t.Lock("draft:" + id); e != nil {
+			return e
+		}
+		r, ok, e := replay(t, rk, h, s.now())
+		if e != nil {
+			return e
+		}
+		if ok {
+			out = r
+			return nil
+		}
+		draft, e := t.Draft(id)
+		if e != nil {
+			return e
+		}
+		if draft.Owner != p.Subject {
+			return ErrNotFound
+		}
+		if draft.Revision != revision {
+			return ErrConflict
+		}
+		if e = t.DeleteDraft(id); e != nil {
+			return e
+		}
+		out = Result{ID: id, State: "deleted", Revision: revision + 1}
+		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
+	})
+	return out, err
+}
+func (s *Service) Drafts(ctx context.Context, p Principal, after string, limit int) ([]DraftView, error) {
+	if p.Subject == "" {
+		return nil, ErrForbidden
+	}
+	if limit < 1 || limit > 100 {
+		return nil, ErrInput
+	}
+	out := []DraftView{}
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		ordinary, e := t.Drafts(p.Subject, after, limit)
+		if e != nil {
+			return e
+		}
+		withdrawn, e := t.Withdrawals(p.Subject, after, limit)
+		if e != nil {
+			return e
+		}
+		for _, v := range ordinary {
+			out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input})
+		}
+		for _, v := range withdrawn {
+			if v.ExpiresAt != nil && s.now().Before(*v.ExpiresAt) {
+				out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input, ExpiresAt: v.ExpiresAt, Withdrawn: true})
+			}
+		}
+		return nil
+	})
+	slices.SortFunc(out, func(a, b DraftView) int { return strings.Compare(a.ID, b.ID) })
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, err
+}
+func (s *Service) SetBookmark(ctx context.Context, p Principal, target, key string, set bool) (Result, error) {
+	var out Result
+	if p.Subject == "" {
+		return out, ErrForbidden
+	}
+	if !validID(target) || !validKey(key) {
+		return out, ErrInput
+	}
+	obj, e := s.Catalog.Target(ctx, "course", target)
+	if e != nil {
+		return out, e
+	}
+	if _, e = s.authorize(ctx, p, "bookmark", obj.SchoolID); e != nil {
+		return out, e
+	}
+	rk := hash([]string{p.Subject, "bookmark", target, key})
+	h := hash(set)
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		if e := t.Lock(rk); e != nil {
+			return e
+		}
+		r, ok, e := replay(t, rk, h, s.now())
+		if e != nil {
+			return e
+		}
+		if ok {
+			out = r
+			return nil
+		}
+		if e = t.Bookmark(p.Subject, target, set); e != nil {
+			return e
+		}
+		out = Result{ID: target, State: "unmarked"}
+		if set {
+			out.State = "bookmarked"
+		}
+		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: target})
+	})
+	return out, err
+}
+func (s *Service) Bookmarks(ctx context.Context, p Principal, after string, limit int) ([]string, error) {
+	if p.Subject == "" {
+		return nil, ErrForbidden
+	}
+	if limit < 1 || limit > 100 {
+		return nil, ErrInput
+	}
+	var out []string
+	err := s.Repo.Transaction(ctx, func(t Transaction) error { var e error; out, e = t.Bookmarks(p.Subject, after, limit); return e })
+	return out, err
+}
+func (s *Service) MyVotes(ctx context.Context, p Principal, after string, limit int) ([]View, error) {
+	if p.Subject == "" {
+		return nil, ErrForbidden
+	}
+	if limit < 1 || limit > 100 {
+		return nil, ErrInput
+	}
+	out := []View{}
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		entries, e := t.Voted(p.Subject, after, limit)
+		if e != nil {
+			return e
+		}
+		for _, entry := range entries {
+			if _, e = s.accessible(t, entry.ID); errors.Is(e, ErrNotFound) {
+				continue
+			} else if e != nil {
+				return e
+			}
+			v, e := s.view(ctx, t, p, entry)
+			if e != nil {
+				return e
+			}
+			out = append(out, v)
+		}
+		return nil
+	})
+	return out, err
+}
+
+// Sweep is bounded and idempotent; read paths independently enforce expiry.
+func (s *Service) Sweep(ctx context.Context, limit int) (int, error) {
+	if limit < 1 || limit > 100 {
+		return 0, ErrInput
+	}
+	count := 0
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		entries, e := t.Expired(s.now(), limit)
+		if e != nil {
+			return e
+		}
+		for _, entry := range entries {
+			if e = t.Lock(entry.RootID); e != nil {
+				return e
+			}
+			current, e := t.Entry(entry.ID)
+			if errors.Is(e, ErrNotFound) {
+				continue
+			}
+			if e != nil {
+				return e
+			}
+			if current.ExpiresAt == nil || s.now().Before(*current.ExpiresAt) {
+				continue
+			}
+			if e = t.DeleteEntry(current); e != nil {
+				return e
+			}
+			if e = t.Event(Event{ID: hash([]string{"expire", entry.ID}), Type: "reviews.expired.v1", Subject: "entry/" + entry.ID, SchoolID: entry.SchoolID, Revision: entry.Revision + 1, At: s.now()}); e != nil {
+				return e
+			}
+			count++
+		}
+		return nil
+	})
+	return count, err
+}
