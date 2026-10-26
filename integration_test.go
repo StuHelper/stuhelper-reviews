@@ -421,9 +421,17 @@ func TestDiscussionIdentityVotingDraftConflictsAndModeration(t *testing.T) {
 			t.Fatal("vote state", got, e)
 		}
 	}
-	draft, e := f.service.SaveDraft(ctx, student, "", "draft", input("course", "autumn", 3), 0)
+	unfinished := r.Input{Kind: "course", TargetID: "course", Body: "Unfinished notes"}
+	draft, e := f.service.SaveDraft(ctx, student, "", "draft", unfinished, 0)
 	if e != nil {
 		t.Fatal(e)
+	}
+	stored, e := f.service.Drafts(ctx, student, "", 20)
+	if e != nil || len(stored) != 1 || stored[0].Input != unfinished {
+		t.Fatal("unfinished draft lost", stored, e)
+	}
+	if _, e = f.service.Create(ctx, student, "unfinished-publish", unfinished); !errors.Is(e, r.ErrInput) {
+		t.Fatal("unfinished draft bypassed publish validation", e)
 	}
 	if _, e = f.service.SaveDraft(ctx, student, draft.ID, "edit", input("course", "autumn", 4), draft.Revision); e != nil {
 		t.Fatal(e)

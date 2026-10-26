@@ -84,7 +84,7 @@ func validate(in Input, draft bool) error {
 		return ErrInput
 	}
 	if in.Kind == "course" {
-		if !validID(in.TermID) || in.TeacherID != "" && !validID(in.TeacherID) {
+		if (!draft || in.TermID != "") && !validID(in.TermID) || in.TeacherID != "" && !validID(in.TeacherID) {
 			return ErrInput
 		}
 		for _, v := range in.Ratings {
