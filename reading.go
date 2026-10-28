@@ -82,32 +82,59 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry) ([]V
 	out := make([]View, 0, len(entries))
 	access := map[string]error{}
 	profiles := map[string]Profile{}
+	presentations := map[string]Presentation{}
 	for _, entry := range entries {
+		labels, public := s.disclosed(ctx, entry)
+		if !public && p.Subject != entry.Owner {
+			continue
+		}
 		if entry.Projection == nil {
 			return nil, ErrUnavailable
 		}
-		v := View{State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
+		v := View{Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
 		v.CanEdit = v.Mine && entry.State == "published" && entry.FirstPublishedAt != nil && s.now().Before(entry.FirstPublishedAt.Add(s.Config.EditWindow))
 		err, ok := access[entry.SchoolID]
 		if !ok {
 			_, err = s.authorize(ctx, p, "read_full", entry.SchoolID)
 			access[entry.SchoolID] = err
 		}
+		if errors.Is(err, ErrForbidden) && p.Subject != "" {
+			course, term := entry.DisclosureCourse, entry.DisclosureTerm
+			if entry.Input.Kind == "course" {
+				course = entry.Input.TargetID
+				term = entry.Input.TermID
+			}
+			if course != "" {
+				facts, e := s.disclosureContext(ctx, p, entry.SchoolID, course, term, true)
+				if e == nil && facts.teacher && facts.ownCourse {
+					err = nil
+				}
+			}
+		}
 		if err != nil && !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrEnrollment) {
 			return nil, err
 		}
 		if err != nil {
 			v.Preview = true
-			limit := s.Config.MemberPreview
+			presentation, ok := presentations[entry.SchoolID]
+			if !ok {
+				settings, e := s.Presentation(ctx, entry.SchoolID)
+				if e != nil {
+					return nil, e
+				}
+				presentation = settings.Effective
+				presentations[entry.SchoolID] = presentation
+			}
+			limit := presentation.MemberPreview
 			if p.Subject == "" {
-				limit = s.Config.GuestPreview
+				limit = presentation.GuestPreview
 				v.Title = ""
 			}
-			v.Body = preview(entry.Input.Body, limit, s.Config.PreviewRatio)
+			v.Body = preview(entry.Input.Body, limit, presentation.PreviewRatio)
 		}
 		identity := entry.Projection.Identity
-		v.Author = Author{Anonymous: !identity.Signed, Handle: identity.Handle}
-		if identity.Signed {
+		v.Author = Author{Anonymous: !identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }), Handle: identity.Handle, Disclosures: labels}
+		if identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }) {
 			if s.Profiles == nil {
 				return nil, ErrUnavailable
 			}
@@ -174,6 +201,9 @@ func (s *Service) get(ctx context.Context, p Principal, id string, own bool) (Vi
 	if err != nil {
 		return View{}, err
 	}
+	if len(views) == 0 {
+		return View{}, ErrNotFound
+	}
 	return views[0], nil
 }
 func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error) {
@@ -188,6 +218,24 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 	}
 	if err := decodeCursor(&f); err != nil {
 		return out, err
+	}
+	if f.TargetID != "" {
+		kind := "course"
+		if f.Kind == "mentor" {
+			kind = "teacher"
+		}
+		var err error
+		f.EquivalentTargets, err = s.equivalentIDs(ctx, kind, f.TargetID)
+		if err != nil {
+			return out, err
+		}
+	}
+	if f.TeacherID != "" {
+		var err error
+		f.EquivalentTeachers, err = s.equivalentIDs(ctx, "teacher", f.TeacherID)
+		if err != nil {
+			return out, err
+		}
 	}
 	f.Viewer = p.Subject
 	f.Now = s.now()

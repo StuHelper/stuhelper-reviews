@@ -2,6 +2,7 @@ package postgres
 
 import (
 	reviews "github.com/StuHelper/stuhelper-reviews"
+	"strconv"
 	"time"
 )
 
@@ -21,6 +22,10 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
 	} else {
 		args = append(args, f.After)
 	}
+	targetIndex := strconv.Itoa(len(args) + 1)
+	args = append(args, f.EquivalentTargets)
+	teacherIndex := strconv.Itoa(len(args) + 1)
+	args = append(args, f.EquivalentTeachers)
 	q := `SELECT e.data,i.data,
  (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=1),
  (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=-1),
@@ -30,9 +35,9 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
  WHERE ((e.state='published' AND root.state='published') OR ($5<>'' AND e.owner=$5 AND e.state IN ('pending','hidden','deleted')))
  AND (e.id=e.root_id OR root.state='published')
  AND (e.expires_at IS NULL OR e.expires_at>$6) AND (root.expires_at IS NULL OR root.expires_at>$6)
- AND ($1='' OR e.kind=$1) AND ($2='' OR e.target_id=$2) AND ($3='' OR e.term_id=$3)
+ AND ($1='' OR e.kind=$1) AND ($2='' OR e.target_id=$2 OR e.target_id=ANY($` + targetIndex + `::text[])) AND ($3='' OR e.term_id=$3)
  AND ($4='' OR e.root_id=$4) AND ($5='' OR e.owner=$5)
- AND ($9='' OR (e.kind='course' AND (e.data->'teacher_ids') ? $9))
+ AND ($9='' OR (e.kind='course' AND ((e.data->'teacher_ids') ? $9 OR (e.data->'teacher_ids') ?| $` + teacherIndex + `::text[])))
  AND ` + cursor + ` ORDER BY ` + order + ` LIMIT $7`
 	return t.projected(q, args...)
 }

@@ -9,7 +9,7 @@ import (
 func adminView(e Entry) AdminEntry {
 	in := e.Input
 	in.Signed = e.Projection.Identity.Signed
-	return AdminEntry{ID: e.ID, RootID: e.RootID, SchoolID: e.SchoolID, Input: in, AuthorHandle: e.Projection.Identity.Handle, Anonymous: !in.Signed, State: e.State, Revision: e.Revision, CreatedAt: e.CreatedAt, PublishedAt: e.FirstPublishedAt}
+	return AdminEntry{ChangeOrigin: e.ChangeOrigin, ChangeReason: e.ChangeReason, Featured: e.Featured, ID: e.ID, RootID: e.RootID, SchoolID: e.SchoolID, Input: in, AuthorHandle: e.Projection.Identity.Handle, Anonymous: !in.Signed, State: e.State, Revision: e.Revision, CreatedAt: e.CreatedAt, PublishedAt: e.FirstPublishedAt}
 }
 func (s *Service) auditRead(t Transaction, p Principal, school, subject string, revision int64) error {
 	now := s.now()
@@ -79,6 +79,48 @@ func (s *Service) AdminList(ctx context.Context, p Principal, school, kind, stat
 			out.Items = append(out.Items, adminView(entry))
 		}
 		return s.auditRead(t, p, school, "school/"+school+"/entries/"+hash([]string{kind, state, after}), 0)
+	})
+	return out, err
+}
+
+func (s *Service) History(ctx context.Context, p Principal, id string, before int64, limit int) ([]AdminEntry, error) {
+	out := []AdminEntry{}
+	if before < 0 || limit < 1 || limit > 100 {
+		return out, ErrInput
+	}
+	current, err := s.AdminGet(ctx, p, id)
+	if err != nil {
+		return out, err
+	}
+	err = s.Repo.Transaction(ctx, func(t Transaction) error {
+		live, e := t.Entry(id)
+		if e != nil {
+			return e
+		}
+		if live.State == "withdrawn" || live.ExpiresAt != nil && !s.now().Before(*live.ExpiresAt) {
+			return ErrNotFound
+		}
+		if live.RootID != live.ID {
+			root, e := t.Entry(live.RootID)
+			if e != nil {
+				return e
+			}
+			if root.State == "withdrawn" || root.ExpiresAt != nil && !s.now().Before(*root.ExpiresAt) {
+				return ErrNotFound
+			}
+		}
+		entries, e := t.History(id, before, limit)
+		if e != nil {
+			return e
+		}
+		for _, entry := range entries {
+			entry, e = project(t, p, entry)
+			if e != nil {
+				return e
+			}
+			out = append(out, adminView(entry))
+		}
+		return s.auditRead(t, p, current.SchoolID, "history/"+id, current.Revision)
 	})
 	return out, err
 }

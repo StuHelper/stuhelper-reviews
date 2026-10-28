@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-func (t *transaction) Aggregates(kind, target string, from, until *time.Time) ([]reviews.Aggregate, error) {
+func (t *transaction) Aggregates(kind string, targets []string, from, until *time.Time) ([]reviews.Aggregate, error) {
 	rows, e := t.tx.QueryContext(t.ctx, `SELECT target_id,
  COALESCE(sum((data->'input'->'ratings'->>0)::integer),0),COALESCE(sum((data->'input'->'ratings'->>1)::integer),0),
  COALESCE(sum((data->'input'->'ratings'->>2)::integer),0),COALESCE(sum((data->'input'->'ratings'->>3)::integer),0),COALESCE(sum((data->'input'->'ratings'->>4)::integer),0),
  count(*) FILTER(WHERE (data->'input'->'ratings'->>0)::integer>0),count(*) FILTER(WHERE (data->'input'->'ratings'->>1)::integer>0),
  count(*) FILTER(WHERE (data->'input'->'ratings'->>2)::integer>0),count(*) FILTER(WHERE (data->'input'->'ratings'->>3)::integer>0),count(*) FILTER(WHERE (data->'input'->'ratings'->>4)::integer>0)
  FROM reviews.entries WHERE kind='course' AND state='published' AND (expires_at IS NULL OR expires_at>clock_timestamp())
- AND (($1='course' AND target_id=$2) OR ($1='teacher' AND data->'teacher_ids' ? $2))
+ AND (($1='course' AND target_id=ANY($2::text[])) OR ($1='teacher' AND data->'teacher_ids' ?| $2::text[]))
  AND ($3::timestamptz IS NULL OR first_published_at >= $3) AND ($4::timestamptz IS NULL OR first_published_at < $4)
- GROUP BY target_id ORDER BY target_id`, kind, target, from, until)
+ GROUP BY target_id ORDER BY target_id LIMIT 1001`, kind, targets, from, until)
 	if e != nil {
 		return nil, safe(e)
 	}
@@ -26,6 +26,9 @@ func (t *transaction) Aggregates(kind, target string, from, until *time.Time) ([
 			return nil, safe(e)
 		}
 		out = append(out, a)
+	}
+	if len(out) > 1000 {
+		return nil, reviews.ErrUnavailable
 	}
 	return out, safe(rows.Err())
 }

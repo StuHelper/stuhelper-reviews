@@ -19,7 +19,10 @@ var (
 )
 
 type Principal struct{ Subject string }
-type Target struct{ ID, SchoolID, Kind string }
+type Target struct {
+	ID, SchoolID, Kind string
+	Inactive           bool
+}
 type Evidence struct {
 	ID         string    `json:"id"`
 	TermID     string    `json:"term_id"`
@@ -47,12 +50,14 @@ type Requirement struct {
 	State string `json:"state"`
 }
 type Composer struct {
-	Allowed      bool          `json:"allowed"`
-	State        string        `json:"state"`
-	Requirements []Requirement `json:"requirements"`
-	TeacherIDs   []string      `json:"teacher_ids"`
-	Identity     string        `json:"identity"`
-	RuleVersion  string        `json:"rule_version"`
+	Disclosures  []DisclosureOption `json:"disclosures,omitempty"`
+	TeacherReply bool               `json:"teacher_reply,omitempty"`
+	Allowed      bool               `json:"allowed"`
+	State        string             `json:"state"`
+	Requirements []Requirement      `json:"requirements"`
+	TeacherIDs   []string           `json:"teacher_ids"`
+	Identity     string             `json:"identity"`
+	RuleVersion  string             `json:"rule_version"`
 }
 type PublishDraft struct {
 	Revision int64 `json:"revision"`
@@ -77,18 +82,25 @@ type Profiles interface {
 }
 
 type Input struct {
-	Kind      string `json:"kind"`
-	TargetID  string `json:"target_id"`
-	TermID    string `json:"term_id,omitempty"`
-	TeacherID string `json:"teacher_id,omitempty"`
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	Ratings   [5]int `json:"ratings"`
-	Signed    bool   `json:"signed"`
+	Disclosures []string `json:"disclosures,omitempty"`
+	Kind        string   `json:"kind"`
+	TargetID    string   `json:"target_id"`
+	TermID      string   `json:"term_id,omitempty"`
+	TeacherID   string   `json:"teacher_id,omitempty"`
+	Title       string   `json:"title"`
+	Body        string   `json:"body"`
+	Ratings     [5]int   `json:"ratings"`
+	Signed      bool     `json:"signed"`
 }
 
 // Entry is a private persistence model. Public responses always use View.
 type Entry struct {
+	ChangeReason     string      `json:"change_reason,omitempty"`
+	ChangeOrigin     string      `json:"change_origin,omitempty"`
+	Featured         bool        `json:"featured,omitempty"`
+	TeacherReply     bool        `json:"teacher_reply,omitempty"`
+	DisclosureCourse string      `json:"disclosure_course,omitempty"`
+	DisclosureTerm   string      `json:"disclosure_term,omitempty"`
 	ID               string      `json:"id"`
 	RootID           string      `json:"root_id"`
 	ParentID         string      `json:"parent_id,omitempty"`
@@ -116,11 +128,13 @@ type Identity struct {
 	Signed                  bool
 }
 type Author struct {
-	Anonymous bool     `json:"anonymous"`
-	Handle    string   `json:"handle"`
-	Profile   *Profile `json:"profile,omitempty"`
+	Disclosures []DisclosureOption `json:"disclosures,omitempty"`
+	Anonymous   bool               `json:"anonymous"`
+	Handle      string             `json:"handle"`
+	Profile     *Profile           `json:"profile,omitempty"`
 }
 type View struct {
+	Featured    bool       `json:"featured,omitempty"`
 	CanEdit     bool       `json:"can_edit"`
 	State       string     `json:"state"`
 	ID          string     `json:"id"`
@@ -172,6 +186,7 @@ type DraftView struct {
 	ParentID  string     `json:"parent_id,omitempty"`
 }
 type Filter struct {
+	EquivalentTargets, EquivalentTeachers                []string
 	Kind, TargetID, TermID, RootID, Owner, Viewer, After string
 	TeacherID, Sort, CursorID                            string
 	CursorTime                                           *time.Time
@@ -183,6 +198,9 @@ type Page struct {
 	Next  string `json:"next"`
 }
 type AdminEntry struct {
+	ChangeReason string     `json:"change_reason,omitempty"`
+	ChangeOrigin string     `json:"change_origin,omitempty"`
+	Featured     bool       `json:"featured,omitempty"`
 	ID           string     `json:"id"`
 	RootID       string     `json:"root_id"`
 	SchoolID     string     `json:"school_id"`
@@ -246,20 +264,25 @@ type Inspection struct {
 	Visible                   bool
 }
 type Decision struct {
-	ID           string  `json:"id"`
-	ObjectID     string  `json:"object_id"`
-	Revision     int64   `json:"revision"`
-	Action       string  `json:"action"`
-	Body         *string `json:"body,omitempty"`
-	Subject      string  `json:"subject,omitempty"`
-	AuthorHandle string  `json:"author_handle,omitempty"`
-	Signed       bool    `json:"signed"`
-	Reason       string  `json:"reason"`
+	TeacherID        string  `json:"teacher_id,omitempty"`
+	EvidenceRevision string  `json:"evidence_revision,omitempty"`
+	ID               string  `json:"id"`
+	ObjectID         string  `json:"object_id"`
+	Revision         int64   `json:"revision"`
+	Action           string  `json:"action"`
+	Body             *string `json:"body,omitempty"`
+	Subject          string  `json:"subject,omitempty"`
+	AuthorHandle     string  `json:"author_handle,omitempty"`
+	Signed           bool    `json:"signed"`
+	Reason           string  `json:"reason"`
 }
 type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
 }
 type Transaction interface {
+	History(string, int64, int) ([]Entry, error)
+	Presentation(string) (Presentation, error)
+	SavePresentation(Presentation) error
 	Lock(string) error
 	Entry(string) (Entry, error)
 	SaveEntry(Entry) error
@@ -282,7 +305,7 @@ type Transaction interface {
 	Withdrawals(subject, after string, limit int) ([]Entry, error)
 	Replay(string) (Replay, error)
 	SaveReplay(string, Replay) error
-	Aggregates(kind, target string, from, until *time.Time) ([]Aggregate, error)
+	Aggregates(kind string, targets []string, from, until *time.Time) ([]Aggregate, error)
 	Event(Event) error
 	AuditRead(Event) error
 	AdminEntries(school, kind, state, after string, limit int, now time.Time) ([]Entry, error)

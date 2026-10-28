@@ -25,13 +25,14 @@ func DefaultConfig() Config {
 }
 
 type Service struct {
-	Repo       Repository
-	Catalog    Catalog
-	Access     Access
-	Moderation Moderation
-	Profiles   Profiles
-	Config     Config
-	Clock      func() time.Time
+	Disclosures DisclosureProvider
+	Repo        Repository
+	Catalog     Catalog
+	Access      Access
+	Moderation  Moderation
+	Profiles    Profiles
+	Config      Config
+	Clock       func() time.Time
 }
 
 func New(repo Repository, catalog Catalog, access Access, moderation Moderation, profiles Profiles, c Config) (*Service, error) {
@@ -77,6 +78,9 @@ func textOK(v string, n int) bool {
 	return utf8.ValidString(v) && utf8.RuneCountInString(v) <= n && !strings.ContainsRune(v, 0)
 }
 func validate(in Input, draft bool) error {
+	if !validDisclosureKeys(in.Disclosures) {
+		return ErrInput
+	}
 	if !slices.Contains([]string{"course", "mentor", "reply"}, in.Kind) || !validID(in.TargetID) || !textOK(in.Title, 200) || !textOK(in.Body, 16000) {
 		return ErrInput
 	}
@@ -118,6 +122,9 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	if e != nil {
 		return target, nil, nil, Grant{}, e
 	}
+	if target.Inactive {
+		return target, nil, nil, Grant{}, ErrForbidden
+	}
 	g, e := s.authorize(ctx, p, action, target.SchoolID)
 	if e != nil {
 		return target, nil, nil, g, e
@@ -156,7 +163,11 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
 	if in.TeacherID != "" {
-		if !slices.Contains(ids, in.TeacherID) {
+		equivalent, err := s.equivalentIDs(ctx, "teacher", in.TeacherID)
+		if err != nil {
+			return target, nil, nil, g, err
+		}
+		if !slices.ContainsFunc(equivalent, func(id string) bool { return slices.Contains(ids, id) }) {
 			return target, nil, nil, g, ErrForbidden
 		}
 		ids = []string{in.TeacherID}
@@ -219,6 +230,14 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 	if err != nil {
 		return out, err
 	}
+	if _, err = s.validateDisclosures(ctx, p, target.SchoolID, func() string {
+		if in.Kind == "course" {
+			return in.TargetID
+		}
+		return ""
+	}(), in.TermID, in); err != nil {
+		return out, err
+	}
 	rk := hash([]string{p.Subject, "create", in.TargetID, key})
 	h := hash(in)
 	if draftID != "" {
@@ -226,7 +245,7 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 		h = hash(PublishDraft{Revision: draftRevision, Input: in})
 	}
 	now := s.now()
-	entry := Entry{ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
+	entry := Entry{ChangeOrigin: "author", ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
 	state, err := s.check(ctx, entry)
 	if err != nil {
 		return out, err
@@ -323,9 +342,37 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 	if !validID(parent) || !validKey(key) || in.Kind != "reply" || validate(in, false) != nil {
 		return out, ErrInput
 	}
+	if err := s.requirePublicDisclosure(ctx, parent); err != nil {
+		return out, err
+	}
+	var root Entry
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		base, e := s.accessible(t, parent)
+		if e != nil {
+			return e
+		}
+		root, e = s.accessible(t, base.RootID)
+		return e
+	})
+	if err != nil {
+		return out, err
+	}
+	course, term := "", ""
+	if root.Input.Kind == "course" {
+		course = root.Input.TargetID
+		term = root.Input.TermID
+	}
+	disclosure, err := s.validateDisclosures(ctx, p, root.SchoolID, course, term, in)
+	if err != nil {
+		return out, err
+	}
+	g, err := s.replyGrant(ctx, p, root, disclosure)
+	if err != nil {
+		return out, err
+	}
 	rk := hash([]string{p.Subject, "reply", parent, key})
 	h := hash(in)
-	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+	err = s.Repo.Transaction(ctx, func(t Transaction) error {
 		base, e := s.accessible(t, parent)
 		if e != nil {
 			return e
@@ -337,9 +384,12 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		if e != nil {
 			return e
 		}
-		g, e := s.authorize(ctx, p, "reply", base.SchoolID)
+		current, e := s.accessible(t, root.ID)
 		if e != nil {
 			return e
+		}
+		if current.Revision != root.Revision {
+			return ErrConflict
 		}
 		cached, ok, e := replay(t, rk, h, s.now())
 		if e != nil {
@@ -363,7 +413,7 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		}
 		in.Signed = identity.Signed
 		now := s.now()
-		entry := Entry{ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
+		entry := Entry{ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
 		state, e := s.check(ctx, entry)
 		if e != nil {
 			return e
@@ -394,6 +444,11 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	}
 	if !validID(id) || !validKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
 		return out, ErrInput
+	}
+	if in.Action == "vote" {
+		if err := s.requirePublicDisclosure(ctx, id); err != nil {
+			return out, err
+		}
 	}
 	if in.Action == "republish" && (in.Input == nil || validate(*in.Input, false) != nil) {
 		return out, ErrInput
@@ -463,7 +518,17 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			if next.Kind != entry.Input.Kind || next.TargetID != entry.Input.TargetID || next.TermID != entry.Input.TermID || next.TeacherID != entry.Input.TeacherID {
 				return ErrInput
 			}
+			course, term := entry.DisclosureCourse, entry.DisclosureTerm
+			if entry.Input.Kind == "course" {
+				course = entry.Input.TargetID
+				term = entry.Input.TermID
+			}
+			if _, err := s.validateDisclosures(ctx, p, entry.SchoolID, course, term, next); err != nil {
+				return err
+			}
 			next.Signed = entry.Input.Signed
+			entry.ChangeOrigin = "author"
+			entry.ChangeReason = ""
 			entry.Input = next
 			entry.Revision++
 			entry.UpdatedAt = s.now()
@@ -521,10 +586,23 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 			return err
 		}
 	}
+	course, term := e.DisclosureCourse, e.DisclosureTerm
+	if e.Input.Kind == "course" {
+		course = e.Input.TargetID
+		term = e.Input.TermID
+	}
+	disclosure, checkErr := s.validateDisclosures(ctx, p, e.SchoolID, course, term, in)
+	if checkErr != nil {
+		return checkErr
+	}
 	var g Grant
 	if e.Input.Kind == "reply" {
 		var err error
-		g, err = s.authorize(ctx, p, "reply", e.SchoolID)
+		g, err = s.replyGrant(ctx, p, e, disclosure)
+		if e.TeacherReply && !disclosure.ownCourse {
+			return ErrForbidden
+		}
+		e.TeacherReply = disclosure.ownCourse
 		if err != nil {
 			return err
 		}
@@ -540,6 +618,8 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 		return err
 	}
 	in.Signed = identity.Signed
+	e.ChangeOrigin = "author"
+	e.ChangeReason = ""
 	e.Input = in
 	e.Revision++
 	e.UpdatedAt = s.now()
@@ -599,47 +679,53 @@ func (s *Service) StatsPage(ctx context.Context, kind, target string, from, unti
 	if !slices.Contains([]string{"course", "teacher"}, kind) || !validID(target) || from != nil && until != nil && !from.Before(*until) {
 		return out, ErrInput
 	}
-	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		rows, e := t.Aggregates(kind, target, from, until)
-		if e != nil {
-			return e
-		}
-		var sums [5]float64
-		var samples, courses [5]int
-		for _, row := range rows {
-			if row.CourseID > after && len(out.Courses) <= limit {
-				item := CourseStatistic{CourseID: row.CourseID}
-				for i := range 5 {
-					item.Dimensions[i].Samples = row.Counts[i]
-					if row.Counts[i] > 0 {
-						item.Dimensions[i].Courses = 1
-					}
-					if row.Counts[i] >= s.Config.MinSamples && row.Counts[i] > 0 {
-						item.Dimensions[i].Level = int(math.Floor(row.Sums[i]/float64(row.Counts[i]) + 0.5))
-					}
-				}
-				out.Courses = append(out.Courses, item)
-			}
+	ids, err := s.equivalentIDs(ctx, kind, target)
+	if err != nil {
+		return out, err
+	}
+	var rows []Aggregate
+	err = s.Repo.Transaction(ctx, func(t Transaction) error { var e error; rows, e = t.Aggregates(kind, ids, from, until); return e })
+	if err != nil {
+		return out, err
+	}
+	rows, err = s.canonicalAggregates(ctx, rows)
+	if err != nil {
+		return out, err
+	}
+	var sums [5]float64
+	var samples, courses [5]int
+	for _, row := range rows {
+		if row.CourseID > after && len(out.Courses) <= limit {
+			item := CourseStatistic{CourseID: row.CourseID}
 			for i := range 5 {
+				item.Dimensions[i].Samples = row.Counts[i]
 				if row.Counts[i] > 0 {
-					sums[i] += row.Sums[i] / float64(row.Counts[i])
-					samples[i] += row.Counts[i]
-					courses[i]++
+					item.Dimensions[i].Courses = 1
+				}
+				if row.Counts[i] >= s.Config.MinSamples && row.Counts[i] > 0 {
+					item.Dimensions[i].Level = int(math.Floor(row.Sums[i]/float64(row.Counts[i]) + 0.5))
 				}
 			}
-		}
-		if len(out.Courses) > limit {
-			out.Next = out.Courses[limit-1].CourseID
-			out.Courses = out.Courses[:limit]
+			out.Courses = append(out.Courses, item)
 		}
 		for i := range 5 {
-			out.Dimensions[i].Samples = samples[i]
-			out.Dimensions[i].Courses = courses[i]
-			if samples[i] >= s.Config.MinSamples && courses[i] > 0 {
-				out.Dimensions[i].Level = int(math.Floor(sums[i]/float64(courses[i]) + 0.5))
+			if row.Counts[i] > 0 {
+				sums[i] += row.Sums[i] / float64(row.Counts[i])
+				samples[i] += row.Counts[i]
+				courses[i]++
 			}
 		}
-		return nil
-	})
-	return out, err
+	}
+	if len(out.Courses) > limit {
+		out.Next = out.Courses[limit-1].CourseID
+		out.Courses = out.Courses[:limit]
+	}
+	for i := range 5 {
+		out.Dimensions[i].Samples = samples[i]
+		out.Dimensions[i].Courses = courses[i]
+		if samples[i] >= s.Config.MinSamples && courses[i] > 0 {
+			out.Dimensions[i].Level = int(math.Floor(sums[i]/float64(courses[i]) + 0.5))
+		}
+	}
+	return out, nil
 }

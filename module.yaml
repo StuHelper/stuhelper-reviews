@@ -1,5 +1,5 @@
 id: reviews
-version: 0.1.0
+version: 0.2.0
 api: 1
 critical: false
 requires:
@@ -40,8 +40,26 @@ scenario_tests:
     - community_test.go#TestDraftPublicationIsAtomicAndRecoverable
     - community_test.go#TestChronologicalPaginationTeacherFilterAndPrivateDetails
   ACAD-21:
+    - management_test.go#TestWithdrawnContentCannotExposeEarlierBodiesThroughHistory
     - community_test.go#TestPrivateReplyListRespectsWithdrawnRoot
   ACAD-23:
     - administration_test.go#TestModerationReadIsScopedAuditedAndUsesDiscussionHandles
   ACAD-31:
     - community_test.go#TestWithdrawnDraftSaveKeepsExpiryAndAttribution
+  ACAD-35:
+    - disclosures_test.go#TestVoluntaryDisclosuresRequireFreshAuthorizedFacts
+  ACAD-36:
+    - disclosures_test.go#TestVoluntaryDisclosuresRequireFreshAuthorizedFacts
+    - disclosures_test.go#TestTeacherReplyRequiresRealNameAcrossTermsAndAllowsIndependentTagsElsewhere
+  ACAD-37:
+    - disclosures_test.go#TestTeacherReplyRequiresRealNameAcrossTermsAndAllowsIndependentTagsElsewhere
+  ACAD-38:
+    - disclosures_test.go#TestTeacherReplyRequiresRealNameAcrossTermsAndAllowsIndependentTagsElsewhere
+  ACAD-39:
+    - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
+  ACAD-40:
+    - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
+  CM-09:
+    - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
+  CM-14:
+    - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned

@@ -34,3 +34,7 @@ ALTER TABLE reviews.outbox ADD COLUMN IF NOT EXISTS blocked boolean NOT NULL DEF
 CREATE INDEX IF NOT EXISTS reviews_outbox_ready ON reviews.outbox(next_attempt,id) WHERE NOT delivered AND NOT blocked;
 REVOKE ALL ON SCHEMA reviews FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA reviews FROM PUBLIC;
+
+CREATE TABLE IF NOT EXISTS reviews.presentations(school_id text PRIMARY KEY,data jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS reviews.presentation_history(school_id text NOT NULL,revision bigint NOT NULL,data jsonb NOT NULL,PRIMARY KEY(school_id,revision));
+REVOKE ALL ON TABLE reviews.presentations,reviews.presentation_history FROM PUBLIC;

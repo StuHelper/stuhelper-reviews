@@ -22,6 +22,7 @@ type Handler struct {
 
 func (h Handler) Routes() http.Handler {
 	m := http.NewServeMux()
+	h.managementRoutes(m)
 	m.HandleFunc("GET /api/v1/reviews", h.list)
 	m.HandleFunc("POST /api/v1/reviews", h.create)
 	m.HandleFunc("GET /api/v1/reviews/{id}", h.get)

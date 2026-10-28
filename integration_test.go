@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -38,7 +39,7 @@ func (c *catalog) Evidence(_ context.Context, p r.Principal, course, term string
 	if term == "spring" {
 		teachers = []string{"teacher-a", "teacher-c"}
 	}
-	return []r.Evidence{{ID: "enrollment-" + term, TermID: term, TeacherIDs: teachers, SourceID: "approved", Revision: 2, FetchedAt: time.Now()}}, nil
+	return []r.Evidence{{ID: "enrollment-" + term, TermID: term, TeacherIDs: teachers, SourceID: "approved", Revision: 2, FetchedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}, nil
 }
 
 type access struct{ revoked, failed, optional bool }
@@ -48,7 +49,7 @@ func (a *access) Authorize(_ context.Context, p r.Principal, action, school stri
 	if a.failed {
 		return g, r.ErrUnavailable
 	}
-	if action == "moderate" {
+	if action == "moderate" || action == "configure" {
 		if p.Subject != "admin" || school != "school" {
 			return g, r.ErrForbidden
 		}
@@ -104,6 +105,7 @@ func fixture(t *testing.T) *fixtureState {
 	}
 	f := &fixtureState{s, c, a, m, time.Now().UTC()}
 	s.Clock = func() time.Time { return f.now }
+	s.Disclosures = ordinaryDisclosures{}
 	return f
 }
 
@@ -427,7 +429,7 @@ func TestDiscussionIdentityVotingDraftConflictsAndModeration(t *testing.T) {
 		t.Fatal(e)
 	}
 	stored, e := f.service.Drafts(ctx, student, "", 20)
-	if e != nil || len(stored) != 1 || stored[0].Input != unfinished {
+	if e != nil || len(stored) != 1 || !reflect.DeepEqual(stored[0].Input, unfinished) {
 		t.Fatal("unfinished draft lost", stored, e)
 	}
 	if _, e = f.service.Create(ctx, student, "unfinished-publish", unfinished); !errors.Is(e, r.ErrInput) {

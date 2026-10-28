@@ -16,6 +16,21 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if !validKey(key) || in.Kind == "reply" || validate(in, true) != nil || revision < 0 {
 		return out, ErrInput
 	}
+	if len(in.Disclosures) > 0 {
+		kind := "course"
+		course := in.TargetID
+		if in.Kind == "mentor" {
+			kind = "teacher"
+			course = ""
+		}
+		target, err := s.Catalog.Target(ctx, kind, in.TargetID)
+		if err != nil {
+			return out, err
+		}
+		if _, err = s.validateDisclosures(ctx, p, target.SchoolID, course, in.TermID, in); err != nil {
+			return out, err
+		}
+	}
 	if id == "" {
 		id = hash([]string{p.Subject, "draft", key})
 	} else if !validID(id) {

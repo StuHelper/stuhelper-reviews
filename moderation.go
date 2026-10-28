@@ -14,8 +14,20 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(d.ID) || !validID(d.ObjectID) || d.Revision < 1 || !textOK(d.Reason, 2000) || strings.TrimSpace(d.Reason) == "" || !slices.Contains([]string{"publish", "hide", "restore", "delete", "edit", "identity"}, d.Action) {
+	if !validID(d.ID) || !validID(d.ObjectID) || d.Revision < 1 || !textOK(d.Reason, 2000) || strings.TrimSpace(d.Reason) == "" || !slices.Contains([]string{"publish", "hide", "restore", "delete", "edit", "identity", "feature", "unfeature", "reassign"}, d.Action) {
 		return out, ErrInput
+	}
+	var attribution AttributionPreview
+	var evidence []Evidence
+	if d.Action == "reassign" {
+		var err error
+		attribution, evidence, err = s.attribution(ctx, p, d.ObjectID, d.TeacherID)
+		if err != nil {
+			return out, err
+		}
+		if d.EvidenceRevision != attribution.EvidenceRevision {
+			return out, ErrConflict
+		}
 	}
 	rk := hash([]string{"moderation", d.ID})
 	h := hash(d)
@@ -49,6 +61,19 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			return ErrNotFound
 		}
 		switch d.Action {
+		case "feature", "unfeature":
+			if entry.State != "published" {
+				return ErrConflict
+			}
+			entry.Featured = d.Action == "feature"
+		case "reassign":
+			if entry.Input.Kind != "course" || entry.State == "withdrawn" {
+				return ErrConflict
+			}
+			entry.Input.TeacherID = d.TeacherID
+			entry.TeacherIDs = attribution.TeacherIDs
+			entry.Evidence = evidence
+
 		case "publish":
 			if entry.State != "pending" {
 				return ErrConflict
@@ -109,6 +134,8 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 				return e
 			}
 		}
+		entry.ChangeOrigin = "moderator"
+		entry.ChangeReason = d.Reason
 		entry.Revision++
 		entry.UpdatedAt = s.now()
 		if e = t.SaveEntry(entry); e != nil {

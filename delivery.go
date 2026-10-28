@@ -13,28 +13,35 @@ func (s *Service) Inspect(ctx context.Context, p Principal, id string) (Inspecti
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
+	var entry Entry
+	var rootVisible bool
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		entry, e := t.Entry(id)
+		var e error
+		entry, e = t.Entry(id)
 		if e != nil {
 			return e
 		}
-		isVisible := visible(entry, s.now())
+		rootVisible = true
 		if entry.RootID != entry.ID {
 			root, e := t.Entry(entry.RootID)
 			if e != nil {
 				return e
 			}
-			isVisible = isVisible && visible(root, s.now())
+			rootVisible = visible(root, s.now())
 		}
-		if !isVisible && entry.Owner != p.Subject {
-			if _, e = s.authorize(ctx, p, "moderate", entry.SchoolID); e != nil {
-				return ErrNotFound
-			}
-		}
-		out = Inspection{entry.ID, entry.Input.Kind, entry.SchoolID, entry.Owner, entry.Revision, isVisible}
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	_, disclosed := s.disclosed(ctx, entry)
+	isVisible := visible(entry, s.now()) && rootVisible && disclosed
+	if !isVisible && entry.Owner != p.Subject {
+		if _, err = s.authorize(ctx, p, "moderate", entry.SchoolID); err != nil {
+			return out, ErrNotFound
+		}
+	}
+	return Inspection{entry.ID, entry.Input.Kind, entry.SchoolID, entry.Owner, entry.Revision, isVisible}, nil
 }
 
 // Handoff sends current pending/review-marked revisions to moderation, using the durable outbox ID.
