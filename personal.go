@@ -13,7 +13,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validKey(key) || validate(in, true) != nil || revision < 0 {
+	if !validKey(key) || in.Kind == "reply" || validate(in, true) != nil || revision < 0 {
 		return out, ErrInput
 	}
 	if id == "" {
@@ -54,6 +54,43 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 		}
 		out = Result{ID: id, State: "draft", Revision: v.Revision}
 		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
+	})
+	return out, err
+}
+func (s *Service) GetDraft(ctx context.Context, p Principal, id string) (DraftView, error) {
+	var out DraftView
+	if p.Subject == "" {
+		return out, ErrForbidden
+	}
+	if !validID(id) {
+		return out, ErrInput
+	}
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		draft, err := t.Draft(id)
+		if err == nil {
+			if draft.Owner != p.Subject {
+				return ErrNotFound
+			}
+			out = DraftView{ID: draft.ID, Revision: draft.Revision, Input: draft.Input}
+			return nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		entry, err := t.Entry(id)
+		if err != nil {
+			return err
+		}
+		if entry.Owner != p.Subject || entry.State != "withdrawn" || entry.ExpiresAt == nil || !s.now().Before(*entry.ExpiresAt) {
+			return ErrNotFound
+		}
+		identity, err := t.Identity(entry.RootID, p.Subject)
+		if err != nil {
+			return err
+		}
+		entry.Input.Signed = identity.Signed
+		out = DraftView{ID: entry.ID, Revision: entry.Revision, Input: entry.Input, ExpiresAt: entry.ExpiresAt, Withdrawn: true, RootID: entry.RootID, ParentID: entry.ParentID}
+		return nil
 	})
 	return out, err
 }
@@ -188,27 +225,30 @@ func (s *Service) MyVotes(ctx context.Context, p Principal, after string, limit 
 	if limit < 1 || limit > 100 {
 		return nil, ErrInput
 	}
-	out := []View{}
+	entries := []Entry{}
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		entries, e := t.Voted(p.Subject, after, limit)
+		rows, e := t.Voted(p.Subject, after, limit, s.now())
 		if e != nil {
 			return e
 		}
-		for _, entry := range entries {
+		for _, entry := range rows {
 			if _, e = s.accessible(t, entry.ID); errors.Is(e, ErrNotFound) {
 				continue
 			} else if e != nil {
 				return e
 			}
-			v, e := s.view(ctx, t, p, entry)
+			v, e := project(t, p, entry)
 			if e != nil {
 				return e
 			}
-			out = append(out, v)
+			entries = append(entries, v)
 		}
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return nil, err
+	}
+	return s.render(ctx, p, entries)
 }
 
 // Sweep is bounded and idempotent; read paths independently enforce expiry.

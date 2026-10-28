@@ -40,6 +40,23 @@ type Catalog interface {
 type Grant struct {
 	RuleVersion        string
 	EnrollmentRequired bool
+	Requirements       []Requirement
+}
+type Requirement struct {
+	Key   string `json:"key"`
+	State string `json:"state"`
+}
+type Composer struct {
+	Allowed      bool          `json:"allowed"`
+	State        string        `json:"state"`
+	Requirements []Requirement `json:"requirements"`
+	TeacherIDs   []string      `json:"teacher_ids"`
+	Identity     string        `json:"identity"`
+	RuleVersion  string        `json:"rule_version"`
+}
+type PublishDraft struct {
+	Revision int64 `json:"revision"`
+	Input    Input `json:"input"`
 }
 type Access interface {
 	Authorize(context.Context, Principal, string, string) (Grant, error)
@@ -151,14 +168,35 @@ type DraftView struct {
 	Input     Input      `json:"input"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	Withdrawn bool       `json:"withdrawn"`
+	RootID    string     `json:"root_id,omitempty"`
+	ParentID  string     `json:"parent_id,omitempty"`
 }
 type Filter struct {
 	Kind, TargetID, TermID, RootID, Owner, Viewer, After string
+	TeacherID, Sort, CursorID                            string
+	CursorTime                                           *time.Time
+	Now                                                  time.Time
 	Limit                                                int
 }
 type Page struct {
 	Items []View `json:"items"`
 	Next  string `json:"next"`
+}
+type AdminEntry struct {
+	ID           string     `json:"id"`
+	RootID       string     `json:"root_id"`
+	SchoolID     string     `json:"school_id"`
+	Input        Input      `json:"input"`
+	AuthorHandle string     `json:"author_handle"`
+	Anonymous    bool       `json:"anonymous"`
+	State        string     `json:"state"`
+	Revision     int64      `json:"revision"`
+	CreatedAt    time.Time  `json:"created_at"`
+	PublishedAt  *time.Time `json:"published_at"`
+}
+type AdminPage struct {
+	Items []AdminEntry `json:"items"`
+	Next  string       `json:"next"`
 }
 type Band struct {
 	Level   int `json:"level"`
@@ -208,14 +246,15 @@ type Inspection struct {
 	Visible                   bool
 }
 type Decision struct {
-	ID       string  `json:"id"`
-	ObjectID string  `json:"object_id"`
-	Revision int64   `json:"revision"`
-	Action   string  `json:"action"`
-	Body     *string `json:"body,omitempty"`
-	Subject  string  `json:"subject,omitempty"`
-	Signed   bool    `json:"signed"`
-	Reason   string  `json:"reason"`
+	ID           string  `json:"id"`
+	ObjectID     string  `json:"object_id"`
+	Revision     int64   `json:"revision"`
+	Action       string  `json:"action"`
+	Body         *string `json:"body,omitempty"`
+	Subject      string  `json:"subject,omitempty"`
+	AuthorHandle string  `json:"author_handle,omitempty"`
+	Signed       bool    `json:"signed"`
+	Reason       string  `json:"reason"`
 }
 type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
@@ -228,11 +267,12 @@ type Transaction interface {
 	List(Filter) ([]Entry, error)
 	Expired(time.Time, int) ([]Entry, error)
 	Identity(root, subject string) (Identity, error)
+	IdentityByHandle(root, handle string) (Identity, error)
 	SaveIdentity(Identity) error
 	Vote(id, subject string) (int, error)
 	SetVote(id, subject string, value int) error
 	VoteCounts(id string) (int, int, error)
-	Voted(subject, after string, limit int) ([]Entry, error)
+	Voted(subject, after string, limit int, now time.Time) ([]Entry, error)
 	Bookmark(subject, target string, set bool) error
 	Bookmarks(subject, after string, limit int) ([]string, error)
 	Draft(string) (Draft, error)
@@ -244,6 +284,8 @@ type Transaction interface {
 	SaveReplay(string, Replay) error
 	Aggregates(kind, target string, from, until *time.Time) ([]Aggregate, error)
 	Event(Event) error
+	AuditRead(Event) error
+	AdminEntries(school, kind, state, after string, limit int, now time.Time) ([]Entry, error)
 	Events(time.Time, int) ([]DeliveryEvent, error)
 	CompleteEvent(string) error
 	FailEvent(string, int, time.Time, time.Time, bool) error

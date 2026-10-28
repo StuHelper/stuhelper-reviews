@@ -88,10 +88,16 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			}
 			entry.Input.Body = *d.Body
 		case "identity":
-			if d.Subject == "" {
+			if (d.Subject == "" && d.AuthorHandle == "") || (d.Subject != "" && d.AuthorHandle != "") {
 				return ErrInput
 			}
-			identity, e := t.Identity(entry.RootID, d.Subject)
+			var identity Identity
+			var e error
+			if d.AuthorHandle != "" {
+				identity, e = t.IdentityByHandle(entry.RootID, d.AuthorHandle)
+			} else {
+				identity, e = t.Identity(entry.RootID, d.Subject)
+			}
 			if errors.Is(e, ErrNotFound) {
 				return ErrNotFound
 			}

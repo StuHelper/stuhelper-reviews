@@ -140,7 +140,11 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 		return target, nil, nil, g, ErrUnavailable
 	}
 	if g.EnrollmentRequired && len(evidence) == 0 {
+		g.Requirements = append(g.Requirements, Requirement{"course_enrollment", "missing"})
 		return target, nil, nil, g, ErrEnrollment
+	}
+	if g.EnrollmentRequired {
+		g.Requirements = append(g.Requirements, Requirement{"course_enrollment", "satisfied"})
 	}
 	ids := []string{}
 	for _, v := range evidence {
@@ -195,6 +199,15 @@ func (s *Service) record(t Transaction, key, digest, action string, p Principal,
 	return t.SaveReplay(key, Replay{Digest: digest, Result: result(e), Until: s.now().Add(24 * time.Hour), ObjectID: e.ID})
 }
 func (s *Service) Create(ctx context.Context, p Principal, key string, in Input) (Result, error) {
+	return s.create(ctx, p, key, in, "", 0)
+}
+func (s *Service) PublishDraft(ctx context.Context, p Principal, id, key string, in PublishDraft) (Result, error) {
+	if !validID(id) || in.Revision < 1 {
+		return Result{}, ErrInput
+	}
+	return s.create(ctx, p, key, in.Input, id, in.Revision)
+}
+func (s *Service) create(ctx context.Context, p Principal, key string, in Input, draftID string, draftRevision int64) (Result, error) {
 	var out Result
 	if p.Subject == "" {
 		return out, ErrForbidden
@@ -208,8 +221,30 @@ func (s *Service) Create(ctx context.Context, p Principal, key string, in Input)
 	}
 	rk := hash([]string{p.Subject, "create", in.TargetID, key})
 	h := hash(in)
+	if draftID != "" {
+		rk = hash([]string{p.Subject, "publish_draft", draftID, key})
+		h = hash(PublishDraft{Revision: draftRevision, Input: in})
+	}
 	now := s.now()
+	entry := Entry{ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
+	state, err := s.check(ctx, entry)
+	if err != nil {
+		return out, err
+	}
+	entry.ReviewRequested = state == "review" || state == "pending"
+	if state == "review" {
+		state = "published"
+	}
+	entry.State = state
+	if state == "published" {
+		entry.FirstPublishedAt = &now
+	}
 	err = s.Repo.Transaction(ctx, func(t Transaction) error {
+		if draftID != "" {
+			if e := t.Lock("draft:" + draftID); e != nil {
+				return e
+			}
+		}
 		if e := t.Lock(rk); e != nil {
 			return e
 		}
@@ -221,23 +256,28 @@ func (s *Service) Create(ctx context.Context, p Principal, key string, in Input)
 			out = cached
 			return nil
 		}
+		if draftID != "" {
+			draft, e := t.Draft(draftID)
+			if e != nil {
+				return e
+			}
+			if draft.Owner != p.Subject {
+				return ErrNotFound
+			}
+			if draft.Revision != draftRevision {
+				return ErrConflict
+			}
+			if draft.Input.Kind != in.Kind || draft.Input.TargetID != in.TargetID {
+				return ErrInput
+			}
+			if e = t.DeleteDraft(draftID); e != nil {
+				return e
+			}
+		}
 		if _, e = t.Entry(rk); e == nil {
 			return ErrConflict
 		} else if !errors.Is(e, ErrNotFound) {
 			return e
-		}
-		entry := Entry{ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
-		state, e := s.check(ctx, entry)
-		if e != nil {
-			return e
-		}
-		entry.ReviewRequested = state == "review" || state == "pending"
-		if state == "review" {
-			state = "published"
-		}
-		entry.State = state
-		if state == "published" {
-			entry.FirstPublishedAt = &now
 		}
 		if e = t.SaveEntry(entry); e != nil {
 			return e
@@ -352,10 +392,13 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(id) || !validKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "vote"}, in.Action) {
+	if !validID(id) || !validKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
 		return out, ErrInput
 	}
 	if in.Action == "republish" && (in.Input == nil || validate(*in.Input, false) != nil) {
+		return out, ErrInput
+	}
+	if in.Action == "save_withdrawn" && (in.Input == nil || validate(*in.Input, true) != nil) {
 		return out, ErrInput
 	}
 	if in.Action == "vote" && (in.Vote < -1 || in.Vote > 1) {
@@ -411,6 +454,27 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 		}
 		if in.Revision != entry.Revision {
 			return ErrConflict
+		}
+		if in.Action == "save_withdrawn" {
+			if entry.State != "withdrawn" {
+				return ErrConflict
+			}
+			next := *in.Input
+			if next.Kind != entry.Input.Kind || next.TargetID != entry.Input.TargetID || next.TermID != entry.Input.TermID || next.TeacherID != entry.Input.TeacherID {
+				return ErrInput
+			}
+			next.Signed = entry.Input.Signed
+			entry.Input = next
+			entry.Revision++
+			entry.UpdatedAt = s.now()
+			if e = t.SaveEntry(entry); e != nil {
+				return e
+			}
+			if e = s.record(t, rk, h, "draft_saved", p, entry); e != nil {
+				return e
+			}
+			out = result(entry)
+			return nil
 		}
 		if in.Action == "republish" {
 			if entry.State != "withdrawn" {
@@ -506,60 +570,6 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 	*out = result(e)
 	return nil
 }
-func (s *Service) view(ctx context.Context, t Transaction, p Principal, e Entry) (View, error) {
-	v := View{State: e.State, ID: e.ID, RootID: e.RootID, ParentID: e.ParentID, Kind: e.Input.Kind, SchoolID: e.SchoolID, TargetID: e.Input.TargetID, TermID: e.Input.TermID, TeacherID: e.Input.TeacherID, Title: e.Input.Title, Body: e.Input.Body, Ratings: e.Input.Ratings, Revision: e.Revision, PublishedAt: e.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == e.Owner}
-	v.CanEdit = v.Mine && e.State == "published" && e.FirstPublishedAt != nil && s.now().Before(e.FirstPublishedAt.Add(s.Config.EditWindow))
-	_, err := s.authorize(ctx, p, "read_full", e.SchoolID)
-	if err != nil && !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrEnrollment) {
-		return View{}, err
-	}
-	if err != nil {
-		v.Preview = true
-		limit := s.Config.MemberPreview
-		if p.Subject == "" {
-			limit = s.Config.GuestPreview
-			v.Title = ""
-		}
-		v.Body = preview(e.Input.Body, limit, s.Config.PreviewRatio)
-	}
-	var identity Identity
-	if e.Projection != nil {
-		identity = e.Projection.Identity
-	} else {
-		identity, err = t.Identity(e.RootID, e.Owner)
-		if err != nil {
-			return View{}, err
-		}
-	}
-	v.Author = Author{Anonymous: !identity.Signed, Handle: identity.Handle}
-	if identity.Signed {
-		if s.Profiles == nil {
-			return View{}, ErrUnavailable
-		}
-		profile, err := s.Profiles.Lookup(ctx, e.Owner)
-		if err != nil {
-			return View{}, err
-		}
-		v.Author.Profile = &profile
-	}
-	if e.Projection != nil {
-		v.Upvotes = e.Projection.Upvotes
-		v.Downvotes = e.Projection.Downvotes
-		v.MyVote = e.Projection.MyVote
-	} else {
-		v.Upvotes, v.Downvotes, err = t.VoteCounts(e.ID)
-		if err != nil {
-			return View{}, err
-		}
-		if p.Subject != "" {
-			v.MyVote, err = t.Vote(e.ID, p.Subject)
-			if err != nil && !errors.Is(err, ErrNotFound) {
-				return View{}, err
-			}
-		}
-	}
-	return v, nil
-}
 func preview(body string, max int, ratio float64) string {
 	line := ""
 	for _, v := range strings.Split(body, "\n") {
@@ -577,49 +587,6 @@ func preview(body string, max int, ratio float64) string {
 		r = r[:n]
 	}
 	return string(r)
-}
-func (s *Service) Get(ctx context.Context, p Principal, id string) (View, error) {
-	var out View
-	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		e, err := s.accessible(t, id)
-		if err != nil {
-			return err
-		}
-		out, err = s.view(ctx, t, p, e)
-		return err
-	})
-	return out, err
-}
-func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error) {
-	out := Page{Items: []View{}}
-	if f.Limit < 1 || f.Limit > 100 || f.Owner != "" && f.Owner != p.Subject {
-		return out, ErrInput
-	}
-	f.Viewer = p.Subject
-	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		if f.RootID != "" {
-			if _, e := s.accessible(t, f.RootID); e != nil {
-				return e
-			}
-		}
-		entries, e := t.List(f)
-		if e != nil {
-			return e
-		}
-		if len(entries) > f.Limit {
-			out.Next = entries[f.Limit-1].ID
-			entries = entries[:f.Limit]
-		}
-		for _, entry := range entries {
-			v, e := s.view(ctx, t, p, entry)
-			if e != nil {
-				return e
-			}
-			out.Items = append(out.Items, v)
-		}
-		return nil
-	})
-	return out, err
 }
 func (s *Service) Stats(ctx context.Context, kind, target string, from, until *time.Time) (Statistics, error) {
 	return s.StatsPage(ctx, kind, target, from, until, "", 20)

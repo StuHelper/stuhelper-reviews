@@ -19,10 +19,11 @@ import (
 
 // Defines values for ActionAction.
 const (
-	Delete    ActionAction = "delete"
-	Republish ActionAction = "republish"
-	Vote      ActionAction = "vote"
-	Withdraw  ActionAction = "withdraw"
+	Delete        ActionAction = "delete"
+	Republish     ActionAction = "republish"
+	SaveWithdrawn ActionAction = "save_withdrawn"
+	Vote          ActionAction = "vote"
+	Withdraw      ActionAction = "withdraw"
 )
 
 // Valid indicates whether the value is a known member of the ActionAction enum.
@@ -32,9 +33,62 @@ func (e ActionAction) Valid() bool {
 		return true
 	case Republish:
 		return true
+	case SaveWithdrawn:
+		return true
 	case Vote:
 		return true
 	case Withdraw:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ComposerIdentity.
+const (
+	Anonymous ComposerIdentity = "anonymous"
+	Choice    ComposerIdentity = "choice"
+	Signed    ComposerIdentity = "signed"
+)
+
+// Valid indicates whether the value is a known member of the ComposerIdentity enum.
+func (e ComposerIdentity) Valid() bool {
+	switch e {
+	case Anonymous:
+		return true
+	case Choice:
+		return true
+	case Signed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ComposerState.
+const (
+	ComposerStateChooseTerm         ComposerState = "choose_term"
+	ComposerStateEnrollmentRequired ComposerState = "enrollment_required"
+	ComposerStateForbidden          ComposerState = "forbidden"
+	ComposerStateReady              ComposerState = "ready"
+	ComposerStateUnauthenticated    ComposerState = "unauthenticated"
+	ComposerStateUnavailable        ComposerState = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the ComposerState enum.
+func (e ComposerState) Valid() bool {
+	switch e {
+	case ComposerStateChooseTerm:
+		return true
+	case ComposerStateEnrollmentRequired:
+		return true
+	case ComposerStateForbidden:
+		return true
+	case ComposerStateReady:
+		return true
+	case ComposerStateUnauthenticated:
+		return true
+	case ComposerStateUnavailable:
 		return true
 	default:
 		return false
@@ -62,6 +116,96 @@ func (e InputKind) Valid() bool {
 	}
 }
 
+// Defines values for RequirementKey.
+const (
+	CampusEligibility RequirementKey = "campus_eligibility"
+	CourseEnrollment  RequirementKey = "course_enrollment"
+	IdentityVerified  RequirementKey = "identity_verified"
+	Login             RequirementKey = "login"
+	PhoneBound        RequirementKey = "phone_bound"
+)
+
+// Valid indicates whether the value is a known member of the RequirementKey enum.
+func (e RequirementKey) Valid() bool {
+	switch e {
+	case CampusEligibility:
+		return true
+	case CourseEnrollment:
+		return true
+	case IdentityVerified:
+		return true
+	case Login:
+		return true
+	case PhoneBound:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RequirementState.
+const (
+	RequirementStateMissing     RequirementState = "missing"
+	RequirementStateSatisfied   RequirementState = "satisfied"
+	RequirementStateUnavailable RequirementState = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the RequirementState enum.
+func (e RequirementState) Valid() bool {
+	switch e {
+	case RequirementStateMissing:
+		return true
+	case RequirementStateSatisfied:
+		return true
+	case RequirementStateUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListReviewsParamsSort.
+const (
+	ListReviewsParamsSortId     ListReviewsParamsSort = "id"
+	ListReviewsParamsSortNewest ListReviewsParamsSort = "newest"
+	ListReviewsParamsSortOldest ListReviewsParamsSort = "oldest"
+)
+
+// Valid indicates whether the value is a known member of the ListReviewsParamsSort enum.
+func (e ListReviewsParamsSort) Valid() bool {
+	switch e {
+	case ListReviewsParamsSortId:
+		return true
+	case ListReviewsParamsSortNewest:
+		return true
+	case ListReviewsParamsSortOldest:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MyReviewsParamsSort.
+const (
+	MyReviewsParamsSortId     MyReviewsParamsSort = "id"
+	MyReviewsParamsSortNewest MyReviewsParamsSort = "newest"
+	MyReviewsParamsSortOldest MyReviewsParamsSort = "oldest"
+)
+
+// Valid indicates whether the value is a known member of the MyReviewsParamsSort enum.
+func (e MyReviewsParamsSort) Valid() bool {
+	switch e {
+	case MyReviewsParamsSortId:
+		return true
+	case MyReviewsParamsSortNewest:
+		return true
+	case MyReviewsParamsSortOldest:
+		return true
+	default:
+		return false
+	}
+}
+
 // Action defines model for Action.
 type Action struct {
 	Action   ActionAction `json:"action"`
@@ -72,6 +216,26 @@ type Action struct {
 
 // ActionAction defines model for Action.Action.
 type ActionAction string
+
+// AdminEntry defines model for AdminEntry.
+type AdminEntry struct {
+	Anonymous    bool       `json:"anonymous"`
+	AuthorHandle string     `json:"author_handle"`
+	CreatedAt    time.Time  `json:"created_at"`
+	Id           string     `json:"id"`
+	Input        Input      `json:"input"`
+	PublishedAt  *time.Time `json:"published_at"`
+	Revision     int        `json:"revision"`
+	RootId       string     `json:"root_id"`
+	SchoolId     string     `json:"school_id"`
+	State        string     `json:"state"`
+}
+
+// AdminPage defines model for AdminPage.
+type AdminPage struct {
+	Items []AdminEntry `json:"items"`
+	Next  string       `json:"next"`
+}
 
 // Author defines model for Author.
 type Author struct {
@@ -93,18 +257,36 @@ type Bookmark struct {
 	TargetId string `json:"target_id"`
 }
 
+// Composer defines model for Composer.
+type Composer struct {
+	Allowed      bool             `json:"allowed"`
+	Identity     ComposerIdentity `json:"identity"`
+	Requirements []Requirement    `json:"requirements"`
+	RuleVersion  string           `json:"rule_version"`
+	State        ComposerState    `json:"state"`
+	TeacherIds   []string         `json:"teacher_ids"`
+}
+
+// ComposerIdentity defines model for Composer.Identity.
+type ComposerIdentity string
+
+// ComposerState defines model for Composer.State.
+type ComposerState string
+
 // CourseStatistic defines model for CourseStatistic.
 type CourseStatistic struct {
 	CourseId   string `json:"course_id"`
 	Dimensions []Band `json:"dimensions"`
 }
 
-// DraftView defines model for DraftView.
+// DraftView A private draft owned by the requester. Withdrawn drafts retain their original expiry. Saving a draft does not publish it.
 type DraftView struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	Id        string     `json:"id"`
 	Input     Input      `json:"input"`
+	ParentId  *string    `json:"parent_id,omitempty"`
 	Revision  int        `json:"revision"`
+	RootId    *string    `json:"root_id,omitempty"`
 	Withdrawn bool       `json:"withdrawn"`
 }
 
@@ -146,6 +328,24 @@ type Profile struct {
 	Avatar *string `json:"avatar,omitempty"`
 	Name   string  `json:"name"`
 }
+
+// PublishDraft defines model for PublishDraft.
+type PublishDraft struct {
+	Input    Input `json:"input"`
+	Revision int   `json:"revision"`
+}
+
+// Requirement defines model for Requirement.
+type Requirement struct {
+	Key   RequirementKey   `json:"key"`
+	State RequirementState `json:"state"`
+}
+
+// RequirementKey defines model for Requirement.Key.
+type RequirementKey string
+
+// RequirementState defines model for Requirement.State.
+type RequirementState string
 
 // Result defines model for Result.
 type Result struct {
@@ -197,11 +397,37 @@ type ListReviewsParams struct {
 	RootId   *string `form:"root_id,omitempty" json:"root_id,omitempty"`
 	After    *string `form:"after,omitempty" json:"after,omitempty"`
 	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Sort Stable ID order by default; newest/oldest use creation time with an opaque cursor.
+	Sort *ListReviewsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// TeacherId Course reviews attributed to this teacher at publication.
+	TeacherId *string `form:"teacher_id,omitempty" json:"teacher_id,omitempty"`
 }
+
+// ListReviewsParamsSort defines parameters for ListReviews.
+type ListReviewsParamsSort string
 
 // CreateReviewParams defines parameters for CreateReview.
 type CreateReviewParams struct {
 	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// ListAdminEntriesParams defines parameters for ListAdminEntries.
+type ListAdminEntriesParams struct {
+	SchoolId string  `form:"school_id" json:"school_id"`
+	Kind     *string `form:"kind,omitempty" json:"kind,omitempty"`
+	State    *string `form:"state,omitempty" json:"state,omitempty"`
+	After    *string `form:"after,omitempty" json:"after,omitempty"`
+	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetComposerParams defines parameters for GetComposer.
+type GetComposerParams struct {
+	Kind     string  `form:"kind" json:"kind"`
+	TargetId string  `form:"target_id" json:"target_id"`
+	TermId   *string `form:"term_id,omitempty" json:"term_id,omitempty"`
+	ParentId *string `form:"parent_id,omitempty" json:"parent_id,omitempty"`
 }
 
 // MyBookmarksParams defines parameters for MyBookmarks.
@@ -236,11 +462,28 @@ type DeleteDraftParams struct {
 	IdempotencyKey string `json:"Idempotency-Key"`
 }
 
+// PublishDraftParams defines parameters for PublishDraft.
+type PublishDraftParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
 // MyReviewsParams defines parameters for MyReviews.
 type MyReviewsParams struct {
 	After *string `form:"after,omitempty" json:"after,omitempty"`
 	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Sort Stable ID order by default; newest/oldest use creation time with an opaque cursor.
+	Sort *MyReviewsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// TeacherId Course reviews attributed to this teacher at publication.
+	TeacherId *string `form:"teacher_id,omitempty" json:"teacher_id,omitempty"`
+	Kind      *string `form:"kind,omitempty" json:"kind,omitempty"`
+	TargetId  *string `form:"target_id,omitempty" json:"target_id,omitempty"`
+	TermId    *string `form:"term_id,omitempty" json:"term_id,omitempty"`
 }
+
+// MyReviewsParamsSort defines parameters for MyReviews.
+type MyReviewsParamsSort string
 
 // MyVotesParams defines parameters for MyVotes.
 type MyVotesParams struct {
@@ -279,6 +522,9 @@ type SaveDraftJSONRequestBody = DraftWrite
 
 // DeleteDraftJSONRequestBody defines body for DeleteDraft for application/json ContentType.
 type DeleteDraftJSONRequestBody DeleteDraftJSONBody
+
+// PublishDraftJSONRequestBody defines body for PublishDraft for application/json ContentType.
+type PublishDraftJSONRequestBody = PublishDraft
 
 // ReviewActionJSONRequestBody defines body for ReviewAction for application/json ContentType.
 type ReviewActionJSONRequestBody = Action
@@ -371,6 +617,15 @@ type ClientInterface interface {
 	// Takes a body of the `application/json` content type.
 	CreateReview(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAdminEntries performs a GET /api/v1/reviews/admin/entries (the `ListAdminEntries` operationId) request.
+	ListAdminEntries(ctx context.Context, params *ListAdminEntriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAdminEntry performs a GET /api/v1/reviews/admin/entries/{id} (the `GetAdminEntry` operationId) request.
+	GetAdminEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetComposer performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+	GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// MyBookmarks performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
 	MyBookmarks(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -401,8 +656,22 @@ type ClientInterface interface {
 	// Takes a body of the `application/json` content type.
 	DeleteDraft(ctx context.Context, id string, params *DeleteDraftParams, body DeleteDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetDraft performs a GET /api/v1/reviews/me/drafts/{id} (the `GetDraft` operationId) request.
+	GetDraft(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PublishDraftWithBody performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request,
+	// with any type of body and a specified content type.
+	PublishDraftWithBody(ctx context.Context, id string, params *PublishDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PublishDraft performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request.
+	// Takes a body of the `application/json` content type.
+	PublishDraft(ctx context.Context, id string, params *PublishDraftParams, body PublishDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// MyReviews performs a GET /api/v1/reviews/me/entries (the `MyReviews` operationId) request.
 	MyReviews(ctx context.Context, params *MyReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOwnEntry performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
+	GetOwnEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyVotes performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
 	MyVotes(ctx context.Context, params *MyVotesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -461,6 +730,45 @@ func (c *Client) CreateReviewWithBody(ctx context.Context, params *CreateReviewP
 // Takes a body of the `application/json` content type.
 func (c *Client) CreateReview(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateReviewRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAdminEntries performs a GET /api/v1/reviews/admin/entries (the `ListAdminEntries` operationId) request.
+func (c *Client) ListAdminEntries(ctx context.Context, params *ListAdminEntriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAdminEntriesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAdminEntry performs a GET /api/v1/reviews/admin/entries/{id} (the `GetAdminEntry` operationId) request.
+func (c *Client) GetAdminEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAdminEntryRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetComposer performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+func (c *Client) GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetComposerRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -581,9 +889,63 @@ func (c *Client) DeleteDraft(ctx context.Context, id string, params *DeleteDraft
 	return c.Client.Do(req)
 }
 
+// GetDraft performs a GET /api/v1/reviews/me/drafts/{id} (the `GetDraft` operationId) request.
+func (c *Client) GetDraft(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDraftRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PublishDraftWithBody performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request,
+// with any type of body and a specified content type.
+func (c *Client) PublishDraftWithBody(ctx context.Context, id string, params *PublishDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPublishDraftRequestWithBody(c.Server, id, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PublishDraft performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request.
+// Takes a body of the `application/json` content type.
+func (c *Client) PublishDraft(ctx context.Context, id string, params *PublishDraftParams, body PublishDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPublishDraftRequest(c.Server, id, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // MyReviews performs a GET /api/v1/reviews/me/entries (the `MyReviews` operationId) request.
 func (c *Client) MyReviews(ctx context.Context, params *MyReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewMyReviewsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOwnEntry performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
+func (c *Client) GetOwnEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOwnEntryRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -789,6 +1151,30 @@ func NewListReviewsRequest(server string, params *ListReviewsParams) (*http.Requ
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TeacherId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "teacher_id", *params.TeacherId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -851,6 +1237,220 @@ func NewCreateReviewRequestWithBody(server string, params *CreateReviewParams, c
 
 		req.Header.Set("Idempotency-Key", headerParam0)
 
+	}
+
+	return req, nil
+}
+
+// NewListAdminEntriesRequest constructs an http.Request for the ListAdminEntries method
+func NewListAdminEntriesRequest(server string, params *ListAdminEntriesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/admin/entries")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "school_id", params.SchoolId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Kind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.State != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.After != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", *params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAdminEntryRequest constructs an http.Request for the GetAdminEntry method
+func NewGetAdminEntryRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/admin/entries/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetComposerRequest constructs an http.Request for the GetComposer method
+func NewGetComposerRequest(server string, params *GetComposerParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/compose")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "target_id", params.TargetId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.TermId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "term_id", *params.TermId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ParentId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "parent_id", *params.ParentId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -1154,6 +1754,100 @@ func NewDeleteDraftRequestWithBody(server string, id string, params *DeleteDraft
 	return req, nil
 }
 
+// NewGetDraftRequest constructs an http.Request for the GetDraft method
+func NewGetDraftRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/me/drafts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPublishDraftRequest calls the generic PublishDraft builder with application/json body
+func NewPublishDraftRequest(server string, id string, params *PublishDraftParams, body PublishDraftJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPublishDraftRequestWithBody(server, id, params, "application/json", bodyReader)
+}
+
+// NewPublishDraftRequestWithBody constructs an http.Request for the PublishDraft method, with any body, and a specified content type
+func NewPublishDraftRequestWithBody(server string, id string, params *PublishDraftParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/me/drafts/%s/publish", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewMyReviewsRequest constructs an http.Request for the MyReviews method
 func NewMyReviewsRequest(server string, params *MyReviewsParams) (*http.Request, error) {
 	var err error
@@ -1206,10 +1900,104 @@ func NewMyReviewsRequest(server string, params *MyReviewsParams) (*http.Request,
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TeacherId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "teacher_id", *params.TeacherId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Kind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TargetId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "target_id", *params.TargetId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TermId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "term_id", *params.TermId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOwnEntryRequest constructs an http.Request for the GetOwnEntry method
+func NewGetOwnEntryRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/me/entries/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -1613,6 +2401,21 @@ type ClientWithResponsesInterface interface {
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	CreateReviewWithResponse(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateReviewResponse, error)
 
+	// ListAdminEntriesWithResponse performs a GET /api/v1/reviews/admin/entries (the `ListAdminEntries` operationId) request.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	ListAdminEntriesWithResponse(ctx context.Context, params *ListAdminEntriesParams, reqEditors ...RequestEditorFn) (*ListAdminEntriesResponse, error)
+
+	// GetAdminEntryWithResponse performs a GET /api/v1/reviews/admin/entries/{id} (the `GetAdminEntry` operationId) request.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetAdminEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetAdminEntryResponse, error)
+
+	// GetComposerWithResponse performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetComposerWithResponse(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*GetComposerResponse, error)
+
 	// MyBookmarksWithResponse performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -1653,10 +2456,30 @@ type ClientWithResponsesInterface interface {
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	DeleteDraftWithResponse(ctx context.Context, id string, params *DeleteDraftParams, body DeleteDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteDraftResponse, error)
 
+	// GetDraftWithResponse performs a GET /api/v1/reviews/me/drafts/{id} (the `GetDraft` operationId) request.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetDraftWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetDraftResponse, error)
+
+	// PublishDraftWithBodyWithResponse performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request,
+	// with any type of body and a specified content type.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	PublishDraftWithBodyWithResponse(ctx context.Context, id string, params *PublishDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PublishDraftResponse, error)
+
+	// PublishDraftWithResponse performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request.
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	PublishDraftWithResponse(ctx context.Context, id string, params *PublishDraftParams, body PublishDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*PublishDraftResponse, error)
+
 	// MyReviewsWithResponse performs a GET /api/v1/reviews/me/entries (the `MyReviews` operationId) request.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	MyReviewsWithResponse(ctx context.Context, params *MyReviewsParams, reqEditors ...RequestEditorFn) (*MyReviewsResponse, error)
+
+	// GetOwnEntryWithResponse performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetOwnEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetOwnEntryResponse, error)
 
 	// MyVotesWithResponse performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
 	//
@@ -1854,6 +2677,255 @@ func (r CreateReviewResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateReviewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListAdminEntriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminPage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAdminEntriesResponse) GetJSON200() *AdminPage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListAdminEntriesResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListAdminEntriesResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListAdminEntriesResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListAdminEntriesResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ListAdminEntriesResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListAdminEntriesResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAdminEntriesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAdminEntriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAdminEntriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAdminEntriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAdminEntryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminEntry
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAdminEntryResponse) GetJSON200() *AdminEntry {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetAdminEntryResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetAdminEntryResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetAdminEntryResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetAdminEntryResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r GetAdminEntryResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetAdminEntryResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAdminEntryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAdminEntryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAdminEntryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAdminEntryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetComposerResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Composer
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetComposerResponse) GetJSON200() *Composer {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetComposerResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetComposerResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetComposerResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetComposerResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r GetComposerResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetComposerResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetComposerResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetComposerResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetComposerResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetComposerResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -2275,6 +3347,172 @@ func (r DeleteDraftResponse) ContentType() string {
 	return ""
 }
 
+type GetDraftResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DraftView
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetDraftResponse) GetJSON200() *DraftView {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetDraftResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetDraftResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetDraftResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetDraftResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r GetDraftResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetDraftResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetDraftResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetDraftResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetDraftResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetDraftResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PublishDraftResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Result
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PublishDraftResponse) GetJSON200() *Result {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PublishDraftResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PublishDraftResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PublishDraftResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PublishDraftResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PublishDraftResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r PublishDraftResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r PublishDraftResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PublishDraftResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PublishDraftResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PublishDraftResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type MyReviewsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2352,6 +3590,89 @@ func (r MyReviewsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r MyReviewsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOwnEntryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *View
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOwnEntryResponse) GetJSON200() *View {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetOwnEntryResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetOwnEntryResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetOwnEntryResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetOwnEntryResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r GetOwnEntryResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetOwnEntryResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOwnEntryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOwnEntryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOwnEntryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOwnEntryResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -2806,6 +4127,39 @@ func (c *ClientWithResponses) CreateReviewWithResponse(ctx context.Context, para
 	return ParseCreateReviewResponse(rsp)
 }
 
+// ListAdminEntriesWithResponse performs a GET /api/v1/reviews/admin/entries (the `ListAdminEntries` operationId) request.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) ListAdminEntriesWithResponse(ctx context.Context, params *ListAdminEntriesParams, reqEditors ...RequestEditorFn) (*ListAdminEntriesResponse, error) {
+	rsp, err := c.ListAdminEntries(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAdminEntriesResponse(rsp)
+}
+
+// GetAdminEntryWithResponse performs a GET /api/v1/reviews/admin/entries/{id} (the `GetAdminEntry` operationId) request.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetAdminEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetAdminEntryResponse, error) {
+	rsp, err := c.GetAdminEntry(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAdminEntryResponse(rsp)
+}
+
+// GetComposerWithResponse performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetComposerWithResponse(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*GetComposerResponse, error) {
+	rsp, err := c.GetComposer(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetComposerResponse(rsp)
+}
+
 // MyBookmarksWithResponse performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -2894,6 +4248,39 @@ func (c *ClientWithResponses) DeleteDraftWithResponse(ctx context.Context, id st
 	return ParseDeleteDraftResponse(rsp)
 }
 
+// GetDraftWithResponse performs a GET /api/v1/reviews/me/drafts/{id} (the `GetDraft` operationId) request.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetDraftWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetDraftResponse, error) {
+	rsp, err := c.GetDraft(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetDraftResponse(rsp)
+}
+
+// PublishDraftWithBodyWithResponse performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request,
+// with any type of body and a specified content type.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) PublishDraftWithBodyWithResponse(ctx context.Context, id string, params *PublishDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PublishDraftResponse, error) {
+	rsp, err := c.PublishDraftWithBody(ctx, id, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePublishDraftResponse(rsp)
+}
+
+// PublishDraftWithResponse performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request.
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) PublishDraftWithResponse(ctx context.Context, id string, params *PublishDraftParams, body PublishDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*PublishDraftResponse, error) {
+	rsp, err := c.PublishDraft(ctx, id, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePublishDraftResponse(rsp)
+}
+
 // MyReviewsWithResponse performs a GET /api/v1/reviews/me/entries (the `MyReviews` operationId) request.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -2903,6 +4290,17 @@ func (c *ClientWithResponses) MyReviewsWithResponse(ctx context.Context, params 
 		return nil, err
 	}
 	return ParseMyReviewsResponse(rsp)
+}
+
+// GetOwnEntryWithResponse performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetOwnEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetOwnEntryResponse, error) {
+	rsp, err := c.GetOwnEntry(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOwnEntryResponse(rsp)
 }
 
 // MyVotesWithResponse performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
@@ -3066,6 +4464,210 @@ func ParseCreateReviewResponse(rsp *http.Response) (*CreateReviewResponse, error
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Result
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAdminEntriesResponse parses an HTTP response from a ListAdminEntriesWithResponse call
+func ParseListAdminEntriesResponse(rsp *http.Response) (*ListAdminEntriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAdminEntriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAdminEntryResponse parses an HTTP response from a GetAdminEntryWithResponse call
+func ParseGetAdminEntryResponse(rsp *http.Response) (*GetAdminEntryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAdminEntryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminEntry
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetComposerResponse parses an HTTP response from a GetComposerWithResponse call
+func ParseGetComposerResponse(rsp *http.Response) (*GetComposerResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetComposerResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Composer
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -3458,6 +5060,142 @@ func ParseDeleteDraftResponse(rsp *http.Response) (*DeleteDraftResponse, error) 
 	return response, nil
 }
 
+// ParseGetDraftResponse parses an HTTP response from a GetDraftWithResponse call
+func ParseGetDraftResponse(rsp *http.Response) (*GetDraftResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetDraftResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DraftView
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePublishDraftResponse parses an HTTP response from a PublishDraftWithResponse call
+func ParsePublishDraftResponse(rsp *http.Response) (*PublishDraftResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PublishDraftResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Result
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseMyReviewsResponse parses an HTTP response from a MyReviewsWithResponse call
 func ParseMyReviewsResponse(rsp *http.Response) (*MyReviewsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -3474,6 +5212,74 @@ func ParseMyReviewsResponse(rsp *http.Response) (*MyReviewsResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Page
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOwnEntryResponse parses an HTTP response from a GetOwnEntryWithResponse call
+func ParseGetOwnEntryResponse(rsp *http.Response) (*GetOwnEntryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOwnEntryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest View
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

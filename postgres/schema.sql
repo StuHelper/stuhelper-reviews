@@ -5,6 +5,13 @@ CREATE TABLE IF NOT EXISTS reviews.entries (
  term_id text NOT NULL, state text NOT NULL CHECK(state IN ('published','pending','withdrawn','hidden','deleted')),
  expires_at timestamptz, first_published_at timestamptz, data jsonb NOT NULL
 );
+-- Backfill the original creation time; editing and republishing do not reorder a discussion.
+ALTER TABLE reviews.entries ADD COLUMN IF NOT EXISTS created_at timestamptz;
+UPDATE reviews.entries SET created_at=(data->>'created_at')::timestamptz WHERE created_at IS NULL;
+ALTER TABLE reviews.entries ALTER COLUMN created_at SET NOT NULL;
+CREATE INDEX IF NOT EXISTS reviews_chronological ON reviews.entries(kind,target_id,created_at,id);
+CREATE INDEX IF NOT EXISTS reviews_owner_chronological ON reviews.entries(owner,created_at,id);
+CREATE INDEX IF NOT EXISTS reviews_admin_scope ON reviews.entries(school_id,state,kind,id);
 CREATE INDEX IF NOT EXISTS reviews_listing ON reviews.entries(kind,target_id,term_id,id) WHERE state='published';
 CREATE INDEX IF NOT EXISTS reviews_roots ON reviews.entries(root_id,id);
 CREATE INDEX IF NOT EXISTS reviews_owner ON reviews.entries(owner,id);

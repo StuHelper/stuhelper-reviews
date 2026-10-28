@@ -28,8 +28,14 @@ func (h Handler) Routes() http.Handler {
 	m.HandleFunc("POST /api/v1/reviews/{id}/actions", h.action)
 	m.HandleFunc("POST /api/v1/reviews/{id}/replies", h.reply)
 	m.HandleFunc("GET /api/v1/reviews/statistics", h.statistics)
+	m.HandleFunc("GET /api/v1/reviews/compose", h.compose)
+	m.HandleFunc("GET /api/v1/reviews/admin/entries", h.adminList)
+	m.HandleFunc("GET /api/v1/reviews/admin/entries/{id}", h.adminGet)
 	m.HandleFunc("GET /api/v1/reviews/me/entries", h.mine)
+	m.HandleFunc("GET /api/v1/reviews/me/entries/{id}", h.ownEntry)
 	m.HandleFunc("GET /api/v1/reviews/me/drafts", h.drafts)
+	m.HandleFunc("GET /api/v1/reviews/me/drafts/{id}", h.getDraft)
+	m.HandleFunc("POST /api/v1/reviews/me/drafts/{id}/publish", h.publishDraft)
 	m.HandleFunc("POST /api/v1/reviews/me/drafts", h.saveDraft)
 	m.HandleFunc("DELETE /api/v1/reviews/me/drafts/{id}", h.deleteDraft)
 	m.HandleFunc("GET /api/v1/reviews/me/bookmarks", h.bookmarks)
@@ -126,7 +132,7 @@ func (h Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
 	respond(w, v, e)
 }
 func (h Handler) get(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +213,8 @@ func (h Handler) mine(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{Owner: p.Subject, After: r.URL.Query().Get("after"), Limit: n})
+	q := r.URL.Query()
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
 	respond(w, v, e)
 }
 func (h Handler) drafts(w http.ResponseWriter, r *http.Request) {

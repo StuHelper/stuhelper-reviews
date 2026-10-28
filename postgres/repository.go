@@ -95,7 +95,7 @@ func (t *transaction) Entry(id string) (reviews.Entry, error) {
 	return read[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE id=$1`, id)
 }
 func (t *transaction) SaveEntry(e reviews.Entry) error {
-	if err := t.save(`INSERT INTO reviews.entries(id,root_id,owner,school_id,kind,target_id,term_id,state,expires_at,first_published_at,data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET state=excluded.state,expires_at=excluded.expires_at,first_published_at=excluded.first_published_at,data=excluded.data`, e, e.ID, e.RootID, e.Owner, e.SchoolID, e.Input.Kind, e.Input.TargetID, e.Input.TermID, e.State, e.ExpiresAt, e.FirstPublishedAt); err != nil {
+	if err := t.save(`INSERT INTO reviews.entries(id,root_id,owner,school_id,kind,target_id,term_id,state,expires_at,first_published_at,created_at,data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(id) DO UPDATE SET state=excluded.state,expires_at=excluded.expires_at,first_published_at=excluded.first_published_at,data=excluded.data`, e, e.ID, e.RootID, e.Owner, e.SchoolID, e.Input.Kind, e.Input.TargetID, e.Input.TermID, e.State, e.ExpiresAt, e.FirstPublishedAt, e.CreatedAt.Round(time.Microsecond)); err != nil {
 		return err
 	}
 	return t.save(`INSERT INTO reviews.history(id,revision,data) VALUES($1,$2,$3)`, e, e.ID, e.Revision)
@@ -108,18 +108,8 @@ func (t *transaction) DeleteEntry(e reviews.Entry) error {
 	_, err := t.tx.ExecContext(t.ctx, q, e.ID)
 	return safe(err)
 }
-func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
-	rows, err := t.tx.QueryContext(t.ctx, `SELECT e.data,i.data,
- (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=1),
- (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=-1),
- COALESCE((SELECT value FROM reviews.votes v WHERE v.id=e.id AND v.subject=$8),0)
- FROM reviews.entries e JOIN reviews.entries root ON root.id=e.root_id
- JOIN reviews.identities i ON i.root_id=e.root_id AND i.subject=e.owner
- WHERE ((e.state='published' AND root.state='published') OR ($5<>'' AND e.owner=$5 AND e.state IN ('pending','hidden','deleted')))
- AND (e.expires_at IS NULL OR e.expires_at>clock_timestamp()) AND (root.expires_at IS NULL OR root.expires_at>clock_timestamp())
- AND ($1='' OR e.kind=$1) AND ($2='' OR e.target_id=$2) AND ($3='' OR e.term_id=$3)
- AND ($4='' OR e.root_id=$4) AND ($5='' OR e.owner=$5) AND e.id>$6
- ORDER BY e.id LIMIT $7`, f.Kind, f.TargetID, f.TermID, f.RootID, f.Owner, f.After, f.Limit+1, f.Viewer)
+func (t *transaction) projected(q string, args ...any) ([]reviews.Entry, error) {
+	rows, err := t.tx.QueryContext(t.ctx, q, args...)
 	if err != nil {
 		return nil, safe(err)
 	}
@@ -164,8 +154,16 @@ func (t *transaction) VoteCounts(id string) (int, int, error) {
 	e := t.tx.QueryRowContext(t.ctx, `SELECT count(*) FILTER(WHERE value=1),count(*) FILTER(WHERE value=-1) FROM reviews.votes WHERE id=$1`, id).Scan(&up, &down)
 	return up, down, safe(e)
 }
-func (t *transaction) Voted(subject, after string, limit int) ([]reviews.Entry, error) {
-	return list[reviews.Entry](t, `SELECT e.data FROM reviews.entries e JOIN reviews.votes v ON v.id=e.id JOIN reviews.entries root ON root.id=e.root_id WHERE v.subject=$1 AND e.id>$2 AND e.state='published' AND root.state='published' ORDER BY e.id LIMIT $3`, subject, after, limit)
+func (t *transaction) Voted(subject, after string, limit int, now time.Time) ([]reviews.Entry, error) {
+	return t.projected(`SELECT e.data,i.data,
+ (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=1),
+ (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=-1),mine.value
+ FROM reviews.entries e JOIN reviews.votes mine ON mine.id=e.id AND mine.subject=$1
+ JOIN reviews.entries root ON root.id=e.root_id
+ JOIN reviews.identities i ON i.root_id=e.root_id AND i.subject=e.owner
+ WHERE e.id>$2 AND e.state='published' AND root.state='published'
+ AND (e.expires_at IS NULL OR e.expires_at>$4) AND (root.expires_at IS NULL OR root.expires_at>$4)
+ ORDER BY e.id LIMIT $3`, subject, after, limit, now)
 }
 func (t *transaction) Bookmark(subject, target string, set bool) error {
 	q := `DELETE FROM reviews.bookmarks WHERE subject=$1 AND target_id=$2`
