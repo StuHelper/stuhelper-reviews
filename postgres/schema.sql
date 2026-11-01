@@ -38,3 +38,12 @@ REVOKE ALL ON ALL TABLES IN SCHEMA reviews FROM PUBLIC;
 CREATE TABLE IF NOT EXISTS reviews.presentations(school_id text PRIMARY KEY,data jsonb NOT NULL);
 CREATE TABLE IF NOT EXISTS reviews.presentation_history(school_id text NOT NULL,revision bigint NOT NULL,data jsonb NOT NULL,PRIMARY KEY(school_id,revision));
 REVOKE ALL ON TABLE reviews.presentations,reviews.presentation_history FROM PUBLIC;
+
+-- Live presentation settings no longer support previews. Historical revisions
+-- remain immutable audit records; application projections omit retired keys.
+UPDATE reviews.presentations SET data=data-'guest_preview'-'member_preview'-'preview_ratio'
+ WHERE data ?| ARRAY['guest_preview','member_preview','preview_ratio'];
+
+CREATE TABLE IF NOT EXISTS reviews.closed_owners(owner text PRIMARY KEY,closure_id text NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
+
+CREATE TABLE IF NOT EXISTS reviews.bookmark_transfers(subject text PRIMARY KEY,sealed_at timestamptz NOT NULL DEFAULT now());

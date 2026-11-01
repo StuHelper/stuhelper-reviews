@@ -1,5 +1,5 @@
 id: reviews
-version: 0.2.0
+version: 0.5.1
 api: 1
 critical: false
 requires:
@@ -22,7 +22,7 @@ capabilities:
 capability_requires: {}
 scenario_tests:
   ACAD-04:
-    - integration_test.go#TestAnonymousPreviewAndCurrentAccessCannotLeakIdentity
+    - integration_test.go#TestContentAdmissionAndCurrentAccessCannotLeakIdentity
   ACAD-05:
     - integration_test.go#TestCourseTermEligibilityAndImmutableTeacherAttribution
   ACAD-13:
@@ -59,7 +59,24 @@ scenario_tests:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   ACAD-40:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
+    - presentation_test.go#TestPresentationMigrationAndHTTPRemovePreviewFieldsPreservingRatingTexts
   CM-09:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   CM-14:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
+  AE-ACCESS-05:
+    - own_references_test.go#TestOwnNamesAndValidatedDraftAssociationsSurviveAdmissionExpiry
+    - own_references_test.go#TestOwnReferenceHTTPDoesNotOpenPublicContent
+    - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
+    - content_security_regression_test.go#TestVoteReceiptsDoNotExposeTargetContentAfterAdmissionExpires
+  AE-ACCESS-07:
+    - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
+    - content_test.go#TestContentListsStatisticsAndComposerRespectServedSchool
+  ACAD-16:
+    - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
+  ACAD-15:
+    - bookmark_transfer_test.go#TestBookmarkTransferSealsLegacyWritesAndRetainsOriginalReplay
+    - interaction_test.go#TestExpiredAdmissionAllowsOnlyOwnVoteAndBookmarkRemoval
+  PC-07:
+    - closure_test.go#TestClosedOwnerKeepsContentWithoutProfileOrDisclosures
+    - closure_test.go#TestClosureRejectsPublicationAlreadyWaitingForExternalModeration

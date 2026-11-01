@@ -7,14 +7,13 @@ import (
 
 // Composer exposes decisions and consent options from current server facts.
 func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term, parent string) (Composer, error) {
+	scope, err := s.contentScope(ctx, p, "")
+	if err != nil {
+		return Composer{}, err
+	}
 	out := Composer{Requirements: []Requirement{}, TeacherIDs: []string{}, Identity: "choice", Disclosures: []DisclosureOption{}}
 	if !validID(target) || (term != "" && !validID(term)) || (parent != "" && !validID(parent)) || (kind != "course" && kind != "mentor" && kind != "reply") {
 		return out, ErrInput
-	}
-	if p.Subject == "" {
-		out.State = "unauthenticated"
-		out.Requirements = append(out.Requirements, Requirement{"login", "missing"})
-		return out, nil
 	}
 	out.Requirements = append(out.Requirements, Requirement{"login", "satisfied"})
 	var grant Grant
@@ -51,6 +50,9 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 			return out, err
 		}
 		school = root.SchoolID
+		if school != scope {
+			return Composer{}, ErrForbidden
+		}
 		if identity.Subject != "" {
 			out.Identity = "anonymous"
 			if identity.Signed {
@@ -85,6 +87,9 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 			return out, err
 		}
 		school = object.SchoolID
+		if school != scope {
+			return Composer{}, ErrForbidden
+		}
 		if kind == "course" && term == "" {
 			grant, checkErr = s.authorize(ctx, p, "publish_course", school)
 			if checkErr == nil {

@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func (t *transaction) Aggregates(kind string, targets []string, from, until *time.Time) ([]reviews.Aggregate, error) {
+func (t *transaction) Aggregates(kind string, targets []string, school string, from, until *time.Time) ([]reviews.Aggregate, error) {
 	rows, e := t.tx.QueryContext(t.ctx, `SELECT target_id,
  COALESCE(sum((data->'input'->'ratings'->>0)::integer),0),COALESCE(sum((data->'input'->'ratings'->>1)::integer),0),
  COALESCE(sum((data->'input'->'ratings'->>2)::integer),0),COALESCE(sum((data->'input'->'ratings'->>3)::integer),0),COALESCE(sum((data->'input'->'ratings'->>4)::integer),0),
@@ -14,7 +14,8 @@ func (t *transaction) Aggregates(kind string, targets []string, from, until *tim
  FROM reviews.entries WHERE kind='course' AND state='published' AND (expires_at IS NULL OR expires_at>clock_timestamp())
  AND (($1='course' AND target_id=ANY($2::text[])) OR ($1='teacher' AND data->'teacher_ids' ?| $2::text[]))
  AND ($3::timestamptz IS NULL OR first_published_at >= $3) AND ($4::timestamptz IS NULL OR first_published_at < $4)
- GROUP BY target_id ORDER BY target_id LIMIT 1001`, kind, targets, from, until)
+ AND ($5='' OR school_id=$5)
+ GROUP BY target_id ORDER BY target_id LIMIT 1001`, kind, targets, from, until, school)
 	if e != nil {
 		return nil, safe(e)
 	}

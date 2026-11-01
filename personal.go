@@ -31,6 +31,10 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 			return out, err
 		}
 	}
+	verified, referenceState := s.verifyDraftReferences(ctx, p, in)
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
 	if id == "" {
 		id = hash([]string{p.Subject, "draft", key})
 	} else if !validID(id) {
@@ -64,6 +68,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 			return ErrConflict
 		}
 		v := Draft{ID: id, Revision: old.Revision + 1, Owner: p.Subject, Input: in, UpdatedAt: s.now()}
+		v.ReferenceIDs, v.ReferenceState = mergeDraftReferences(old.ReferenceIDs, verified, in, referenceState)
 		if e = t.SaveDraft(v); e != nil {
 			return e
 		}
@@ -86,7 +91,7 @@ func (s *Service) GetDraft(ctx context.Context, p Principal, id string) (DraftVi
 			if draft.Owner != p.Subject {
 				return ErrNotFound
 			}
-			out = DraftView{ID: draft.ID, Revision: draft.Revision, Input: draft.Input}
+			out = draftView(draft)
 			return nil
 		}
 		if !errors.Is(err, ErrNotFound) {
@@ -104,7 +109,7 @@ func (s *Service) GetDraft(ctx context.Context, p Principal, id string) (DraftVi
 			return err
 		}
 		entry.Input.Signed = identity.Signed
-		out = DraftView{ID: entry.ID, Revision: entry.Revision, Input: entry.Input, ExpiresAt: entry.ExpiresAt, Withdrawn: true, RootID: entry.RootID, ParentID: entry.ParentID}
+		out = DraftView{ID: entry.ID, Revision: entry.Revision, Input: entry.Input, ReferenceIDs: draftReferenceIDs(entry.Input), ReferenceState: "verified", ExpiresAt: entry.ExpiresAt, Withdrawn: true, RootID: entry.RootID, ParentID: entry.ParentID}
 		return nil
 	})
 	return out, err
@@ -167,11 +172,11 @@ func (s *Service) Drafts(ctx context.Context, p Principal, after string, limit i
 			return e
 		}
 		for _, v := range ordinary {
-			out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input})
+			out = append(out, draftView(v))
 		}
 		for _, v := range withdrawn {
 			if v.ExpiresAt != nil && s.now().Before(*v.ExpiresAt) {
-				out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input, ExpiresAt: v.ExpiresAt, Withdrawn: true})
+				out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input, ReferenceIDs: draftReferenceIDs(v.Input), ReferenceState: "verified", ExpiresAt: v.ExpiresAt, Withdrawn: true})
 			}
 		}
 		return nil
@@ -190,12 +195,27 @@ func (s *Service) SetBookmark(ctx context.Context, p Principal, target, key stri
 	if !validID(target) || !validKey(key) {
 		return out, ErrInput
 	}
-	obj, e := s.Catalog.Target(ctx, "course", target)
-	if e != nil {
+	if s.BookmarksProvider != nil {
+		previous, found, e := s.oldBookmarkReplay(ctx, p, target, key, set)
+		if e != nil || found {
+			return previous, e
+		}
+		e = s.BookmarksProvider.SetCourseBookmark(ctx, p.Subject, target, "reviews:"+hash([]string{p.Subject, "bookmark", target, key}), set)
+		out = Result{ID: target, State: "unmarked"}
+		if set {
+			out.State = "bookmarked"
+		}
 		return out, e
 	}
-	if _, e = s.authorize(ctx, p, "bookmark", obj.SchoolID); e != nil {
-		return out, e
+
+	if set {
+		obj, e := s.Catalog.Target(ctx, "course", target)
+		if e != nil {
+			return out, e
+		}
+		if _, e = s.authorize(ctx, p, "bookmark", obj.SchoolID); e != nil {
+			return out, e
+		}
 	}
 	rk := hash([]string{p.Subject, "bookmark", target, key})
 	h := hash(set)
@@ -220,6 +240,9 @@ func (s *Service) SetBookmark(ctx context.Context, p Principal, target, key stri
 		}
 		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: target})
 	})
+	if errors.Is(err, ErrBookmarksMoved) {
+		return out, ErrUnavailable
+	}
 	return out, err
 }
 func (s *Service) Bookmarks(ctx context.Context, p Principal, after string, limit int) ([]string, error) {
@@ -229,41 +252,45 @@ func (s *Service) Bookmarks(ctx context.Context, p Principal, after string, limi
 	if limit < 1 || limit > 100 {
 		return nil, ErrInput
 	}
+	if s.BookmarksProvider != nil {
+		return s.BookmarksProvider.CourseBookmarks(ctx, p.Subject, after, limit)
+	}
 	var out []string
 	err := s.Repo.Transaction(ctx, func(t Transaction) error { var e error; out, e = t.Bookmarks(p.Subject, after, limit); return e })
+	if errors.Is(err, ErrBookmarksMoved) {
+		return out, ErrUnavailable
+	}
 	return out, err
 }
-func (s *Service) MyVotes(ctx context.Context, p Principal, after string, limit int) ([]View, error) {
+func (s *Service) MyVotes(ctx context.Context, p Principal, after string, limit int) ([]OwnVote, error) {
 	if p.Subject == "" {
-		return nil, ErrForbidden
+		return nil, ErrUnauthenticated
 	}
-	if limit < 1 || limit > 100 {
+	if limit < 1 || limit > 100 || after != "" && !validID(after) {
 		return nil, ErrInput
 	}
-	entries := []Entry{}
+	out := []OwnVote{}
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		rows, e := t.Voted(p.Subject, after, limit, s.now())
 		if e != nil {
 			return e
 		}
 		for _, entry := range rows {
-			if _, e = s.accessible(t, entry.ID); errors.Is(e, ErrNotFound) {
+			value, e := t.Vote(entry.ID, p.Subject)
+			if errors.Is(e, ErrNotFound) {
 				continue
-			} else if e != nil {
-				return e
 			}
-			v, e := project(t, p, entry)
 			if e != nil {
 				return e
 			}
-			entries = append(entries, v)
+			if value != 1 && value != -1 {
+				return ErrUnavailable
+			}
+			out = append(out, OwnVote{ID: entry.ID, RootID: entry.RootID, SchoolID: entry.SchoolID, Kind: entry.Input.Kind, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, MyVote: value})
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return s.render(ctx, p, entries)
+	return out, err
 }
 
 // Sweep is bounded and idempotent; read paths independently enforce expiry.

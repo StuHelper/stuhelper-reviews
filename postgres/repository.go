@@ -95,6 +95,9 @@ func (t *transaction) Entry(id string) (reviews.Entry, error) {
 	return read[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE id=$1`, id)
 }
 func (t *transaction) SaveEntry(e reviews.Entry) error {
+	if err := t.closedEntry(&e); err != nil {
+		return err
+	}
 	if err := t.save(`INSERT INTO reviews.entries(id,root_id,owner,school_id,kind,target_id,term_id,state,expires_at,first_published_at,created_at,data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(id) DO UPDATE SET state=excluded.state,expires_at=excluded.expires_at,first_published_at=excluded.first_published_at,data=excluded.data`, e, e.ID, e.RootID, e.Owner, e.SchoolID, e.Input.Kind, e.Input.TargetID, e.Input.TermID, e.State, e.ExpiresAt, e.FirstPublishedAt, e.CreatedAt.Round(time.Microsecond)); err != nil {
 		return err
 	}
@@ -166,6 +169,9 @@ func (t *transaction) Voted(subject, after string, limit int, now time.Time) ([]
  ORDER BY e.id LIMIT $3`, subject, after, limit, now)
 }
 func (t *transaction) Bookmark(subject, target string, set bool) error {
+	if e := t.bookmarkWritable(subject); e != nil {
+		return e
+	}
 	q := `DELETE FROM reviews.bookmarks WHERE subject=$1 AND target_id=$2`
 	if set {
 		q = `INSERT INTO reviews.bookmarks(subject,target_id) VALUES($1,$2) ON CONFLICT DO NOTHING`
@@ -174,6 +180,12 @@ func (t *transaction) Bookmark(subject, target string, set bool) error {
 	return safe(e)
 }
 func (t *transaction) Bookmarks(subject, after string, limit int) ([]string, error) {
+	if e := t.bookmarkWritable(subject); e != nil {
+		return nil, e
+	}
+	return t.bookmarkPage(subject, after, limit)
+}
+func (t *transaction) bookmarkPage(subject, after string, limit int) ([]string, error) {
 	rows, e := t.tx.QueryContext(t.ctx, `SELECT target_id FROM reviews.bookmarks WHERE subject=$1 AND target_id>$2 ORDER BY target_id LIMIT $3`, subject, after, limit)
 	if e != nil {
 		return nil, safe(e)

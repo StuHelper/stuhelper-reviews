@@ -128,6 +128,27 @@ func (e DisclosureKey) Valid() bool {
 	}
 }
 
+// Defines values for DraftViewReferenceState.
+const (
+	DraftViewReferenceStateUnavailable DraftViewReferenceState = "unavailable"
+	DraftViewReferenceStateUnverified  DraftViewReferenceState = "unverified"
+	DraftViewReferenceStateVerified    DraftViewReferenceState = "verified"
+)
+
+// Valid indicates whether the value is a known member of the DraftViewReferenceState enum.
+func (e DraftViewReferenceState) Valid() bool {
+	switch e {
+	case DraftViewReferenceStateUnavailable:
+		return true
+	case DraftViewReferenceStateUnverified:
+		return true
+	case DraftViewReferenceStateVerified:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InputKind.
 const (
 	Course InputKind = "course"
@@ -143,6 +164,24 @@ func (e InputKind) Valid() bool {
 	case Mentor:
 		return true
 	case Reply:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnVoteMyVote.
+const (
+	Minus1 OwnVoteMyVote = -1
+	N1     OwnVoteMyVote = 1
+)
+
+// Valid indicates whether the value is a known member of the OwnVoteMyVote enum.
+func (e OwnVoteMyVote) Valid() bool {
+	switch e {
+	case Minus1:
+		return true
+	case N1:
 		return true
 	default:
 		return false
@@ -347,10 +386,19 @@ type DraftView struct {
 	Id        string     `json:"id"`
 	Input     Input      `json:"input"`
 	ParentId  *string    `json:"parent_id,omitempty"`
-	Revision  int        `json:"revision"`
-	RootId    *string    `json:"root_id,omitempty"`
-	Withdrawn bool       `json:"withdrawn"`
+
+	// ReferenceIds Only associations previously validated by the server under content admission. These IDs may be sent to myReviewsReferences.
+	ReferenceIds []string `json:"reference_ids"`
+
+	// ReferenceState Historical proof coverage after the latest save. Previously validated associations remain usable after qualification expiry. unavailable means unvalidated associations could not be checked; draft text was saved.
+	ReferenceState DraftViewReferenceState `json:"reference_state"`
+	Revision       int                     `json:"revision"`
+	RootId         *string                 `json:"root_id,omitempty"`
+	Withdrawn      bool                    `json:"withdrawn"`
 }
+
+// DraftViewReferenceState Historical proof coverage after the latest save. Previously validated associations remain usable after qualification expiry. unavailable means unvalidated associations could not be checked; draft text was saved.
+type DraftViewReferenceState string
 
 // DraftWrite defines model for DraftWrite.
 type DraftWrite struct {
@@ -382,6 +430,20 @@ type Input struct {
 // InputKind defines model for Input.Kind.
 type InputKind string
 
+// OwnVote Caller-owned vote receipt. Does not contain another author's title, body, rating, identity or aggregate counts.
+type OwnVote struct {
+	Id       string        `json:"id"`
+	Kind     string        `json:"kind"`
+	MyVote   OwnVoteMyVote `json:"my_vote"`
+	RootId   string        `json:"root_id"`
+	SchoolId string        `json:"school_id"`
+	TargetId string        `json:"target_id"`
+	TermId   string        `json:"term_id"`
+}
+
+// OwnVoteMyVote defines model for OwnVote.MyVote.
+type OwnVoteMyVote int
+
 // Page defines model for Page.
 type Page struct {
 	Items []View `json:"items"`
@@ -390,23 +452,17 @@ type Page struct {
 
 // Presentation defines model for Presentation.
 type Presentation struct {
-	GuestPreview  int         `json:"guest_preview"`
-	MemberPreview int         `json:"member_preview"`
-	PreviewRatio  float32     `json:"preview_ratio"`
-	RatingTexts   RatingTexts `json:"rating_texts"`
-	Revision      int         `json:"revision"`
-	SchoolId      string      `json:"school_id"`
+	RatingTexts RatingTexts `json:"rating_texts"`
+	Revision    int         `json:"revision"`
+	SchoolId    string      `json:"school_id"`
 }
 
 // PresentationView defines model for PresentationView.
 type PresentationView struct {
 	Configured *struct {
-		GuestPreview  int         `json:"guest_preview"`
-		MemberPreview int         `json:"member_preview"`
-		PreviewRatio  float32     `json:"preview_ratio"`
-		RatingTexts   RatingTexts `json:"rating_texts"`
-		Revision      int         `json:"revision"`
-		SchoolId      string      `json:"school_id"`
+		RatingTexts RatingTexts `json:"rating_texts"`
+		Revision    int         `json:"revision"`
+		SchoolId    string      `json:"school_id"`
 	} `json:"configured"`
 	Effective Presentation `json:"effective"`
 	Source    string       `json:"source"`
@@ -426,6 +482,20 @@ type PublishDraft struct {
 
 // RatingTexts defines model for RatingTexts.
 type RatingTexts map[string][][]string
+
+// Reference defines model for Reference.
+type Reference struct {
+	CanonicalId *string `json:"canonical_id,omitempty"`
+	Id          string  `json:"id"`
+	Kind        string  `json:"kind"`
+	Name        string  `json:"name"`
+}
+
+// References defines model for References.
+type References struct {
+	Items      []Reference `json:"items"`
+	MissingIds []string    `json:"missing_ids"`
+}
 
 // Requirement defines model for Requirement.
 type Requirement struct {
@@ -468,7 +538,6 @@ type View struct {
 	Mine        bool       `json:"mine"`
 	MyVote      int        `json:"my_vote"`
 	ParentId    *string    `json:"parent_id,omitempty"`
-	Preview     bool       `json:"preview"`
 	PublishedAt *time.Time `json:"published_at"`
 	Ratings     []int      `json:"ratings"`
 	Revision    int        `json:"revision"`
@@ -599,6 +668,12 @@ type MyReviewsParams struct {
 
 // MyReviewsParamsSort defines parameters for MyReviews.
 type MyReviewsParamsSort string
+
+// MyReviewsReferencesParams defines parameters for MyReviewsReferences.
+type MyReviewsReferencesParams struct {
+	// Ids Comma-separated IDs referenced by own records, at most 100. Any unowned ID rejects the whole batch.
+	Ids string `form:"ids" json:"ids"`
+}
 
 // MyVotesParams defines parameters for MyVotes.
 type MyVotesParams struct {
@@ -733,6 +808,8 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 type ClientInterface interface {
 
 	// ListReviews performs a GET /api/v1/reviews (the `ListReviews` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	ListReviews(ctx context.Context, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateReviewWithBody performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
@@ -772,17 +849,25 @@ type ClientInterface interface {
 	SavePresentation(ctx context.Context, params *SavePresentationParams, body SavePresentationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetComposer performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyBookmarks performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
+	//
+	//  When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	MyBookmarks(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetBookmarkWithBody performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 	// with any type of body and a specified content type.
+	//
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	SetBookmarkWithBody(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetBookmark performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 	// Takes a body of the `application/json` content type.
+	//
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	SetBookmark(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyDrafts performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
@@ -790,10 +875,14 @@ type ClientInterface interface {
 
 	// SaveDraftWithBody performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request,
 	// with any type of body and a specified content type.
+	//
+	// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 	SaveDraftWithBody(ctx context.Context, params *SaveDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SaveDraft performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request.
 	// Takes a body of the `application/json` content type.
+	//
+	// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 	SaveDraft(ctx context.Context, params *SaveDraftParams, body SaveDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteDraftWithBody performs a DELETE /api/v1/reviews/me/drafts/{id} (the `DeleteDraft` operationId) request,
@@ -821,24 +910,41 @@ type ClientInterface interface {
 	// GetOwnEntry performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
 	GetOwnEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// MyReviewsReferences performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
+	//
+	// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
+	MyReviewsReferences(ctx context.Context, params *MyReviewsReferencesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// MyVotes performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
+	//
+	// Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized.
 	MyVotes(ctx context.Context, params *MyVotesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetPresentation performs a GET /api/v1/reviews/presentation (the `GetPresentation` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	GetPresentation(ctx context.Context, params *GetPresentationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// Statistics performs a GET /api/v1/reviews/statistics (the `Statistics` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	Statistics(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetReview performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	GetReview(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
+	//
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	ReviewActionWithBody(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReviewAction performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 	// Takes a body of the `application/json` content type.
+	//
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	ReviewAction(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplyWithBody performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
@@ -851,6 +957,8 @@ type ClientInterface interface {
 }
 
 // ListReviews performs a GET /api/v1/reviews (the `ListReviews` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) ListReviews(ctx context.Context, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListReviewsRequest(c.Server, params)
 	if err != nil {
@@ -1000,6 +1108,8 @@ func (c *Client) SavePresentation(ctx context.Context, params *SavePresentationP
 }
 
 // GetComposer performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetComposerRequest(c.Server, params)
 	if err != nil {
@@ -1013,6 +1123,8 @@ func (c *Client) GetComposer(ctx context.Context, params *GetComposerParams, req
 }
 
 // MyBookmarks performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
+//
+//	When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 func (c *Client) MyBookmarks(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewMyBookmarksRequest(c.Server, params)
 	if err != nil {
@@ -1027,6 +1139,8 @@ func (c *Client) MyBookmarks(ctx context.Context, params *MyBookmarksParams, req
 
 // SetBookmarkWithBody performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 // with any type of body and a specified content type.
+//
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 func (c *Client) SetBookmarkWithBody(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetBookmarkRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -1041,6 +1155,8 @@ func (c *Client) SetBookmarkWithBody(ctx context.Context, params *SetBookmarkPar
 
 // SetBookmark performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 // Takes a body of the `application/json` content type.
+//
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 func (c *Client) SetBookmark(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetBookmarkRequest(c.Server, params, body)
 	if err != nil {
@@ -1068,6 +1184,8 @@ func (c *Client) MyDrafts(ctx context.Context, params *MyDraftsParams, reqEditor
 
 // SaveDraftWithBody performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request,
 // with any type of body and a specified content type.
+//
+// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 func (c *Client) SaveDraftWithBody(ctx context.Context, params *SaveDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSaveDraftRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -1082,6 +1200,8 @@ func (c *Client) SaveDraftWithBody(ctx context.Context, params *SaveDraftParams,
 
 // SaveDraft performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request.
 // Takes a body of the `application/json` content type.
+//
+// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 func (c *Client) SaveDraft(ctx context.Context, params *SaveDraftParams, body SaveDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSaveDraftRequest(c.Server, params, body)
 	if err != nil {
@@ -1189,7 +1309,24 @@ func (c *Client) GetOwnEntry(ctx context.Context, id string, reqEditors ...Reque
 	return c.Client.Do(req)
 }
 
+// MyReviewsReferences performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
+//
+// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
+func (c *Client) MyReviewsReferences(ctx context.Context, params *MyReviewsReferencesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMyReviewsReferencesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // MyVotes performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
+//
+// Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized.
 func (c *Client) MyVotes(ctx context.Context, params *MyVotesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewMyVotesRequest(c.Server, params)
 	if err != nil {
@@ -1203,6 +1340,8 @@ func (c *Client) MyVotes(ctx context.Context, params *MyVotesParams, reqEditors 
 }
 
 // GetPresentation performs a GET /api/v1/reviews/presentation (the `GetPresentation` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) GetPresentation(ctx context.Context, params *GetPresentationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetPresentationRequest(c.Server, params)
 	if err != nil {
@@ -1216,6 +1355,8 @@ func (c *Client) GetPresentation(ctx context.Context, params *GetPresentationPar
 }
 
 // Statistics performs a GET /api/v1/reviews/statistics (the `Statistics` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) Statistics(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStatisticsRequest(c.Server, params)
 	if err != nil {
@@ -1229,6 +1370,8 @@ func (c *Client) Statistics(ctx context.Context, params *StatisticsParams, reqEd
 }
 
 // GetReview performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) GetReview(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetReviewRequest(c.Server, id)
 	if err != nil {
@@ -1243,6 +1386,8 @@ func (c *Client) GetReview(ctx context.Context, id string, reqEditors ...Request
 
 // ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 // with any type of body and a specified content type.
+//
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 func (c *Client) ReviewActionWithBody(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReviewActionRequestWithBody(c.Server, id, params, contentType, body)
 	if err != nil {
@@ -1257,6 +1402,8 @@ func (c *Client) ReviewActionWithBody(ctx context.Context, id string, params *Re
 
 // ReviewAction performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 // Takes a body of the `application/json` content type.
+//
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 func (c *Client) ReviewAction(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReviewActionRequest(c.Server, id, params, body)
 	if err != nil {
@@ -2517,6 +2664,56 @@ func NewGetOwnEntryRequest(server string, id string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewMyReviewsReferencesRequest constructs an http.Request for the MyReviewsReferences method
+func NewMyReviewsReferencesRequest(server string, params *MyReviewsReferencesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/me/references")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "ids", params.Ids, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewMyVotesRequest constructs an http.Request for the MyVotes method
 func NewMyVotesRequest(server string, params *MyVotesParams) (*http.Request, error) {
 	var err error
@@ -2947,6 +3144,8 @@ type ClientWithResponsesInterface interface {
 
 	// ListReviewsWithResponse performs a GET /api/v1/reviews (the `ListReviews` operationId) request.
 	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	ListReviewsWithResponse(ctx context.Context, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*ListReviewsResponse, error)
 
@@ -3002,10 +3201,14 @@ type ClientWithResponsesInterface interface {
 
 	// GetComposerWithResponse performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
 	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	GetComposerWithResponse(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*GetComposerResponse, error)
 
 	// MyBookmarksWithResponse performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
+	//
+	//  When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	MyBookmarksWithResponse(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*MyBookmarksResponse, error)
@@ -3013,11 +3216,15 @@ type ClientWithResponsesInterface interface {
 	// SetBookmarkWithBodyWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 	// with any type of body and a specified content type.
 	//
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	SetBookmarkWithBodyWithResponse(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error)
 
 	// SetBookmarkWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	SetBookmarkWithResponse(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error)
 
 	// MyDraftsWithResponse performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
@@ -3028,11 +3235,15 @@ type ClientWithResponsesInterface interface {
 	// SaveDraftWithBodyWithResponse performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request,
 	// with any type of body and a specified content type.
 	//
+	// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	SaveDraftWithBodyWithResponse(ctx context.Context, params *SaveDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SaveDraftResponse, error)
 
 	// SaveDraftWithResponse performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 	SaveDraftWithResponse(ctx context.Context, params *SaveDraftParams, body SaveDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*SaveDraftResponse, error)
 
 	// DeleteDraftWithBodyWithResponse performs a DELETE /api/v1/reviews/me/drafts/{id} (the `DeleteDraft` operationId) request,
@@ -3070,22 +3281,37 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	GetOwnEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetOwnEntryResponse, error)
 
+	// MyReviewsReferencesWithResponse performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
+	//
+	// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	MyReviewsReferencesWithResponse(ctx context.Context, params *MyReviewsReferencesParams, reqEditors ...RequestEditorFn) (*MyReviewsReferencesResponse, error)
+
 	// MyVotesWithResponse performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
+	//
+	// Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	MyVotesWithResponse(ctx context.Context, params *MyVotesParams, reqEditors ...RequestEditorFn) (*MyVotesResponse, error)
 
 	// GetPresentationWithResponse performs a GET /api/v1/reviews/presentation (the `GetPresentation` operationId) request.
 	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	GetPresentationWithResponse(ctx context.Context, params *GetPresentationParams, reqEditors ...RequestEditorFn) (*GetPresentationResponse, error)
 
 	// StatisticsWithResponse performs a GET /api/v1/reviews/statistics (the `Statistics` operationId) request.
 	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	StatisticsWithResponse(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*StatisticsResponse, error)
 
 	// GetReviewWithResponse performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetReviewWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetReviewResponse, error)
@@ -3093,11 +3319,15 @@ type ClientWithResponsesInterface interface {
 	// ReviewActionWithBodyWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
 	//
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	ReviewActionWithBodyWithResponse(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error)
 
 	// ReviewActionWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	ReviewActionWithResponse(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error)
 
 	// ReplyWithBodyWithResponse performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
@@ -4605,11 +4835,11 @@ func (r GetOwnEntryResponse) ContentType() string {
 	return ""
 }
 
-type MyVotesResponse struct {
+type MyReviewsReferencesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]View
+	JSON200 *References
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *Error
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -4625,7 +4855,90 @@ type MyVotesResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r MyVotesResponse) GetJSON200() *[]View {
+func (r MyReviewsReferencesResponse) GetJSON200() *References {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r MyReviewsReferencesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r MyReviewsReferencesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MyReviewsReferencesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r MyReviewsReferencesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type MyVotesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]OwnVote
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r MyVotesResponse) GetJSON200() *[]OwnVote {
 	return r.JSON200
 }
 
@@ -5105,6 +5418,8 @@ func (r ReplyResponse) ContentType() string {
 
 // ListReviewsWithResponse performs a GET /api/v1/reviews (the `ListReviews` operationId) request.
 //
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) ListReviewsWithResponse(ctx context.Context, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*ListReviewsResponse, error) {
 	rsp, err := c.ListReviews(ctx, params, reqEditors...)
@@ -5226,6 +5541,8 @@ func (c *ClientWithResponses) SavePresentationWithResponse(ctx context.Context, 
 
 // GetComposerWithResponse performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
 //
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) GetComposerWithResponse(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*GetComposerResponse, error) {
 	rsp, err := c.GetComposer(ctx, params, reqEditors...)
@@ -5236,6 +5553,8 @@ func (c *ClientWithResponses) GetComposerWithResponse(ctx context.Context, param
 }
 
 // MyBookmarksWithResponse performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
+//
+//	When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) MyBookmarksWithResponse(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*MyBookmarksResponse, error) {
@@ -5249,6 +5568,8 @@ func (c *ClientWithResponses) MyBookmarksWithResponse(ctx context.Context, param
 // SetBookmarkWithBodyWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 // with any type of body and a specified content type.
 //
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) SetBookmarkWithBodyWithResponse(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error) {
 	rsp, err := c.SetBookmarkWithBody(ctx, params, contentType, body, reqEditors...)
@@ -5260,6 +5581,8 @@ func (c *ClientWithResponses) SetBookmarkWithBodyWithResponse(ctx context.Contex
 
 // SetBookmarkWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 func (c *ClientWithResponses) SetBookmarkWithResponse(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error) {
 	rsp, err := c.SetBookmark(ctx, params, body, reqEditors...)
 	if err != nil {
@@ -5282,6 +5605,8 @@ func (c *ClientWithResponses) MyDraftsWithResponse(ctx context.Context, params *
 // SaveDraftWithBodyWithResponse performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request,
 // with any type of body and a specified content type.
 //
+// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) SaveDraftWithBodyWithResponse(ctx context.Context, params *SaveDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SaveDraftResponse, error) {
 	rsp, err := c.SaveDraftWithBody(ctx, params, contentType, body, reqEditors...)
@@ -5293,6 +5618,8 @@ func (c *ClientWithResponses) SaveDraftWithBodyWithResponse(ctx context.Context,
 
 // SaveDraftWithResponse performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 func (c *ClientWithResponses) SaveDraftWithResponse(ctx context.Context, params *SaveDraftParams, body SaveDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*SaveDraftResponse, error) {
 	rsp, err := c.SaveDraft(ctx, params, body, reqEditors...)
 	if err != nil {
@@ -5378,7 +5705,22 @@ func (c *ClientWithResponses) GetOwnEntryWithResponse(ctx context.Context, id st
 	return ParseGetOwnEntryResponse(rsp)
 }
 
+// MyReviewsReferencesWithResponse performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
+//
+// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) MyReviewsReferencesWithResponse(ctx context.Context, params *MyReviewsReferencesParams, reqEditors ...RequestEditorFn) (*MyReviewsReferencesResponse, error) {
+	rsp, err := c.MyReviewsReferences(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMyReviewsReferencesResponse(rsp)
+}
+
 // MyVotesWithResponse performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
+//
+// Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) MyVotesWithResponse(ctx context.Context, params *MyVotesParams, reqEditors ...RequestEditorFn) (*MyVotesResponse, error) {
@@ -5391,6 +5733,8 @@ func (c *ClientWithResponses) MyVotesWithResponse(ctx context.Context, params *M
 
 // GetPresentationWithResponse performs a GET /api/v1/reviews/presentation (the `GetPresentation` operationId) request.
 //
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) GetPresentationWithResponse(ctx context.Context, params *GetPresentationParams, reqEditors ...RequestEditorFn) (*GetPresentationResponse, error) {
 	rsp, err := c.GetPresentation(ctx, params, reqEditors...)
@@ -5402,6 +5746,8 @@ func (c *ClientWithResponses) GetPresentationWithResponse(ctx context.Context, p
 
 // StatisticsWithResponse performs a GET /api/v1/reviews/statistics (the `Statistics` operationId) request.
 //
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) StatisticsWithResponse(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*StatisticsResponse, error) {
 	rsp, err := c.Statistics(ctx, params, reqEditors...)
@@ -5412,6 +5758,8 @@ func (c *ClientWithResponses) StatisticsWithResponse(ctx context.Context, params
 }
 
 // GetReviewWithResponse performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) GetReviewWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetReviewResponse, error) {
@@ -5425,6 +5773,8 @@ func (c *ClientWithResponses) GetReviewWithResponse(ctx context.Context, id stri
 // ReviewActionWithBodyWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 // with any type of body and a specified content type.
 //
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) ReviewActionWithBodyWithResponse(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error) {
 	rsp, err := c.ReviewActionWithBody(ctx, id, params, contentType, body, reqEditors...)
@@ -5436,6 +5786,8 @@ func (c *ClientWithResponses) ReviewActionWithBodyWithResponse(ctx context.Conte
 
 // ReviewActionWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 func (c *ClientWithResponses) ReviewActionWithResponse(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error) {
 	rsp, err := c.ReviewAction(ctx, id, params, body, reqEditors...)
 	if err != nil {
@@ -6690,6 +7042,74 @@ func ParseGetOwnEntryResponse(rsp *http.Response) (*GetOwnEntryResponse, error) 
 	return response, nil
 }
 
+// ParseMyReviewsReferencesResponse parses an HTTP response from a MyReviewsReferencesWithResponse call
+func ParseMyReviewsReferencesResponse(rsp *http.Response) (*MyReviewsReferencesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MyReviewsReferencesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest References
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseMyVotesResponse parses an HTTP response from a MyVotesWithResponse call
 func ParseMyVotesResponse(rsp *http.Response) (*MyVotesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -6705,7 +7125,7 @@ func ParseMyVotesResponse(rsp *http.Response) (*MyVotesResponse, error) {
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []View
+		var dest []OwnVote
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

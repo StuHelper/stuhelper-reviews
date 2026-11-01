@@ -17,7 +17,10 @@ import (
 	"github.com/StuHelper/stuhelper-reviews/httpapi"
 )
 
-type catalog struct{ missing, failed bool }
+type catalog struct {
+	missing, failed bool
+	schools         map[string]string
+}
 
 func (c *catalog) Target(_ context.Context, kind, id string) (r.Target, error) {
 	if c.failed {
@@ -26,7 +29,11 @@ func (c *catalog) Target(_ context.Context, kind, id string) (r.Target, error) {
 	if id == "missing" {
 		return r.Target{}, r.ErrNotFound
 	}
-	return r.Target{ID: id, Kind: kind, SchoolID: "school"}, nil
+	school := "school"
+	if c.schools[id] != "" {
+		school = c.schools[id]
+	}
+	return r.Target{ID: id, Kind: kind, SchoolID: school}, nil
 }
 func (c *catalog) Evidence(_ context.Context, p r.Principal, course, term string) ([]r.Evidence, error) {
 	if c.failed {
@@ -45,7 +52,7 @@ func (c *catalog) Evidence(_ context.Context, p r.Principal, course, term string
 type access struct{ revoked, failed, optional bool }
 
 func (a *access) Authorize(_ context.Context, p r.Principal, action, school string) (r.Grant, error) {
-	g := r.Grant{RuleVersion: "rule-1", EnrollmentRequired: !a.optional}
+	g := r.Grant{SchoolID: "school", RuleVersion: "rule-1", EnrollmentRequired: !a.optional}
 	if a.failed {
 		return g, r.ErrUnavailable
 	}
@@ -55,10 +62,13 @@ func (a *access) Authorize(_ context.Context, p r.Principal, action, school stri
 		}
 		return g, nil
 	}
+	if action == "read_full" && school != "" && school != "school" {
+		return g, r.ErrForbidden
+	}
 	if a.revoked || p.Subject == "" {
 		return g, r.ErrForbidden
 	}
-	if p.Subject == "member" && action != "vote" && action != "bookmark" {
+	if p.Subject == "member" {
 		return g, r.ErrForbidden
 	}
 	return g, nil
@@ -120,7 +130,7 @@ func TestPersonalPendingStatesAndBoundedDraftPages(t *testing.T) {
 	if err != nil || len(mine.Items) != 1 || mine.Items[0].ID != pending.ID || mine.Items[0].State != "pending" || mine.Items[0].CanEdit {
 		t.Fatal("pending owner status missing", err)
 	}
-	public, err := f.service.List(ctx, r.Principal{}, r.Filter{Limit: 20})
+	public, err := f.service.List(ctx, r.Principal{Subject: "reader"}, r.Filter{Limit: 20})
 	if err != nil || len(public.Items) != 0 {
 		t.Fatal("pending review exposed")
 	}
@@ -164,7 +174,7 @@ func TestTeacherCourseStatisticsPaginationPreservesOverallWeights(t *testing.T) 
 }
 
 func input(course, term string, score int) r.Input {
-	return r.Input{Kind: "course", TargetID: course, TermID: term, Title: "Useful course", Body: "First line of the course experience.\nSecond line should remain private in previews.", Ratings: [5]int{score, score, score, score, score}}
+	return r.Input{Kind: "course", TargetID: course, TermID: term, Title: "Useful course", Body: "First line of the course experience.\nSecond line is protected content.", Ratings: [5]int{score, score, score, score, score}}
 }
 func create(t *testing.T, f *fixtureState, key string, in r.Input) r.Result {
 	t.Helper()
@@ -218,36 +228,43 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 		t.Fatal("optional missing evidence invented teachers")
 	}
 }
-func TestAnonymousPreviewAndCurrentAccessCannotLeakIdentity(t *testing.T) {
+func TestContentAdmissionAndCurrentAccessCannotLeakIdentity(t *testing.T) {
 	f := fixture(t)
 	ctx := context.Background()
 	v := create(t, f, "review", input("course", "autumn", 4))
 	guest, e := f.service.Get(ctx, r.Principal{}, v.ID)
-	if e != nil || !guest.Preview || guest.Title != "" || strings.Contains(guest.Body, "Second line") {
-		t.Fatalf("guest preview %+v %v", guest, e)
+	if !errors.Is(e, r.ErrUnauthenticated) || guest.Body != "" {
+		t.Fatal("guest content leaked", e)
 	}
-	b, _ := json.Marshal(guest)
+	member, e := f.service.Get(ctx, r.Principal{Subject: "member"}, v.ID)
+	if !errors.Is(e, r.ErrForbidden) || member.Body != "" {
+		t.Fatal("unverified content leaked", e)
+	}
+	full, e := f.service.Get(ctx, r.Principal{Subject: "reader"}, v.ID)
+	if e != nil || !strings.Contains(full.Body, "Second line") {
+		t.Fatal("qualified read failed", e)
+	}
+	b, _ := json.Marshal(full)
 	for _, secret := range []string{"student", "enrollment", "approved", "source_id", "owner"} {
 		if strings.Contains(string(b), secret) {
 			t.Fatal("private field leaked", secret)
 		}
 	}
-	member, e := f.service.Get(ctx, r.Principal{Subject: "member"}, v.ID)
-	if e != nil || member.Title == "" || !member.Preview {
-		t.Fatal("member preview", e)
-	}
-	full, e := f.service.Get(ctx, student, v.ID)
-	if e != nil || full.Preview || !strings.Contains(full.Body, "Second line") {
-		t.Fatal("full read", e)
-	}
 	f.access.revoked = true
 	after, e := f.service.Get(ctx, student, v.ID)
-	if e != nil || !after.Preview {
+	if !errors.Is(e, r.ErrForbidden) || after.Body != "" {
 		t.Fatal("revoked facts reused", e)
+	}
+	own, e := f.service.GetOwn(ctx, student, v.ID)
+	if e != nil || own.Body != full.Body {
+		t.Fatal("own content no longer manageable", e)
 	}
 	f.access.failed = true
 	if _, e = f.service.Get(ctx, student, v.ID); !errors.Is(e, r.ErrUnavailable) {
-		t.Fatal("failed dependency became success")
+		t.Fatal("failed dependency became success", e)
+	}
+	if _, e = f.service.GetOwn(ctx, student, v.ID); e != nil {
+		t.Fatal("own record incorrectly depends on admission", e)
 	}
 }
 func TestConcurrentCreateReplayAndNewReviewsRemainAllowed(t *testing.T) {
@@ -319,7 +336,7 @@ func TestWithdrawalWindowExpiryVotesAndPermanentDeletion(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = f.service.Action(ctx, r.Principal{Subject: "member"}, v.ID, "vote", r.Action{Action: "vote", Vote: 1}); e != nil {
+	if _, e = f.service.Action(ctx, r.Principal{Subject: "qualified-voter"}, v.ID, "vote", r.Action{Action: "vote", Vote: 1}); e != nil {
 		t.Fatal(e)
 	}
 	f.now = f.now.Add(4 * time.Minute)

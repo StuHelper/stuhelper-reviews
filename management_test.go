@@ -11,9 +11,9 @@ func TestPresentationConfigAndAttributionChangesAreScopedAndVersioned(t *testing
 	f := fixture(t)
 	ctx := context.Background()
 	admin := r.Principal{Subject: "admin"}
-	settings := r.Presentation{SchoolID: "school", GuestPreview: 5, MemberPreview: 10, PreviewRatio: 0.2, RatingTexts: map[string][][]string{}}
+	settings := r.Presentation{SchoolID: "school", RatingTexts: map[string][][]string{}}
 	if _, err := f.service.SavePresentation(ctx, student, "denied", settings); !errors.Is(err, r.ErrForbidden) {
-		t.Fatal("student configured previews", err)
+		t.Fatal("student configured rating presentation", err)
 	}
 	result, err := f.service.SavePresentation(ctx, admin, "settings", settings)
 	if err != nil || result.Effective.Revision != 1 {
@@ -26,8 +26,8 @@ func TestPresentationConfigAndAttributionChangesAreScopedAndVersioned(t *testing
 		t.Fatal(err)
 	}
 	root := create(t, f, "review", input("course", "autumn", 3))
-	view, err := f.service.Get(ctx, r.Principal{}, root.ID)
-	if err != nil || len([]rune(view.Body)) > 5 {
+	view, err := f.service.Get(ctx, r.Principal{Subject: "reader"}, root.ID)
+	if err != nil || view.Body != input("course", "autumn", 3).Body {
 		t.Fatal(view, err)
 	}
 	preview, err := f.service.PreviewAttribution(ctx, admin, root.ID, "teacher-b")

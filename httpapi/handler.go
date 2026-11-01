@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	reviews "github.com/StuHelper/stuhelper-reviews"
@@ -32,6 +33,7 @@ func (h Handler) Routes() http.Handler {
 	m.HandleFunc("GET /api/v1/reviews/compose", h.compose)
 	m.HandleFunc("GET /api/v1/reviews/admin/entries", h.adminList)
 	m.HandleFunc("GET /api/v1/reviews/admin/entries/{id}", h.adminGet)
+	m.HandleFunc("GET /api/v1/reviews/me/references", h.references)
 	m.HandleFunc("GET /api/v1/reviews/me/entries", h.mine)
 	m.HandleFunc("GET /api/v1/reviews/me/entries/{id}", h.ownEntry)
 	m.HandleFunc("GET /api/v1/reviews/me/drafts", h.drafts)
@@ -123,7 +125,7 @@ func limit(r *http.Request) (int, error) {
 	return n, nil
 }
 func (h Handler) list(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.principal(w, r, false)
+	p, ok := h.principal(w, r, true)
 	if !ok {
 		return
 	}
@@ -137,7 +139,7 @@ func (h Handler) list(w http.ResponseWriter, r *http.Request) {
 	respond(w, v, e)
 }
 func (h Handler) get(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.principal(w, r, false)
+	p, ok := h.principal(w, r, true)
 	if !ok {
 		return
 	}
@@ -184,6 +186,10 @@ func (h Handler) action(w http.ResponseWriter, r *http.Request) {
 	respond(w, v, e)
 }
 func (h Handler) statistics(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.principal(w, r, true)
+	if !ok {
+		return
+	}
 	q := r.URL.Query()
 	var from, until *time.Time
 	for key, dest := range map[string]**time.Time{"from": &from, "until": &until} {
@@ -201,7 +207,7 @@ func (h Handler) statistics(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.StatsPage(r.Context(), q.Get("kind"), q.Get("target_id"), from, until, q.Get("after"), n)
+	v, e := h.Service.ReadStatsPage(r.Context(), p, q.Get("kind"), q.Get("target_id"), from, until, q.Get("after"), n)
 	respond(w, v, e)
 }
 func (h Handler) mine(w http.ResponseWriter, r *http.Request) {
@@ -304,4 +310,13 @@ func (h Handler) votes(w http.ResponseWriter, r *http.Request) {
 	}
 	v, e := h.Service.MyVotes(r.Context(), p, r.URL.Query().Get("after"), n)
 	respond(w, v, e)
+}
+
+func (h Handler) references(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.principal(w, r, true)
+	if !ok {
+		return
+	}
+	out, err := h.Service.MyReferences(r.Context(), p, strings.Split(r.URL.Query().Get("ids"), ","))
+	respond(w, out, err)
 }

@@ -180,7 +180,7 @@ func TestComposerUsesCurrentFactsAndDiscussionIdentity(t *testing.T) {
 	f := fixture(t)
 	ctx := context.Background()
 	guest, err := f.service.Composer(ctx, r.Principal{}, "course", "course", "autumn", "")
-	if err != nil || guest.Allowed || guest.State != "unauthenticated" {
+	if !errors.Is(err, r.ErrUnauthenticated) || guest.Allowed {
 		t.Fatal(guest, err)
 	}
 	choice, err := f.service.Composer(ctx, student, "course", "course", "", "")
@@ -210,7 +210,7 @@ func TestComposerUsesCurrentFactsAndDiscussionIdentity(t *testing.T) {
 	}
 	f.access.revoked = true
 	revoked, err := f.service.Composer(ctx, student, "mentor", "teacher", "", "")
-	if err != nil || revoked.Allowed || revoked.State != "forbidden" {
+	if !errors.Is(err, r.ErrForbidden) || revoked.Allowed {
 		t.Fatal(revoked, err)
 	}
 }
