@@ -174,7 +174,7 @@ func TestTeacherCourseStatisticsPaginationPreservesOverallWeights(t *testing.T) 
 }
 
 func input(course, term string, score int) r.Input {
-	return r.Input{Kind: "course", TargetID: course, TermID: term, Title: "Useful course", Body: "First line of the course experience.\nSecond line should remain private in previews.", Ratings: [5]int{score, score, score, score, score}}
+	return r.Input{Kind: "course", TargetID: course, TermID: term, Title: "Useful course", Body: "First line of the course experience.\nSecond line is protected content.", Ratings: [5]int{score, score, score, score, score}}
 }
 func create(t *testing.T, f *fixtureState, key string, in r.Input) r.Result {
 	t.Helper()
@@ -241,7 +241,7 @@ func TestContentAdmissionAndCurrentAccessCannotLeakIdentity(t *testing.T) {
 		t.Fatal("unverified content leaked", e)
 	}
 	full, e := f.service.Get(ctx, r.Principal{Subject: "reader"}, v.ID)
-	if e != nil || full.Preview || !strings.Contains(full.Body, "Second line") {
+	if e != nil || !strings.Contains(full.Body, "Second line") {
 		t.Fatal("qualified read failed", e)
 	}
 	b, _ := json.Marshal(full)
@@ -256,7 +256,7 @@ func TestContentAdmissionAndCurrentAccessCannotLeakIdentity(t *testing.T) {
 		t.Fatal("revoked facts reused", e)
 	}
 	own, e := f.service.GetOwn(ctx, student, v.ID)
-	if e != nil || own.Body != full.Body || own.Preview {
+	if e != nil || own.Body != full.Body {
 		t.Fatal("own content no longer manageable", e)
 	}
 	f.access.failed = true

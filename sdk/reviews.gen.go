@@ -422,23 +422,17 @@ type Page struct {
 
 // Presentation defines model for Presentation.
 type Presentation struct {
-	GuestPreview  int         `json:"guest_preview"`
-	MemberPreview int         `json:"member_preview"`
-	PreviewRatio  float32     `json:"preview_ratio"`
-	RatingTexts   RatingTexts `json:"rating_texts"`
-	Revision      int         `json:"revision"`
-	SchoolId      string      `json:"school_id"`
+	RatingTexts RatingTexts `json:"rating_texts"`
+	Revision    int         `json:"revision"`
+	SchoolId    string      `json:"school_id"`
 }
 
 // PresentationView defines model for PresentationView.
 type PresentationView struct {
 	Configured *struct {
-		GuestPreview  int         `json:"guest_preview"`
-		MemberPreview int         `json:"member_preview"`
-		PreviewRatio  float32     `json:"preview_ratio"`
-		RatingTexts   RatingTexts `json:"rating_texts"`
-		Revision      int         `json:"revision"`
-		SchoolId      string      `json:"school_id"`
+		RatingTexts RatingTexts `json:"rating_texts"`
+		Revision    int         `json:"revision"`
+		SchoolId    string      `json:"school_id"`
 	} `json:"configured"`
 	Effective Presentation `json:"effective"`
 	Source    string       `json:"source"`
@@ -500,7 +494,6 @@ type View struct {
 	Mine        bool       `json:"mine"`
 	MyVote      int        `json:"my_vote"`
 	ParentId    *string    `json:"parent_id,omitempty"`
-	Preview     bool       `json:"preview"`
 	PublishedAt *time.Time `json:"published_at"`
 	Ratings     []int      `json:"ratings"`
 	Revision    int        `json:"revision"`

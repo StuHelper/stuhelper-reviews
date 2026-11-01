@@ -372,7 +372,6 @@ export interface components {
             title: string;
             body: string;
             ratings: number[];
-            preview: boolean;
             author: components["schemas"]["Author"];
             revision: number;
             /** Format: date-time */
@@ -494,9 +493,6 @@ export interface components {
         Presentation: {
             school_id: string;
             revision: number;
-            guest_preview: number;
-            member_preview: number;
-            preview_ratio: number;
             rating_texts: components["schemas"]["RatingTexts"];
         };
         PresentationView: {
@@ -504,9 +500,6 @@ export interface components {
             configured: {
                 school_id: string;
                 revision: number;
-                guest_preview: number;
-                member_preview: number;
-                preview_ratio: number;
                 rating_texts: components["schemas"]["RatingTexts"];
             } | null;
             source: string;

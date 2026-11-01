@@ -14,14 +14,12 @@ import (
 )
 
 type Config struct {
-	GuestPreview, MemberPreview int
-	PreviewRatio                float64
-	EditWindow, DraftLifetime   time.Duration
-	MinSamples                  int
+	EditWindow, DraftLifetime time.Duration
+	MinSamples                int
 }
 
 func DefaultConfig() Config {
-	return Config{GuestPreview: 80, MemberPreview: 160, PreviewRatio: 0.3, EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1}
+	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1}
 }
 
 type Service struct {
@@ -36,7 +34,7 @@ type Service struct {
 }
 
 func New(repo Repository, catalog Catalog, access Access, moderation Moderation, profiles Profiles, c Config) (*Service, error) {
-	if repo == nil || catalog == nil || access == nil || moderation == nil || c.GuestPreview < 0 || c.GuestPreview > 1000 || c.MemberPreview < 0 || c.MemberPreview > 1000 || c.PreviewRatio <= 0 || c.PreviewRatio >= 1 || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 {
+	if repo == nil || catalog == nil || access == nil || moderation == nil || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 {
 		return nil, ErrInput
 	}
 	return &Service{Repo: repo, Catalog: catalog, Access: access, Moderation: moderation, Profiles: profiles, Config: c}, nil
@@ -653,24 +651,6 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 	}
 	*out = result(e)
 	return nil
-}
-func preview(body string, max int, ratio float64) string {
-	line := ""
-	for _, v := range strings.Split(body, "\n") {
-		if strings.TrimSpace(v) != "" {
-			line = strings.TrimSpace(v)
-			break
-		}
-	}
-	n := int(math.Floor(float64(utf8.RuneCountInString(body)) * ratio))
-	if n > max {
-		n = max
-	}
-	r := []rune(line)
-	if n < len(r) {
-		r = r[:n]
-	}
-	return string(r)
 }
 func (s *Service) Stats(ctx context.Context, kind, target string, from, until *time.Time) (Statistics, error) {
 	return s.StatsPage(ctx, kind, target, from, until, "", 20)

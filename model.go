@@ -149,7 +149,6 @@ type View struct {
 	Title       string     `json:"title"`
 	Body        string     `json:"body"`
 	Ratings     [5]int     `json:"ratings"`
-	Preview     bool       `json:"preview"`
 	Author      Author     `json:"author"`
 	Revision    int64      `json:"revision"`
 	PublishedAt *time.Time `json:"published_at"`

@@ -3,18 +3,14 @@ package reviews
 import (
 	"context"
 	"errors"
-	"math"
 	"slices"
 	"time"
 )
 
 type Presentation struct {
-	SchoolID      string                `json:"school_id"`
-	Revision      int64                 `json:"revision"`
-	GuestPreview  int                   `json:"guest_preview"`
-	MemberPreview int                   `json:"member_preview"`
-	PreviewRatio  float64               `json:"preview_ratio"`
-	RatingTexts   map[string][][]string `json:"rating_texts"`
+	SchoolID    string                `json:"school_id"`
+	Revision    int64                 `json:"revision"`
+	RatingTexts map[string][][]string `json:"rating_texts"`
 }
 type PresentationView struct {
 	Effective  Presentation  `json:"effective"`
@@ -44,13 +40,13 @@ func (s *Service) Presentation(ctx context.Context, school string) (Presentation
 		if !errors.Is(e, ErrNotFound) {
 			return e
 		}
-		out = PresentationView{Presentation{SchoolID: school, GuestPreview: s.Config.GuestPreview, MemberPreview: s.Config.MemberPreview, PreviewRatio: s.Config.PreviewRatio, RatingTexts: map[string][][]string{}}, nil, "default"}
+		out = PresentationView{Presentation{SchoolID: school, RatingTexts: map[string][][]string{}}, nil, "default"}
 		return nil
 	})
 	return out, err
 }
 func validPresentation(v Presentation) bool {
-	if v.SchoolID != "*" && !validID(v.SchoolID) || v.Revision < 0 || v.GuestPreview < 0 || v.GuestPreview > 1000 || v.MemberPreview < 0 || v.MemberPreview > 1000 || math.IsNaN(v.PreviewRatio) || v.PreviewRatio <= 0 || v.PreviewRatio >= 1 {
+	if v.SchoolID != "*" && !validID(v.SchoolID) || v.Revision < 0 {
 		return false
 	}
 	locales := []string{"zh-CN", "en-US", "ja-JP", "ko-KR", "fr-FR", "es-ES", "ru-RU", "ar-EG"}

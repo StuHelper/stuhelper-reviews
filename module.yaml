@@ -1,5 +1,5 @@
 id: reviews
-version: 0.3.0
+version: 0.4.0
 api: 1
 critical: false
 requires:
@@ -59,6 +59,7 @@ scenario_tests:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   ACAD-40:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
+    - presentation_test.go#TestPresentationMigrationAndHTTPRemovePreviewFieldsPreservingRatingTexts
   CM-09:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   CM-14:

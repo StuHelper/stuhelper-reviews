@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "StuHelper Reviews",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "servers": [
     {
@@ -2861,9 +2861,6 @@
               "maximum": 5
             }
           },
-          "preview": {
-            "type": "boolean"
-          },
           "author": {
             "$ref": "#/components/schemas/Author"
           },
@@ -2902,7 +2899,6 @@
           "title",
           "body",
           "ratings",
-          "preview",
           "author",
           "revision",
           "published_at",
@@ -3381,23 +3377,6 @@
           "revision": {
             "type": "integer"
           },
-          "guest_preview": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1000
-          },
-          "member_preview": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1000
-          },
-          "preview_ratio": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "exclusiveMinimum": true,
-            "exclusiveMaximum": true
-          },
           "rating_texts": {
             "$ref": "#/components/schemas/RatingTexts"
           }
@@ -3405,9 +3384,6 @@
         "required": [
           "school_id",
           "revision",
-          "guest_preview",
-          "member_preview",
-          "preview_ratio",
           "rating_texts"
         ]
       },
@@ -3428,23 +3404,6 @@
               "revision": {
                 "type": "integer"
               },
-              "guest_preview": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 1000
-              },
-              "member_preview": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 1000
-              },
-              "preview_ratio": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1,
-                "exclusiveMinimum": true,
-                "exclusiveMaximum": true
-              },
               "rating_texts": {
                 "$ref": "#/components/schemas/RatingTexts"
               }
@@ -3452,9 +3411,6 @@
             "required": [
               "school_id",
               "revision",
-              "guest_preview",
-              "member_preview",
-              "preview_ratio",
               "rating_texts"
             ],
             "nullable": true
