@@ -193,6 +193,13 @@ func (s *Service) requirePublicDisclosure(ctx context.Context, id string) error 
 		return err
 	}
 	if entry.TeacherReply {
+		var closed map[string]bool
+		if err := s.Repo.Transaction(ctx, func(t Transaction) error { var e error; closed, e = t.ClosedOwners([]string{entry.Owner}); return e }); err != nil {
+			return err
+		}
+		if closed[entry.Owner] {
+			return nil
+		}
 		_, public := s.disclosed(ctx, entry)
 		if !public {
 			return ErrNotFound

@@ -34,7 +34,14 @@ func (s *Service) Inspect(ctx context.Context, p Principal, id string) (Inspecti
 	if err != nil {
 		return out, err
 	}
-	_, disclosed := s.disclosed(ctx, entry)
+	var closed map[string]bool
+	if err := s.Repo.Transaction(ctx, func(t Transaction) error { var e error; closed, e = t.ClosedOwners([]string{entry.Owner}); return e }); err != nil {
+		return Inspection{}, err
+	}
+	disclosed := true
+	if !closed[entry.Owner] {
+		_, disclosed = s.disclosed(ctx, entry)
+	}
 	isVisible := visible(entry, s.now()) && rootVisible && disclosed
 	if !isVisible && entry.Owner != p.Subject {
 		if _, err = s.authorize(ctx, p, "moderate", entry.SchoolID); err != nil {

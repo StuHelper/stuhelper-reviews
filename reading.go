@@ -81,6 +81,14 @@ func project(t Transaction, p Principal, entry Entry) (Entry, error) {
 func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own bool, school string) ([]View, error) {
 	out := make([]View, 0, len(entries))
 	profiles := map[string]Profile{}
+	owners := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		owners = append(owners, entry.Owner)
+	}
+	var closed map[string]bool
+	if e := s.Repo.Transaction(ctx, func(t Transaction) error { var err error; closed, err = t.ClosedOwners(owners); return err }); e != nil {
+		return nil, e
+	}
 	for _, entry := range entries {
 		if own {
 			if p.Subject == "" || entry.Owner != p.Subject {
@@ -89,7 +97,11 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		} else if !validID(school) || entry.SchoolID != school {
 			return nil, ErrForbidden
 		}
-		labels, public := s.disclosed(ctx, entry)
+		var labels []DisclosureOption
+		public := true
+		if !closed[entry.Owner] {
+			labels, public = s.disclosed(ctx, entry)
+		}
 		if !public && p.Subject != entry.Owner {
 			continue
 		}
@@ -99,6 +111,9 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		v := View{Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
 		v.CanEdit = v.Mine && entry.State == "published" && entry.FirstPublishedAt != nil && s.now().Before(entry.FirstPublishedAt.Add(s.Config.EditWindow))
 		identity := entry.Projection.Identity
+		if closed[entry.Owner] {
+			identity.Signed = false
+		}
 		v.Author = Author{Anonymous: !identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }), Handle: identity.Handle, Disclosures: labels}
 		if identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }) {
 			if s.Profiles == nil {

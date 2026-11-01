@@ -76,3 +76,6 @@ scenario_tests:
     - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
   ACAD-15:
     - interaction_test.go#TestExpiredAdmissionAllowsOnlyOwnVoteAndBookmarkRemoval
+  PC-07:
+    - closure_test.go#TestClosedOwnerKeepsContentWithoutProfileOrDisclosures
+    - closure_test.go#TestClosureRejectsPublicationAlreadyWaitingForExternalModeration

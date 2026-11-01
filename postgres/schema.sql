@@ -43,3 +43,5 @@ REVOKE ALL ON TABLE reviews.presentations,reviews.presentation_history FROM PUBL
 -- remain immutable audit records; application projections omit retired keys.
 UPDATE reviews.presentations SET data=data-'guest_preview'-'member_preview'-'preview_ratio'
  WHERE data ?| ARRAY['guest_preview','member_preview','preview_ratio'];
+
+CREATE TABLE IF NOT EXISTS reviews.closed_owners(owner text PRIMARY KEY,closure_id text NOT NULL,created_at timestamptz NOT NULL DEFAULT now());

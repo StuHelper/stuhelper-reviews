@@ -285,6 +285,8 @@ type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
 }
 type Transaction interface {
+	ClosedOwners([]string) (map[string]bool, error)
+	CloseOwner(string, string) error
 	OwnedReferences(string, []string, time.Time) ([]string, error)
 	History(string, int64, int) ([]Entry, error)
 	Presentation(string) (Presentation, error)
