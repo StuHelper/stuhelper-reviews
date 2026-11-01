@@ -149,6 +149,24 @@ func (e InputKind) Valid() bool {
 	}
 }
 
+// Defines values for OwnVoteMyVote.
+const (
+	Minus1 OwnVoteMyVote = -1
+	N1     OwnVoteMyVote = 1
+)
+
+// Valid indicates whether the value is a known member of the OwnVoteMyVote enum.
+func (e OwnVoteMyVote) Valid() bool {
+	switch e {
+	case Minus1:
+		return true
+	case N1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RequirementKey.
 const (
 	CampusEligibility RequirementKey = "campus_eligibility"
@@ -381,6 +399,20 @@ type Input struct {
 
 // InputKind defines model for Input.Kind.
 type InputKind string
+
+// OwnVote Caller-owned vote receipt. Does not contain another author's title, body, rating, identity or aggregate counts.
+type OwnVote struct {
+	Id       string        `json:"id"`
+	Kind     string        `json:"kind"`
+	MyVote   OwnVoteMyVote `json:"my_vote"`
+	RootId   string        `json:"root_id"`
+	SchoolId string        `json:"school_id"`
+	TargetId string        `json:"target_id"`
+	TermId   string        `json:"term_id"`
+}
+
+// OwnVoteMyVote defines model for OwnVote.MyVote.
+type OwnVoteMyVote int
 
 // Page defines model for Page.
 type Page struct {
@@ -733,6 +765,8 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 type ClientInterface interface {
 
 	// ListReviews performs a GET /api/v1/reviews (the `ListReviews` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	ListReviews(ctx context.Context, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateReviewWithBody performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
@@ -772,6 +806,8 @@ type ClientInterface interface {
 	SavePresentation(ctx context.Context, params *SavePresentationParams, body SavePresentationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetComposer performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyBookmarks performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
@@ -822,15 +858,23 @@ type ClientInterface interface {
 	GetOwnEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyVotes performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
+	//
+	// Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized.
 	MyVotes(ctx context.Context, params *MyVotesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetPresentation performs a GET /api/v1/reviews/presentation (the `GetPresentation` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	GetPresentation(ctx context.Context, params *GetPresentationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// Statistics performs a GET /api/v1/reviews/statistics (the `Statistics` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	Statistics(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetReview performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	GetReview(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
@@ -851,6 +895,8 @@ type ClientInterface interface {
 }
 
 // ListReviews performs a GET /api/v1/reviews (the `ListReviews` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) ListReviews(ctx context.Context, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListReviewsRequest(c.Server, params)
 	if err != nil {
@@ -1000,6 +1046,8 @@ func (c *Client) SavePresentation(ctx context.Context, params *SavePresentationP
 }
 
 // GetComposer performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetComposerRequest(c.Server, params)
 	if err != nil {
@@ -1190,6 +1238,8 @@ func (c *Client) GetOwnEntry(ctx context.Context, id string, reqEditors ...Reque
 }
 
 // MyVotes performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
+//
+// Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized.
 func (c *Client) MyVotes(ctx context.Context, params *MyVotesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewMyVotesRequest(c.Server, params)
 	if err != nil {
@@ -1203,6 +1253,8 @@ func (c *Client) MyVotes(ctx context.Context, params *MyVotesParams, reqEditors 
 }
 
 // GetPresentation performs a GET /api/v1/reviews/presentation (the `GetPresentation` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) GetPresentation(ctx context.Context, params *GetPresentationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetPresentationRequest(c.Server, params)
 	if err != nil {
@@ -1216,6 +1268,8 @@ func (c *Client) GetPresentation(ctx context.Context, params *GetPresentationPar
 }
 
 // Statistics performs a GET /api/v1/reviews/statistics (the `Statistics` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) Statistics(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStatisticsRequest(c.Server, params)
 	if err != nil {
@@ -1229,6 +1283,8 @@ func (c *Client) Statistics(ctx context.Context, params *StatisticsParams, reqEd
 }
 
 // GetReview performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) GetReview(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetReviewRequest(c.Server, id)
 	if err != nil {
@@ -2947,6 +3003,8 @@ type ClientWithResponsesInterface interface {
 
 	// ListReviewsWithResponse performs a GET /api/v1/reviews (the `ListReviews` operationId) request.
 	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	ListReviewsWithResponse(ctx context.Context, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*ListReviewsResponse, error)
 
@@ -3001,6 +3059,8 @@ type ClientWithResponsesInterface interface {
 	SavePresentationWithResponse(ctx context.Context, params *SavePresentationParams, body SavePresentationJSONRequestBody, reqEditors ...RequestEditorFn) (*SavePresentationResponse, error)
 
 	// GetComposerWithResponse performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetComposerWithResponse(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*GetComposerResponse, error)
@@ -3072,20 +3132,28 @@ type ClientWithResponsesInterface interface {
 
 	// MyVotesWithResponse performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
 	//
+	// Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	MyVotesWithResponse(ctx context.Context, params *MyVotesParams, reqEditors ...RequestEditorFn) (*MyVotesResponse, error)
 
 	// GetPresentationWithResponse performs a GET /api/v1/reviews/presentation (the `GetPresentation` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetPresentationWithResponse(ctx context.Context, params *GetPresentationParams, reqEditors ...RequestEditorFn) (*GetPresentationResponse, error)
 
 	// StatisticsWithResponse performs a GET /api/v1/reviews/statistics (the `Statistics` operationId) request.
 	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	StatisticsWithResponse(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*StatisticsResponse, error)
 
 	// GetReviewWithResponse performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
+	//
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetReviewWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetReviewResponse, error)
@@ -4609,7 +4677,7 @@ type MyVotesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]View
+	JSON200 *[]OwnVote
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *Error
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -4625,7 +4693,7 @@ type MyVotesResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r MyVotesResponse) GetJSON200() *[]View {
+func (r MyVotesResponse) GetJSON200() *[]OwnVote {
 	return r.JSON200
 }
 
@@ -5105,6 +5173,8 @@ func (r ReplyResponse) ContentType() string {
 
 // ListReviewsWithResponse performs a GET /api/v1/reviews (the `ListReviews` operationId) request.
 //
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) ListReviewsWithResponse(ctx context.Context, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*ListReviewsResponse, error) {
 	rsp, err := c.ListReviews(ctx, params, reqEditors...)
@@ -5225,6 +5295,8 @@ func (c *ClientWithResponses) SavePresentationWithResponse(ctx context.Context, 
 }
 
 // GetComposerWithResponse performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) GetComposerWithResponse(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*GetComposerResponse, error) {
@@ -5380,6 +5452,8 @@ func (c *ClientWithResponses) GetOwnEntryWithResponse(ctx context.Context, id st
 
 // MyVotesWithResponse performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
 //
+// Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) MyVotesWithResponse(ctx context.Context, params *MyVotesParams, reqEditors ...RequestEditorFn) (*MyVotesResponse, error) {
 	rsp, err := c.MyVotes(ctx, params, reqEditors...)
@@ -5390,6 +5464,8 @@ func (c *ClientWithResponses) MyVotesWithResponse(ctx context.Context, params *M
 }
 
 // GetPresentationWithResponse performs a GET /api/v1/reviews/presentation (the `GetPresentation` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) GetPresentationWithResponse(ctx context.Context, params *GetPresentationParams, reqEditors ...RequestEditorFn) (*GetPresentationResponse, error) {
@@ -5402,6 +5478,8 @@ func (c *ClientWithResponses) GetPresentationWithResponse(ctx context.Context, p
 
 // StatisticsWithResponse performs a GET /api/v1/reviews/statistics (the `Statistics` operationId) request.
 //
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) StatisticsWithResponse(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*StatisticsResponse, error) {
 	rsp, err := c.Statistics(ctx, params, reqEditors...)
@@ -5412,6 +5490,8 @@ func (c *ClientWithResponses) StatisticsWithResponse(ctx context.Context, params
 }
 
 // GetReviewWithResponse performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
+//
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) GetReviewWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetReviewResponse, error) {
@@ -6705,7 +6785,7 @@ func ParseMyVotesResponse(rsp *http.Response) (*MyVotesResponse, error) {
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []View
+		var dest []OwnVote
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

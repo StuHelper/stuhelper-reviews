@@ -123,7 +123,7 @@ func limit(r *http.Request) (int, error) {
 	return n, nil
 }
 func (h Handler) list(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.principal(w, r, false)
+	p, ok := h.principal(w, r, true)
 	if !ok {
 		return
 	}
@@ -137,7 +137,7 @@ func (h Handler) list(w http.ResponseWriter, r *http.Request) {
 	respond(w, v, e)
 }
 func (h Handler) get(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.principal(w, r, false)
+	p, ok := h.principal(w, r, true)
 	if !ok {
 		return
 	}
@@ -184,6 +184,10 @@ func (h Handler) action(w http.ResponseWriter, r *http.Request) {
 	respond(w, v, e)
 }
 func (h Handler) statistics(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.principal(w, r, true)
+	if !ok {
+		return
+	}
 	q := r.URL.Query()
 	var from, until *time.Time
 	for key, dest := range map[string]**time.Time{"from": &from, "until": &until} {
@@ -201,7 +205,7 @@ func (h Handler) statistics(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.StatsPage(r.Context(), q.Get("kind"), q.Get("target_id"), from, until, q.Get("after"), n)
+	v, e := h.Service.ReadStatsPage(r.Context(), p, q.Get("kind"), q.Get("target_id"), from, until, q.Get("after"), n)
 	respond(w, v, e)
 }
 func (h Handler) mine(w http.ResponseWriter, r *http.Request) {

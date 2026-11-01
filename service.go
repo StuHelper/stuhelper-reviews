@@ -672,6 +672,9 @@ func (s *Service) Stats(ctx context.Context, kind, target string, from, until *t
 	return s.StatsPage(ctx, kind, target, from, until, "", 20)
 }
 func (s *Service) StatsPage(ctx context.Context, kind, target string, from, until *time.Time, after string, limit int) (Statistics, error) {
+	return s.statsPage(ctx, kind, target, from, until, after, limit, "")
+}
+func (s *Service) statsPage(ctx context.Context, kind, target string, from, until *time.Time, after string, limit int, school string) (Statistics, error) {
 	out := Statistics{From: from, Until: until, Courses: []CourseStatistic{}}
 	if limit < 1 || limit > 100 {
 		return out, ErrInput
@@ -684,7 +687,11 @@ func (s *Service) StatsPage(ctx context.Context, kind, target string, from, unti
 		return out, err
 	}
 	var rows []Aggregate
-	err = s.Repo.Transaction(ctx, func(t Transaction) error { var e error; rows, e = t.Aggregates(kind, ids, from, until); return e })
+	err = s.Repo.Transaction(ctx, func(t Transaction) error {
+		var e error
+		rows, e = t.Aggregates(kind, ids, school, from, until)
+		return e
+	})
 	if err != nil {
 		return out, err
 	}

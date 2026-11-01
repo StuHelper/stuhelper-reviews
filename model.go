@@ -41,6 +41,7 @@ type Catalog interface {
 // Access evaluates the current action configuration and facts on every request.
 // EnrollmentRequired is read from the same effective rule version as Authorize.
 type Grant struct {
+	SchoolID           string
 	RuleVersion        string
 	EnrollmentRequired bool
 	Requirements       []Requirement
@@ -186,6 +187,7 @@ type DraftView struct {
 	ParentID  string     `json:"parent_id,omitempty"`
 }
 type Filter struct {
+	SchoolID                                             string
 	EquivalentTargets, EquivalentTeachers                []string
 	Kind, TargetID, TermID, RootID, Owner, Viewer, After string
 	TeacherID, Sort, CursorID                            string
@@ -305,11 +307,22 @@ type Transaction interface {
 	Withdrawals(subject, after string, limit int) ([]Entry, error)
 	Replay(string) (Replay, error)
 	SaveReplay(string, Replay) error
-	Aggregates(kind string, targets []string, from, until *time.Time) ([]Aggregate, error)
+	Aggregates(kind string, targets []string, school string, from, until *time.Time) ([]Aggregate, error)
 	Event(Event) error
 	AuditRead(Event) error
 	AdminEntries(school, kind, state, after string, limit int, now time.Time) ([]Entry, error)
 	Events(time.Time, int) ([]DeliveryEvent, error)
 	CompleteEvent(string) error
 	FailEvent(string, int, time.Time, time.Time, bool) error
+}
+
+// OwnVote is a receipt for the caller's action, not a projection of its target.
+type OwnVote struct {
+	ID       string `json:"id"`
+	RootID   string `json:"root_id"`
+	SchoolID string `json:"school_id"`
+	Kind     string `json:"kind"`
+	TargetID string `json:"target_id"`
+	TermID   string `json:"term_id"`
+	MyVote   int    `json:"my_vote"`
 }

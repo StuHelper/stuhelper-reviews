@@ -16,7 +16,7 @@ type pageCursor struct {
 }
 
 func cursorScope(f Filter) string {
-	return hash([]string{f.Kind, f.TargetID, f.TermID, f.RootID, f.Owner, f.TeacherID, f.Sort})
+	return hash([]string{f.Kind, f.TargetID, f.TermID, f.RootID, f.Owner, f.TeacherID, f.Sort, f.SchoolID})
 }
 func decodeCursor(f *Filter) error {
 	if f.Sort == "" {
@@ -78,12 +78,17 @@ func project(t Transaction, p Principal, entry Entry) (Entry, error) {
 	entry.Projection = v
 	return entry, nil
 }
-func (s *Service) render(ctx context.Context, p Principal, entries []Entry) ([]View, error) {
+func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own bool, school string) ([]View, error) {
 	out := make([]View, 0, len(entries))
-	access := map[string]error{}
 	profiles := map[string]Profile{}
-	presentations := map[string]Presentation{}
 	for _, entry := range entries {
+		if own {
+			if p.Subject == "" || entry.Owner != p.Subject {
+				return nil, ErrForbidden
+			}
+		} else if !validID(school) || entry.SchoolID != school {
+			return nil, ErrForbidden
+		}
 		labels, public := s.disclosed(ctx, entry)
 		if !public && p.Subject != entry.Owner {
 			continue
@@ -93,45 +98,6 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry) ([]V
 		}
 		v := View{Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
 		v.CanEdit = v.Mine && entry.State == "published" && entry.FirstPublishedAt != nil && s.now().Before(entry.FirstPublishedAt.Add(s.Config.EditWindow))
-		err, ok := access[entry.SchoolID]
-		if !ok {
-			_, err = s.authorize(ctx, p, "read_full", entry.SchoolID)
-			access[entry.SchoolID] = err
-		}
-		if errors.Is(err, ErrForbidden) && p.Subject != "" {
-			course, term := entry.DisclosureCourse, entry.DisclosureTerm
-			if entry.Input.Kind == "course" {
-				course = entry.Input.TargetID
-				term = entry.Input.TermID
-			}
-			if course != "" {
-				facts, e := s.disclosureContext(ctx, p, entry.SchoolID, course, term, true)
-				if e == nil && facts.teacher && facts.ownCourse {
-					err = nil
-				}
-			}
-		}
-		if err != nil && !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrEnrollment) {
-			return nil, err
-		}
-		if err != nil {
-			v.Preview = true
-			presentation, ok := presentations[entry.SchoolID]
-			if !ok {
-				settings, e := s.Presentation(ctx, entry.SchoolID)
-				if e != nil {
-					return nil, e
-				}
-				presentation = settings.Effective
-				presentations[entry.SchoolID] = presentation
-			}
-			limit := presentation.MemberPreview
-			if p.Subject == "" {
-				limit = presentation.GuestPreview
-				v.Title = ""
-			}
-			v.Body = preview(entry.Input.Body, limit, presentation.PreviewRatio)
-		}
 		identity := entry.Projection.Identity
 		v.Author = Author{Anonymous: !identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }), Handle: identity.Handle, Disclosures: labels}
 		if identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }) {
@@ -166,6 +132,14 @@ func (s *Service) GetOwn(ctx context.Context, p Principal, id string) (View, err
 	return s.get(ctx, p, id, true)
 }
 func (s *Service) get(ctx context.Context, p Principal, id string, own bool) (View, error) {
+	school := ""
+	if !own {
+		var e error
+		school, e = s.contentScope(ctx, p, "")
+		if e != nil {
+			return View{}, e
+		}
+	}
 	if !validID(id) {
 		return View{}, ErrInput
 	}
@@ -197,7 +171,7 @@ func (s *Service) get(ctx context.Context, p Principal, id string, own bool) (Vi
 	if err != nil {
 		return View{}, err
 	}
-	views, err := s.render(ctx, p, []Entry{entry})
+	views, err := s.render(ctx, p, []Entry{entry}, own, school)
 	if err != nil {
 		return View{}, err
 	}
@@ -216,6 +190,13 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 			return out, ErrInput
 		}
 	}
+	if f.Owner == "" {
+		scope, err := s.contentScope(ctx, p, f.SchoolID)
+		if err != nil {
+			return out, err
+		}
+		f.SchoolID = scope
+	}
 	if err := decodeCursor(&f); err != nil {
 		return out, err
 	}
@@ -224,6 +205,15 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 		if f.Kind == "mentor" {
 			kind = "teacher"
 		}
+		if f.Owner == "" {
+			object, err := s.Catalog.Target(ctx, kind, f.TargetID)
+			if err != nil {
+				return out, err
+			}
+			if object.SchoolID != f.SchoolID {
+				return out, ErrForbidden
+			}
+		}
 		var err error
 		f.EquivalentTargets, err = s.equivalentIDs(ctx, kind, f.TargetID)
 		if err != nil {
@@ -231,6 +221,15 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 		}
 	}
 	if f.TeacherID != "" {
+		if f.Owner == "" {
+			object, err := s.Catalog.Target(ctx, "teacher", f.TeacherID)
+			if err != nil {
+				return out, err
+			}
+			if object.SchoolID != f.SchoolID {
+				return out, ErrForbidden
+			}
+		}
 		var err error
 		f.EquivalentTeachers, err = s.equivalentIDs(ctx, "teacher", f.TeacherID)
 		if err != nil {
@@ -242,8 +241,12 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 	var entries []Entry
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		if f.RootID != "" {
-			if _, err := s.accessible(t, f.RootID); err != nil {
+			root, err := s.accessible(t, f.RootID)
+			if err != nil {
 				return err
+			}
+			if f.Owner == "" && root.SchoolID != f.SchoolID {
+				return ErrForbidden
 			}
 		}
 		var err error
@@ -257,6 +260,6 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 		out.Next = encodeCursor(f, entries[f.Limit-1])
 		entries = entries[:f.Limit]
 	}
-	out.Items, err = s.render(ctx, p, entries)
+	out.Items, err = s.render(ctx, p, entries, f.Owner != "", f.SchoolID)
 	return out, err
 }

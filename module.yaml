@@ -1,5 +1,5 @@
 id: reviews
-version: 0.2.0
+version: 0.3.0
 api: 1
 critical: false
 requires:
@@ -22,7 +22,7 @@ capabilities:
 capability_requires: {}
 scenario_tests:
   ACAD-04:
-    - integration_test.go#TestAnonymousPreviewAndCurrentAccessCannotLeakIdentity
+    - integration_test.go#TestContentAdmissionAndCurrentAccessCannotLeakIdentity
   ACAD-05:
     - integration_test.go#TestCourseTermEligibilityAndImmutableTeacherAttribution
   ACAD-13:
@@ -63,3 +63,11 @@ scenario_tests:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   CM-14:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
+  AE-ACCESS-05:
+    - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
+    - content_security_regression_test.go#TestVoteReceiptsDoNotExposeTargetContentAfterAdmissionExpires
+  AE-ACCESS-07:
+    - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
+    - content_test.go#TestContentListsStatisticsAndComposerRespectServedSchool
+  ACAD-16:
+    - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "StuHelper Reviews",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "servers": [
     {
@@ -85,7 +85,11 @@
             }
           }
         },
-        "security": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "query",
@@ -154,7 +158,8 @@
             },
             "description": "Course reviews attributed to this teacher at publication."
           }
-        ]
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       },
       "post": {
         "operationId": "createReview",
@@ -334,7 +339,11 @@
             }
           }
         },
-        "security": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
@@ -344,7 +353,8 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       }
     },
     "/api/v1/reviews/{id}/actions": {
@@ -646,7 +656,11 @@
             }
           }
         },
-        "security": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "query",
@@ -693,7 +707,8 @@
               "default": 20
             }
           }
-        ]
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       }
     },
     "/api/v1/reviews/me/entries": {
@@ -1475,7 +1490,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/View"
+                    "$ref": "#/components/schemas/OwnVote"
                   }
                 }
               }
@@ -1565,7 +1580,8 @@
               "default": 20
             }
           }
-        ]
+        ],
+        "description": "Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized."
       }
     },
     "/api/v1/reviews/me/drafts/{id}/publish": {
@@ -1883,7 +1899,12 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       }
     },
     "/api/v1/reviews/admin/entries": {
@@ -2108,7 +2129,11 @@
     "/api/v1/reviews/presentation": {
       "get": {
         "operationId": "getPresentation",
-        "security": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -2190,7 +2215,8 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       }
     },
     "/api/v1/reviews/admin/presentation": {
@@ -3482,6 +3508,46 @@
           "teacher_ids",
           "previous_teacher_ids"
         ]
+      },
+      "OwnVote": {
+        "type": "object",
+        "required": [
+          "id",
+          "root_id",
+          "school_id",
+          "kind",
+          "target_id",
+          "term_id",
+          "my_vote"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "root_id": {
+            "type": "string"
+          },
+          "school_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "term_id": {
+            "type": "string"
+          },
+          "my_vote": {
+            "type": "integer",
+            "enum": [
+              -1,
+              1
+            ]
+          }
+        },
+        "description": "Caller-owned vote receipt. Does not contain another author's title, body, rating, identity or aggregate counts."
       }
     }
   }

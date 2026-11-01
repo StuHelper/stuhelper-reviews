@@ -11,6 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["listReviews"];
         put?: never;
         post: operations["createReview"];
@@ -27,6 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["getReview"];
         put?: never;
         post?: never;
@@ -75,6 +77,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["statistics"];
         put?: never;
         post?: never;
@@ -155,6 +158,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized. */
         get: operations["myVotes"];
         put?: never;
         post?: never;
@@ -203,6 +207,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["getComposer"];
         put?: never;
         post?: never;
@@ -251,6 +256,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["getPresentation"];
         put?: never;
         post?: never;
@@ -511,6 +517,17 @@ export interface components {
             evidence_revision: string;
             teacher_ids: string[];
             previous_teacher_ids: string[];
+        };
+        /** @description Caller-owned vote receipt. Does not contain another author's title, body, rating, identity or aggregate counts. */
+        OwnVote: {
+            id: string;
+            root_id: string;
+            school_id: string;
+            kind: string;
+            target_id: string;
+            term_id: string;
+            /** @enum {integer} */
+            my_vote: -1 | 1;
         };
     };
     responses: never;
@@ -1583,7 +1600,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["View"][];
+                    "application/json": components["schemas"]["OwnVote"][];
                 };
             };
             /** @description Invalid input */

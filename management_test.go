@@ -26,8 +26,8 @@ func TestPresentationConfigAndAttributionChangesAreScopedAndVersioned(t *testing
 		t.Fatal(err)
 	}
 	root := create(t, f, "review", input("course", "autumn", 3))
-	view, err := f.service.Get(ctx, r.Principal{}, root.ID)
-	if err != nil || len([]rune(view.Body)) > 5 {
+	view, err := f.service.Get(ctx, r.Principal{Subject: "reader"}, root.ID)
+	if err != nil || view.Preview || view.Body != input("course", "autumn", 3).Body {
 		t.Fatal(view, err)
 	}
 	preview, err := f.service.PreviewAttribution(ctx, admin, root.ID, "teacher-b")

@@ -233,37 +233,35 @@ func (s *Service) Bookmarks(ctx context.Context, p Principal, after string, limi
 	err := s.Repo.Transaction(ctx, func(t Transaction) error { var e error; out, e = t.Bookmarks(p.Subject, after, limit); return e })
 	return out, err
 }
-func (s *Service) MyVotes(ctx context.Context, p Principal, after string, limit int) ([]View, error) {
+func (s *Service) MyVotes(ctx context.Context, p Principal, after string, limit int) ([]OwnVote, error) {
 	if p.Subject == "" {
-		return nil, ErrForbidden
+		return nil, ErrUnauthenticated
 	}
-	if limit < 1 || limit > 100 {
+	if limit < 1 || limit > 100 || after != "" && !validID(after) {
 		return nil, ErrInput
 	}
-	entries := []Entry{}
+	out := []OwnVote{}
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		rows, e := t.Voted(p.Subject, after, limit, s.now())
 		if e != nil {
 			return e
 		}
 		for _, entry := range rows {
-			if _, e = s.accessible(t, entry.ID); errors.Is(e, ErrNotFound) {
+			value, e := t.Vote(entry.ID, p.Subject)
+			if errors.Is(e, ErrNotFound) {
 				continue
-			} else if e != nil {
-				return e
 			}
-			v, e := project(t, p, entry)
 			if e != nil {
 				return e
 			}
-			entries = append(entries, v)
+			if value != 1 && value != -1 {
+				return ErrUnavailable
+			}
+			out = append(out, OwnVote{ID: entry.ID, RootID: entry.RootID, SchoolID: entry.SchoolID, Kind: entry.Input.Kind, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, MyVote: value})
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return s.render(ctx, p, entries)
+	return out, err
 }
 
 // Sweep is bounded and idempotent; read paths independently enforce expiry.
