@@ -195,6 +195,19 @@ func (s *Service) SetBookmark(ctx context.Context, p Principal, target, key stri
 	if !validID(target) || !validKey(key) {
 		return out, ErrInput
 	}
+	if s.BookmarksProvider != nil {
+		previous, found, e := s.oldBookmarkReplay(ctx, p, target, key, set)
+		if e != nil || found {
+			return previous, e
+		}
+		e = s.BookmarksProvider.SetCourseBookmark(ctx, p.Subject, target, "reviews:"+hash([]string{p.Subject, "bookmark", target, key}), set)
+		out = Result{ID: target, State: "unmarked"}
+		if set {
+			out.State = "bookmarked"
+		}
+		return out, e
+	}
+
 	if set {
 		obj, e := s.Catalog.Target(ctx, "course", target)
 		if e != nil {
@@ -227,6 +240,9 @@ func (s *Service) SetBookmark(ctx context.Context, p Principal, target, key stri
 		}
 		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: target})
 	})
+	if errors.Is(err, ErrBookmarksMoved) {
+		return out, ErrUnavailable
+	}
 	return out, err
 }
 func (s *Service) Bookmarks(ctx context.Context, p Principal, after string, limit int) ([]string, error) {
@@ -236,8 +252,14 @@ func (s *Service) Bookmarks(ctx context.Context, p Principal, after string, limi
 	if limit < 1 || limit > 100 {
 		return nil, ErrInput
 	}
+	if s.BookmarksProvider != nil {
+		return s.BookmarksProvider.CourseBookmarks(ctx, p.Subject, after, limit)
+	}
 	var out []string
 	err := s.Repo.Transaction(ctx, func(t Transaction) error { var e error; out, e = t.Bookmarks(p.Subject, after, limit); return e })
+	if errors.Is(err, ErrBookmarksMoved) {
+		return out, ErrUnavailable
+	}
 	return out, err
 }
 func (s *Service) MyVotes(ctx context.Context, p Principal, after string, limit int) ([]OwnVote, error) {

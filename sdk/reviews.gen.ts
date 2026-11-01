@@ -144,9 +144,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite. */
         get: operations["myBookmarks"];
         put?: never;
-        /** @description Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. */
+        /** @description Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite. */
         post: operations["setBookmark"];
         delete?: never;
         options?: never;

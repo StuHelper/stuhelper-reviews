@@ -1,5 +1,5 @@
 id: reviews
-version: 0.5.0
+version: 0.5.1
 api: 1
 critical: false
 requires:
@@ -75,6 +75,7 @@ scenario_tests:
   ACAD-16:
     - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
   ACAD-15:
+    - bookmark_transfer_test.go#TestBookmarkTransferSealsLegacyWritesAndRetainsOriginalReplay
     - interaction_test.go#TestExpiredAdmissionAllowsOnlyOwnVoteAndBookmarkRemoval
   PC-07:
     - closure_test.go#TestClosedOwnerKeepsContentWithoutProfileOrDisclosures

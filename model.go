@@ -285,6 +285,7 @@ type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
 }
 type Transaction interface {
+	BookmarkTransfer(string, string, int) ([]string, error)
 	ClosedOwners([]string) (map[string]bool, error)
 	CloseOwner(string, string) error
 	OwnedReferences(string, []string, time.Time) ([]string, error)

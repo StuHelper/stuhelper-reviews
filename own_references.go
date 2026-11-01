@@ -38,18 +38,42 @@ func (s *Service) MyReferences(ctx context.Context, p Principal, ids []string) (
 			return References{}, ErrInput
 		}
 	}
+	var owned []string
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		owned, e := t.OwnedReferences(p.Subject, ids, s.now())
+		var e error
+		owned, e = t.OwnedReferences(p.Subject, ids, s.now())
 		if e != nil {
 			return e
-		}
-		if !slices.Equal(owned, ids) {
-			return ErrNotFound
 		}
 		return nil
 	})
 	if err != nil {
 		return References{}, err
+	}
+	if !slices.Equal(owned, ids) && s.BookmarksProvider != nil {
+		remaining := []string{}
+		for _, id := range ids {
+			if !slices.Contains(owned, id) {
+				remaining = append(remaining, id)
+			}
+		}
+		call, cancel := context.WithTimeout(ctx, 3*time.Second)
+		extra, e := s.BookmarksProvider.CourseReferences(call, p.Subject, remaining)
+		cancel()
+		if e != nil {
+			return References{}, e
+		}
+		for _, id := range extra {
+			if !slices.Contains(remaining, id) {
+				return References{}, ErrUnavailable
+			}
+		}
+		owned = append(owned, extra...)
+		slices.Sort(owned)
+		owned = slices.Compact(owned)
+	}
+	if !slices.Equal(owned, ids) {
+		return References{}, ErrNotFound
 	}
 	port, ok := s.Catalog.(NameCatalog)
 	if !ok {

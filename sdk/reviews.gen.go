@@ -854,18 +854,20 @@ type ClientInterface interface {
 	GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyBookmarks performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
+	//
+	//  When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	MyBookmarks(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetBookmarkWithBody performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 	// with any type of body and a specified content type.
 	//
-	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	SetBookmarkWithBody(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetBookmark performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 	// Takes a body of the `application/json` content type.
 	//
-	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	SetBookmark(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyDrafts performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
@@ -1121,6 +1123,8 @@ func (c *Client) GetComposer(ctx context.Context, params *GetComposerParams, req
 }
 
 // MyBookmarks performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
+//
+//	When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 func (c *Client) MyBookmarks(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewMyBookmarksRequest(c.Server, params)
 	if err != nil {
@@ -1136,7 +1140,7 @@ func (c *Client) MyBookmarks(ctx context.Context, params *MyBookmarksParams, req
 // SetBookmarkWithBody performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 // with any type of body and a specified content type.
 //
-// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 func (c *Client) SetBookmarkWithBody(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetBookmarkRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -1152,7 +1156,7 @@ func (c *Client) SetBookmarkWithBody(ctx context.Context, params *SetBookmarkPar
 // SetBookmark performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 // Takes a body of the `application/json` content type.
 //
-// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 func (c *Client) SetBookmark(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetBookmarkRequest(c.Server, params, body)
 	if err != nil {
@@ -3204,13 +3208,15 @@ type ClientWithResponsesInterface interface {
 
 	// MyBookmarksWithResponse performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
 	//
+	//  When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	MyBookmarksWithResponse(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*MyBookmarksResponse, error)
 
 	// SetBookmarkWithBodyWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 	// with any type of body and a specified content type.
 	//
-	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	SetBookmarkWithBodyWithResponse(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error)
@@ -3218,7 +3224,7 @@ type ClientWithResponsesInterface interface {
 	// SetBookmarkWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 	SetBookmarkWithResponse(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error)
 
 	// MyDraftsWithResponse performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
@@ -5548,6 +5554,8 @@ func (c *ClientWithResponses) GetComposerWithResponse(ctx context.Context, param
 
 // MyBookmarksWithResponse performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
 //
+//	When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) MyBookmarksWithResponse(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*MyBookmarksResponse, error) {
 	rsp, err := c.MyBookmarks(ctx, params, reqEditors...)
@@ -5560,7 +5568,7 @@ func (c *ClientWithResponses) MyBookmarksWithResponse(ctx context.Context, param
 // SetBookmarkWithBodyWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 // with any type of body and a specified content type.
 //
-// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) SetBookmarkWithBodyWithResponse(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error) {
@@ -5574,7 +5582,7 @@ func (c *ClientWithResponses) SetBookmarkWithBodyWithResponse(ctx context.Contex
 // SetBookmarkWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
 func (c *ClientWithResponses) SetBookmarkWithResponse(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error) {
 	rsp, err := c.SetBookmark(ctx, params, body, reqEditors...)
 	if err != nil {
