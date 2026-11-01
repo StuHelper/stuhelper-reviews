@@ -71,3 +71,5 @@ scenario_tests:
     - content_test.go#TestContentListsStatisticsAndComposerRespectServedSchool
   ACAD-16:
     - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
+  ACAD-15:
+    - interaction_test.go#TestExpiredAdmissionAllowsOnlyOwnVoteAndBookmarkRemoval

@@ -68,7 +68,7 @@ func (a *access) Authorize(_ context.Context, p r.Principal, action, school stri
 	if a.revoked || p.Subject == "" {
 		return g, r.ErrForbidden
 	}
-	if p.Subject == "member" && action != "vote" && action != "bookmark" {
+	if p.Subject == "member" {
 		return g, r.ErrForbidden
 	}
 	return g, nil
@@ -336,7 +336,7 @@ func TestWithdrawalWindowExpiryVotesAndPermanentDeletion(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = f.service.Action(ctx, r.Principal{Subject: "member"}, v.ID, "vote", r.Action{Action: "vote", Vote: 1}); e != nil {
+	if _, e = f.service.Action(ctx, r.Principal{Subject: "qualified-voter"}, v.ID, "vote", r.Action{Action: "vote", Vote: 1}); e != nil {
 		t.Fatal(e)
 	}
 	f.now = f.now.Add(4 * time.Minute)

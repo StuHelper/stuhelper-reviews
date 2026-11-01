@@ -47,6 +47,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. */
         post: operations["reviewAction"];
         delete?: never;
         options?: never;
@@ -144,6 +145,7 @@ export interface paths {
         };
         get: operations["myBookmarks"];
         put?: never;
+        /** @description Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. */
         post: operations["setBookmark"];
         delete?: never;
         options?: never;

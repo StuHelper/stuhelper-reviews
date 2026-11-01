@@ -815,10 +815,14 @@ type ClientInterface interface {
 
 	// SetBookmarkWithBody performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 	// with any type of body and a specified content type.
+	//
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
 	SetBookmarkWithBody(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetBookmark performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 	// Takes a body of the `application/json` content type.
+	//
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
 	SetBookmark(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyDrafts performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
@@ -879,10 +883,14 @@ type ClientInterface interface {
 
 	// ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
+	//
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	ReviewActionWithBody(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReviewAction performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 	// Takes a body of the `application/json` content type.
+	//
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	ReviewAction(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplyWithBody performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
@@ -1075,6 +1083,8 @@ func (c *Client) MyBookmarks(ctx context.Context, params *MyBookmarksParams, req
 
 // SetBookmarkWithBody performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 // with any type of body and a specified content type.
+//
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
 func (c *Client) SetBookmarkWithBody(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetBookmarkRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -1089,6 +1099,8 @@ func (c *Client) SetBookmarkWithBody(ctx context.Context, params *SetBookmarkPar
 
 // SetBookmark performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 // Takes a body of the `application/json` content type.
+//
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
 func (c *Client) SetBookmark(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetBookmarkRequest(c.Server, params, body)
 	if err != nil {
@@ -1299,6 +1311,8 @@ func (c *Client) GetReview(ctx context.Context, id string, reqEditors ...Request
 
 // ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 // with any type of body and a specified content type.
+//
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 func (c *Client) ReviewActionWithBody(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReviewActionRequestWithBody(c.Server, id, params, contentType, body)
 	if err != nil {
@@ -1313,6 +1327,8 @@ func (c *Client) ReviewActionWithBody(ctx context.Context, id string, params *Re
 
 // ReviewAction performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 // Takes a body of the `application/json` content type.
+//
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 func (c *Client) ReviewAction(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReviewActionRequest(c.Server, id, params, body)
 	if err != nil {
@@ -3073,11 +3089,15 @@ type ClientWithResponsesInterface interface {
 	// SetBookmarkWithBodyWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 	// with any type of body and a specified content type.
 	//
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	SetBookmarkWithBodyWithResponse(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error)
 
 	// SetBookmarkWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
 	SetBookmarkWithResponse(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error)
 
 	// MyDraftsWithResponse performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
@@ -3161,11 +3181,15 @@ type ClientWithResponsesInterface interface {
 	// ReviewActionWithBodyWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
 	//
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	ReviewActionWithBodyWithResponse(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error)
 
 	// ReviewActionWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	ReviewActionWithResponse(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error)
 
 	// ReplyWithBodyWithResponse performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
@@ -5321,6 +5345,8 @@ func (c *ClientWithResponses) MyBookmarksWithResponse(ctx context.Context, param
 // SetBookmarkWithBodyWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
 // with any type of body and a specified content type.
 //
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) SetBookmarkWithBodyWithResponse(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error) {
 	rsp, err := c.SetBookmarkWithBody(ctx, params, contentType, body, reqEditors...)
@@ -5332,6 +5358,8 @@ func (c *ClientWithResponses) SetBookmarkWithBodyWithResponse(ctx context.Contex
 
 // SetBookmarkWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable.
 func (c *ClientWithResponses) SetBookmarkWithResponse(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error) {
 	rsp, err := c.SetBookmark(ctx, params, body, reqEditors...)
 	if err != nil {
@@ -5505,6 +5533,8 @@ func (c *ClientWithResponses) GetReviewWithResponse(ctx context.Context, id stri
 // ReviewActionWithBodyWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 // with any type of body and a specified content type.
 //
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) ReviewActionWithBodyWithResponse(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error) {
 	rsp, err := c.ReviewActionWithBody(ctx, id, params, contentType, body, reqEditors...)
@@ -5516,6 +5546,8 @@ func (c *ClientWithResponses) ReviewActionWithBodyWithResponse(ctx context.Conte
 
 // ReviewActionWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 func (c *ClientWithResponses) ReviewActionWithResponse(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error) {
 	rsp, err := c.ReviewAction(ctx, id, params, body, reqEditors...)
 	if err != nil {

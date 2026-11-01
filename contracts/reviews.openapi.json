@@ -466,7 +466,8 @@
               "maxLength": 128
             }
           }
-        ]
+        ],
+        "description": "New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content."
       }
     },
     "/api/v1/reviews/{id}/replies": {
@@ -1476,7 +1477,8 @@
               "maxLength": 128
             }
           }
-        ]
+        ],
+        "description": "Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable."
       }
     },
     "/api/v1/reviews/me/votes": {

@@ -445,7 +445,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	if !validID(id) || !validKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
 		return out, ErrInput
 	}
-	if in.Action == "vote" {
+	if in.Action == "vote" && in.Vote != 0 {
 		if err := s.requirePublicDisclosure(ctx, id); err != nil {
 			return out, err
 		}
@@ -486,11 +486,15 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			return e
 		}
 		if in.Action == "vote" {
-			if _, e = s.authorize(ctx, p, "vote", entry.SchoolID); e != nil {
-				return e
-			}
-			if _, e = s.accessible(t, id); e != nil {
-				return e
+			// Removal only affects this caller's row and must survive qualification
+			// expiry, hidden content and unavailable external facts.
+			if in.Vote != 0 {
+				if _, e = s.authorize(ctx, p, "vote", entry.SchoolID); e != nil {
+					return e
+				}
+				if _, e = s.accessible(t, id); e != nil {
+					return e
+				}
 			}
 			if e = t.SetVote(id, p.Subject, in.Vote); e != nil {
 				return e

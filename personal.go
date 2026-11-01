@@ -190,12 +190,14 @@ func (s *Service) SetBookmark(ctx context.Context, p Principal, target, key stri
 	if !validID(target) || !validKey(key) {
 		return out, ErrInput
 	}
-	obj, e := s.Catalog.Target(ctx, "course", target)
-	if e != nil {
-		return out, e
-	}
-	if _, e = s.authorize(ctx, p, "bookmark", obj.SchoolID); e != nil {
-		return out, e
+	if set {
+		obj, e := s.Catalog.Target(ctx, "course", target)
+		if e != nil {
+			return out, e
+		}
+		if _, e = s.authorize(ctx, p, "bookmark", obj.SchoolID); e != nil {
+			return out, e
+		}
 	}
 	rk := hash([]string{p.Subject, "bookmark", target, key})
 	h := hash(set)
