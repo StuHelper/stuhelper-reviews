@@ -31,6 +31,10 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 			return out, err
 		}
 	}
+	verified, referenceState := s.verifyDraftReferences(ctx, p, in)
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
 	if id == "" {
 		id = hash([]string{p.Subject, "draft", key})
 	} else if !validID(id) {
@@ -64,6 +68,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 			return ErrConflict
 		}
 		v := Draft{ID: id, Revision: old.Revision + 1, Owner: p.Subject, Input: in, UpdatedAt: s.now()}
+		v.ReferenceIDs, v.ReferenceState = mergeDraftReferences(old.ReferenceIDs, verified, in, referenceState)
 		if e = t.SaveDraft(v); e != nil {
 			return e
 		}
@@ -86,7 +91,7 @@ func (s *Service) GetDraft(ctx context.Context, p Principal, id string) (DraftVi
 			if draft.Owner != p.Subject {
 				return ErrNotFound
 			}
-			out = DraftView{ID: draft.ID, Revision: draft.Revision, Input: draft.Input}
+			out = draftView(draft)
 			return nil
 		}
 		if !errors.Is(err, ErrNotFound) {
@@ -104,7 +109,7 @@ func (s *Service) GetDraft(ctx context.Context, p Principal, id string) (DraftVi
 			return err
 		}
 		entry.Input.Signed = identity.Signed
-		out = DraftView{ID: entry.ID, Revision: entry.Revision, Input: entry.Input, ExpiresAt: entry.ExpiresAt, Withdrawn: true, RootID: entry.RootID, ParentID: entry.ParentID}
+		out = DraftView{ID: entry.ID, Revision: entry.Revision, Input: entry.Input, ReferenceIDs: draftReferenceIDs(entry.Input), ReferenceState: "verified", ExpiresAt: entry.ExpiresAt, Withdrawn: true, RootID: entry.RootID, ParentID: entry.ParentID}
 		return nil
 	})
 	return out, err
@@ -167,11 +172,11 @@ func (s *Service) Drafts(ctx context.Context, p Principal, after string, limit i
 			return e
 		}
 		for _, v := range ordinary {
-			out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input})
+			out = append(out, draftView(v))
 		}
 		for _, v := range withdrawn {
 			if v.ExpiresAt != nil && s.now().Before(*v.ExpiresAt) {
-				out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input, ExpiresAt: v.ExpiresAt, Withdrawn: true})
+				out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input, ReferenceIDs: draftReferenceIDs(v.Input), ReferenceState: "verified", ExpiresAt: v.ExpiresAt, Withdrawn: true})
 			}
 		}
 		return nil

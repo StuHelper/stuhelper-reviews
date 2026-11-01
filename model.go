@@ -170,20 +170,24 @@ type Action struct {
 	Vote     int    `json:"vote,omitempty"`
 }
 type Draft struct {
-	ID        string    `json:"id"`
-	Revision  int64     `json:"revision"`
-	Owner     string    `json:"owner"`
-	Input     Input     `json:"input"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ReferenceIDs   []string  `json:"trusted_reference_ids,omitempty"`
+	ReferenceState string    `json:"reference_state,omitempty"`
+	ID             string    `json:"id"`
+	Revision       int64     `json:"revision"`
+	Owner          string    `json:"owner"`
+	Input          Input     `json:"input"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 type DraftView struct {
-	ID        string     `json:"id"`
-	Revision  int64      `json:"revision"`
-	Input     Input      `json:"input"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	Withdrawn bool       `json:"withdrawn"`
-	RootID    string     `json:"root_id,omitempty"`
-	ParentID  string     `json:"parent_id,omitempty"`
+	ReferenceIDs   []string   `json:"reference_ids"`
+	ReferenceState string     `json:"reference_state"`
+	ID             string     `json:"id"`
+	Revision       int64      `json:"revision"`
+	Input          Input      `json:"input"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	Withdrawn      bool       `json:"withdrawn"`
+	RootID         string     `json:"root_id,omitempty"`
+	ParentID       string     `json:"parent_id,omitempty"`
 }
 type Filter struct {
 	SchoolID                                             string
@@ -281,6 +285,7 @@ type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
 }
 type Transaction interface {
+	OwnedReferences(string, []string, time.Time) ([]string, error)
 	History(string, int64, int) ([]Entry, error)
 	Presentation(string) (Presentation, error)
 	SavePresentation(Presentation) error

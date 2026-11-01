@@ -128,6 +128,27 @@ func (e DisclosureKey) Valid() bool {
 	}
 }
 
+// Defines values for DraftViewReferenceState.
+const (
+	DraftViewReferenceStateUnavailable DraftViewReferenceState = "unavailable"
+	DraftViewReferenceStateUnverified  DraftViewReferenceState = "unverified"
+	DraftViewReferenceStateVerified    DraftViewReferenceState = "verified"
+)
+
+// Valid indicates whether the value is a known member of the DraftViewReferenceState enum.
+func (e DraftViewReferenceState) Valid() bool {
+	switch e {
+	case DraftViewReferenceStateUnavailable:
+		return true
+	case DraftViewReferenceStateUnverified:
+		return true
+	case DraftViewReferenceStateVerified:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InputKind.
 const (
 	Course InputKind = "course"
@@ -365,10 +386,19 @@ type DraftView struct {
 	Id        string     `json:"id"`
 	Input     Input      `json:"input"`
 	ParentId  *string    `json:"parent_id,omitempty"`
-	Revision  int        `json:"revision"`
-	RootId    *string    `json:"root_id,omitempty"`
-	Withdrawn bool       `json:"withdrawn"`
+
+	// ReferenceIds Only associations previously validated by the server under content admission. These IDs may be sent to myReviewsReferences.
+	ReferenceIds []string `json:"reference_ids"`
+
+	// ReferenceState Historical proof coverage after the latest save. Previously validated associations remain usable after qualification expiry. unavailable means unvalidated associations could not be checked; draft text was saved.
+	ReferenceState DraftViewReferenceState `json:"reference_state"`
+	Revision       int                     `json:"revision"`
+	RootId         *string                 `json:"root_id,omitempty"`
+	Withdrawn      bool                    `json:"withdrawn"`
 }
+
+// DraftViewReferenceState Historical proof coverage after the latest save. Previously validated associations remain usable after qualification expiry. unavailable means unvalidated associations could not be checked; draft text was saved.
+type DraftViewReferenceState string
 
 // DraftWrite defines model for DraftWrite.
 type DraftWrite struct {
@@ -452,6 +482,20 @@ type PublishDraft struct {
 
 // RatingTexts defines model for RatingTexts.
 type RatingTexts map[string][][]string
+
+// Reference defines model for Reference.
+type Reference struct {
+	CanonicalId *string `json:"canonical_id,omitempty"`
+	Id          string  `json:"id"`
+	Kind        string  `json:"kind"`
+	Name        string  `json:"name"`
+}
+
+// References defines model for References.
+type References struct {
+	Items      []Reference `json:"items"`
+	MissingIds []string    `json:"missing_ids"`
+}
 
 // Requirement defines model for Requirement.
 type Requirement struct {
@@ -624,6 +668,12 @@ type MyReviewsParams struct {
 
 // MyReviewsParamsSort defines parameters for MyReviews.
 type MyReviewsParamsSort string
+
+// MyReviewsReferencesParams defines parameters for MyReviewsReferences.
+type MyReviewsReferencesParams struct {
+	// Ids Comma-separated IDs referenced by own records, at most 100. Any unowned ID rejects the whole batch.
+	Ids string `form:"ids" json:"ids"`
+}
 
 // MyVotesParams defines parameters for MyVotes.
 type MyVotesParams struct {
@@ -823,10 +873,14 @@ type ClientInterface interface {
 
 	// SaveDraftWithBody performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request,
 	// with any type of body and a specified content type.
+	//
+	// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 	SaveDraftWithBody(ctx context.Context, params *SaveDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SaveDraft performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request.
 	// Takes a body of the `application/json` content type.
+	//
+	// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 	SaveDraft(ctx context.Context, params *SaveDraftParams, body SaveDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteDraftWithBody performs a DELETE /api/v1/reviews/me/drafts/{id} (the `DeleteDraft` operationId) request,
@@ -853,6 +907,11 @@ type ClientInterface interface {
 
 	// GetOwnEntry performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
 	GetOwnEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MyReviewsReferences performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
+	//
+	// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
+	MyReviewsReferences(ctx context.Context, params *MyReviewsReferencesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyVotes performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
 	//
@@ -1121,6 +1180,8 @@ func (c *Client) MyDrafts(ctx context.Context, params *MyDraftsParams, reqEditor
 
 // SaveDraftWithBody performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request,
 // with any type of body and a specified content type.
+//
+// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 func (c *Client) SaveDraftWithBody(ctx context.Context, params *SaveDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSaveDraftRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -1135,6 +1196,8 @@ func (c *Client) SaveDraftWithBody(ctx context.Context, params *SaveDraftParams,
 
 // SaveDraft performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request.
 // Takes a body of the `application/json` content type.
+//
+// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 func (c *Client) SaveDraft(ctx context.Context, params *SaveDraftParams, body SaveDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSaveDraftRequest(c.Server, params, body)
 	if err != nil {
@@ -1232,6 +1295,21 @@ func (c *Client) MyReviews(ctx context.Context, params *MyReviewsParams, reqEdit
 // GetOwnEntry performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
 func (c *Client) GetOwnEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOwnEntryRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// MyReviewsReferences performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
+//
+// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
+func (c *Client) MyReviewsReferences(ctx context.Context, params *MyReviewsReferencesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMyReviewsReferencesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2582,6 +2660,56 @@ func NewGetOwnEntryRequest(server string, id string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewMyReviewsReferencesRequest constructs an http.Request for the MyReviewsReferences method
+func NewMyReviewsReferencesRequest(server string, params *MyReviewsReferencesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/me/references")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "ids", params.Ids, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewMyVotesRequest constructs an http.Request for the MyVotes method
 func NewMyVotesRequest(server string, params *MyVotesParams) (*http.Request, error) {
 	var err error
@@ -3101,11 +3229,15 @@ type ClientWithResponsesInterface interface {
 	// SaveDraftWithBodyWithResponse performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request,
 	// with any type of body and a specified content type.
 	//
+	// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	SaveDraftWithBodyWithResponse(ctx context.Context, params *SaveDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SaveDraftResponse, error)
 
 	// SaveDraftWithResponse performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 	SaveDraftWithResponse(ctx context.Context, params *SaveDraftParams, body SaveDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*SaveDraftResponse, error)
 
 	// DeleteDraftWithBodyWithResponse performs a DELETE /api/v1/reviews/me/drafts/{id} (the `DeleteDraft` operationId) request,
@@ -3142,6 +3274,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetOwnEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetOwnEntryResponse, error)
+
+	// MyReviewsReferencesWithResponse performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
+	//
+	// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	MyReviewsReferencesWithResponse(ctx context.Context, params *MyReviewsReferencesParams, reqEditors ...RequestEditorFn) (*MyReviewsReferencesResponse, error)
 
 	// MyVotesWithResponse performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
 	//
@@ -4690,6 +4829,89 @@ func (r GetOwnEntryResponse) ContentType() string {
 	return ""
 }
 
+type MyReviewsReferencesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *References
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON200() *References {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r MyReviewsReferencesResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r MyReviewsReferencesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r MyReviewsReferencesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MyReviewsReferencesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r MyReviewsReferencesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type MyVotesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -5375,6 +5597,8 @@ func (c *ClientWithResponses) MyDraftsWithResponse(ctx context.Context, params *
 // SaveDraftWithBodyWithResponse performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request,
 // with any type of body and a specified content type.
 //
+// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) SaveDraftWithBodyWithResponse(ctx context.Context, params *SaveDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SaveDraftResponse, error) {
 	rsp, err := c.SaveDraftWithBody(ctx, params, contentType, body, reqEditors...)
@@ -5386,6 +5610,8 @@ func (c *ClientWithResponses) SaveDraftWithBodyWithResponse(ctx context.Context,
 
 // SaveDraftWithResponse performs a POST /api/v1/reviews/me/drafts (the `SaveDraft` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names.
 func (c *ClientWithResponses) SaveDraftWithResponse(ctx context.Context, params *SaveDraftParams, body SaveDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*SaveDraftResponse, error) {
 	rsp, err := c.SaveDraft(ctx, params, body, reqEditors...)
 	if err != nil {
@@ -5469,6 +5695,19 @@ func (c *ClientWithResponses) GetOwnEntryWithResponse(ctx context.Context, id st
 		return nil, err
 	}
 	return ParseGetOwnEntryResponse(rsp)
+}
+
+// MyReviewsReferencesWithResponse performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
+//
+// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) MyReviewsReferencesWithResponse(ctx context.Context, params *MyReviewsReferencesParams, reqEditors ...RequestEditorFn) (*MyReviewsReferencesResponse, error) {
+	rsp, err := c.MyReviewsReferences(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMyReviewsReferencesResponse(rsp)
 }
 
 // MyVotesWithResponse performs a GET /api/v1/reviews/me/votes (the `MyVotes` operationId) request.
@@ -6743,6 +6982,74 @@ func ParseGetOwnEntryResponse(rsp *http.Response) (*GetOwnEntryResponse, error) 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest View
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMyReviewsReferencesResponse parses an HTTP response from a MyReviewsReferencesWithResponse call
+func ParseMyReviewsReferencesResponse(rsp *http.Response) (*MyReviewsReferencesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MyReviewsReferencesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest References
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -48,3 +48,7 @@ PostgreSQL 测试覆盖资格缺失、不同学期教师、内容准入、本人
 业务规则见 [课程与评价规格](https://github.com/StuHelper/stuhelper-next/blob/develop/docs/spec/academic-content.md)。
 
 展示配置迁移删除当前配置中的旧预览键，保留评分文案、学校和修订。历史配置作为审计记录保留；对外投影只包含当前契约字段。迁移可重复执行，运行身份不执行迁移。
+
+本人记录通过 /reviews/me/references 查询关联名称，每次最多 100 个 ID，任一 ID 无本人记录依据则整批返回 404。公开详情仍要求内容准入。
+
+保存草稿时，服务端尝试按当前准入验证关联，验证失败不丢弃文字。reference_ids 只列出已验证关联，reference_state 说明验证状态。更换关联移除旧依据，历史草稿需恢复资格后保存验证。
