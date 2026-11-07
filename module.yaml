@@ -1,5 +1,6 @@
 id: reviews
 version: 0.5.1
+kind: module
 api: 1
 critical: false
 requires:
@@ -10,6 +11,8 @@ requires:
   - id: moderation
     api: 1
 optional:
+  - id: favorites
+    api: 1
   - id: profiles
     api: 1
   - id: verification
@@ -19,7 +22,17 @@ optional:
 capabilities:
   - reviews.read
   - reviews.write
-capability_requires: {}
+  - reviews.moderate
+capability_requires:
+  reviews.read:
+    - id: identity
+      api: 1
+  reviews.write:
+    - id: identity
+      api: 1
+  reviews.moderate:
+    - id: identity
+      api: 1
 scenario_tests:
   ACAD-04:
     - integration_test.go#TestContentAdmissionAndCurrentAccessCannotLeakIdentity
