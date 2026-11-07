@@ -145,11 +145,21 @@ func (t *transaction) Vote(id, subject string) (int, error) {
 	return v, safe(e)
 }
 func (t *transaction) SetVote(id, subject string, v int) error {
+	if e := t.Lock("closure-owner:" + subject); e != nil {
+		return e
+	}
+	closed, e := t.ClosedOwners([]string{subject})
+	if e != nil {
+		return e
+	}
+	if closed[subject] {
+		return reviews.ErrForbidden
+	}
 	if v == 0 {
 		_, e := t.tx.ExecContext(t.ctx, `DELETE FROM reviews.votes WHERE id=$1 AND subject=$2`, id, subject)
 		return safe(e)
 	}
-	_, e := t.tx.ExecContext(t.ctx, `INSERT INTO reviews.votes(id,subject,value) VALUES($1,$2,$3) ON CONFLICT(id,subject) DO UPDATE SET value=excluded.value`, id, subject, v)
+	_, e = t.tx.ExecContext(t.ctx, `INSERT INTO reviews.votes(id,subject,value) VALUES($1,$2,$3) ON CONFLICT(id,subject) DO UPDATE SET value=excluded.value`, id, subject, v)
 	return safe(e)
 }
 func (t *transaction) VoteCounts(id string) (int, int, error) {

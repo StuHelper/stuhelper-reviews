@@ -33,7 +33,24 @@ func (t *transaction) CloseOwner(owner, id string) error {
 	if saved != id {
 		return r.ErrConflict
 	}
-	return nil
+	// Each retained vote gets an independent random identity, with no account mapping.
+	if _, e = t.tx.ExecContext(t.ctx, `UPDATE reviews.votes SET subject='anonymous:'||gen_random_uuid()::text WHERE subject=$1`, owner); e != nil {
+		return safe(e)
+	}
+	if _, e = t.tx.ExecContext(t.ctx, `DELETE FROM reviews.replays WHERE key IN (SELECT id FROM reviews.audit WHERE data->>'Actor'=$1 AND data->>'Type'='reviews.voted.v1')`, owner); e != nil {
+		return safe(e)
+	}
+	if _, e = t.tx.ExecContext(t.ctx, `UPDATE reviews.audit SET data=jsonb_set(data,'{Actor}','""') WHERE data->>'Actor'=$1 AND data->>'Type'='reviews.voted.v1'`, owner); e != nil {
+		return safe(e)
+	}
+	if e = t.Lock("bookmark-owner:" + owner); e != nil {
+		return e
+	}
+	if _, e = t.tx.ExecContext(t.ctx, `INSERT INTO reviews.bookmark_transfers(subject) VALUES($1) ON CONFLICT DO NOTHING`, owner); e != nil {
+		return safe(e)
+	}
+	_, e = t.tx.ExecContext(t.ctx, `DELETE FROM reviews.bookmarks WHERE subject=$1`, owner)
+	return safe(e)
 }
 func (t *transaction) closedEntry(e *r.Entry) error {
 	if err := t.Lock("closure-owner:" + e.Owner); err != nil {

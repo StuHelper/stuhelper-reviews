@@ -4,9 +4,51 @@ import (
 	"context"
 	"errors"
 	r "github.com/StuHelper/stuhelper-reviews"
+	"github.com/StuHelper/stuhelper-reviews/postgres"
 	"sync"
 	"testing"
 )
+
+func TestClosureRetainsAnonymousVotesAndRemovesLegacyBookmarks(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	entry := create(t, f, "entry", input("course", "autumn", 4))
+	voter := r.Principal{Subject: "voter"}
+	other := r.Principal{Subject: "other"}
+	for _, p := range []r.Principal{voter, other} {
+		if _, e := f.service.Action(ctx, p, entry.ID, "vote", r.Action{Action: "vote", Vote: 1}); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := f.service.SetBookmark(ctx, p, "course", "bookmark", true); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for range 2 {
+		if e := f.service.AnonymizeOwner(ctx, voter.Subject, "11111111-1111-4111-8111-111111111111"); e != nil {
+			t.Fatal(e)
+		}
+	}
+	view, e := f.service.Get(ctx, other, entry.ID)
+	if e != nil || view.Upvotes != 2 || view.MyVote != 1 {
+		t.Fatal("anonymous vote no longer counted", view, e)
+	}
+	votes, e := f.service.MyVotes(ctx, voter, "", 20)
+	if e != nil || len(votes) != 0 {
+		t.Fatal("votes still associated with closed account", votes, e)
+	}
+	marks, e := f.service.Bookmarks(ctx, voter, "", 20)
+	if e != nil || len(marks) != 0 {
+		t.Fatal("legacy favorites retained", marks, e)
+	}
+	if _, e = f.service.Action(ctx, voter, entry.ID, "vote", r.Action{Action: "vote", Vote: 1}); !errors.Is(e, r.ErrForbidden) {
+		t.Fatal("closed vote replay accepted", e)
+	}
+	db := f.service.Repo.(*postgres.Repository).DB
+	var n int
+	if e = db.QueryRow(`SELECT count(*) FROM reviews.audit WHERE data->>'Actor'=$1 AND data->>'Type'='reviews.voted.v1'`, voter.Subject).Scan(&n); e != nil || n != 0 {
+		t.Fatal("vote audit still identifies account", n, e)
+	}
+}
 
 func TestClosedOwnerKeepsContentWithoutProfileOrDisclosures(t *testing.T) {
 	f := fixture(t)
