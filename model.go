@@ -249,6 +249,7 @@ type Replay struct {
 	ObjectID string
 }
 type Event struct {
+	Reason                             string `json:"-"`
 	ID, Type, Subject, SchoolID, Actor string
 	Revision                           int64
 	At                                 time.Time

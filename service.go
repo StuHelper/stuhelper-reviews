@@ -203,7 +203,11 @@ func replay(t Transaction, key, digest string, now time.Time) (Result, bool, err
 	return r.Result, true, nil
 }
 func (s *Service) record(t Transaction, key, digest, action string, p Principal, e Entry) error {
-	if err := t.Event(Event{ID: key, Type: "reviews." + action + ".v1", Subject: "entry/" + e.ID, SchoolID: e.SchoolID, Actor: p.Subject, Revision: e.Revision, At: s.now()}); err != nil {
+	reason := ""
+	if action == "moderated" {
+		reason = e.ChangeReason
+	}
+	if err := t.Event(Event{ID: key, Type: "reviews." + action + ".v1", Reason: reason, Subject: "entry/" + e.ID, SchoolID: e.SchoolID, Actor: p.Subject, Revision: e.Revision, At: s.now()}); err != nil {
 		return err
 	}
 	return t.SaveReplay(key, Replay{Digest: digest, Result: result(e), Until: s.now().Add(24 * time.Hour), ObjectID: e.ID})

@@ -67,5 +67,5 @@ func (t *transaction) IdentityByHandle(root, handle string) (reviews.Identity, e
 	return rows[0], nil
 }
 func (t *transaction) AuditRead(event reviews.Event) error {
-	return t.save(`INSERT INTO reviews.audit(id,data) VALUES($1,$2) ON CONFLICT(id) DO NOTHING`, event, event.ID)
+	return t.save(`INSERT INTO reviews.audit(id,reason,result,data) VALUES($1,$2,'success',$3) ON CONFLICT(id) DO NOTHING`, event, event.ID, event.Reason)
 }

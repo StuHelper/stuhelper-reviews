@@ -201,7 +201,7 @@ func (t *transaction) SaveReplay(key string, v reviews.Replay) error {
 	return t.save(`INSERT INTO reviews.replays(key,object_id,data) VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE SET data=excluded.data`, v, key, v.ObjectID)
 }
 func (t *transaction) Event(v reviews.Event) error {
-	if e := t.save(`INSERT INTO reviews.audit(id,data) VALUES($1,$2)`, v, v.ID); e != nil {
+	if e := t.save(`INSERT INTO reviews.audit(id,reason,result,data) VALUES($1,$2,'success',$3)`, v, v.ID, v.Reason); e != nil {
 		return e
 	}
 	return t.save(`INSERT INTO reviews.outbox(id,data) VALUES($1,$2)`, map[string]any{"specversion": "1.0", "id": v.ID, "source": "reviews", "type": v.Type, "subject": v.Subject, "time": v.At, "schoolid": v.SchoolID, "datacontenttype": "application/json", "data": map[string]any{"revision": v.Revision}}, v.ID)
