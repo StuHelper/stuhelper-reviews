@@ -72,7 +72,7 @@ scenario_tests:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   ACAD-40:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
-    - presentation_test.go#TestPresentationMigrationAndHTTPRemovePreviewFieldsPreservingRatingTexts
+    - presentation_test.go#TestPresentationHTTPPreservesRatingTexts
   CM-09:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   CM-14:
@@ -88,9 +88,8 @@ scenario_tests:
   ACAD-16:
     - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
   ACAD-15:
-    - bookmark_transfer_test.go#TestBookmarkTransferSealsLegacyWritesAndRetainsOriginalReplay
-    - interaction_test.go#TestExpiredAdmissionAllowsOnlyOwnVoteAndBookmarkRemoval
+    - interaction_test.go#TestExpiredAdmissionAllowsOnlyOwnVoteRemoval
   PC-07:
-    - closure_test.go#TestClosureRetainsAnonymousVotesAndRemovesLegacyBookmarks
+    - closure_test.go#TestClosureRetainsAnonymousVotes
     - closure_test.go#TestClosedOwnerKeepsContentWithoutProfileOrDisclosures
     - closure_test.go#TestClosureRejectsPublicationAlreadyWaitingForExternalModeration

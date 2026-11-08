@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	r "github.com/StuHelper/stuhelper-reviews"
 	"github.com/StuHelper/stuhelper-reviews/httpapi"
-	"github.com/StuHelper/stuhelper-reviews/postgres"
+
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func TestPresentationMigrationAndHTTPRemovePreviewFieldsPreservingRatingTexts(t *testing.T) {
+func TestPresentationHTTPPreservesRatingTexts(t *testing.T) {
 	f := fixture(t)
 	repo, migration := database(t)
 	f.service.Repo = repo
@@ -25,30 +25,13 @@ func TestPresentationMigrationAndHTTPRemovePreviewFieldsPreservingRatingTexts(t 
 		}
 		texts[locale] = dimensions
 	}
-	old := map[string]any{"school_id": "school", "revision": 3, "guest_preview": 80, "member_preview": 160, "preview_ratio": 0.3, "rating_texts": texts}
-	raw, e := json.Marshal(old)
+	_, e := f.service.SavePresentation(ctx, r.Principal{Subject: "admin"}, "initial", r.Presentation{SchoolID: "school", RatingTexts: texts})
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = migration.Exec(`INSERT INTO reviews.presentations(school_id,data) VALUES($1,$2)`, "school", string(raw)); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = migration.Exec(`INSERT INTO reviews.presentation_history(school_id,revision,data) VALUES($1,3,$2)`, "school", string(raw)); e != nil {
-		t.Fatal(e)
-	}
-	for i := 0; i < 2; i++ {
-		if _, e = migration.Exec(postgres.Schema); e != nil {
-			t.Fatal(e)
-		}
-	}
-	var clean []byte
-	if e = migration.QueryRow(`SELECT data FROM reviews.presentations WHERE school_id='school'`).Scan(&clean); e != nil {
-		t.Fatal(e)
-	}
-	assertNoPreviewKeys(t, clean)
 	view, e := f.service.ReadPresentation(ctx, student, "school")
-	if e != nil || view.Effective.Revision != 3 || len(view.Effective.RatingTexts) != 8 || view.Effective.RatingTexts["ar-EG"][4][5] != "Five" {
-		t.Fatal("migration lost rating configuration", view, e)
+	if e != nil || view.Effective.Revision != 1 || len(view.Effective.RatingTexts) != 8 || view.Effective.RatingTexts["ar-EG"][4][5] != "Five" {
+		t.Fatal("rating configuration missing", view, e)
 	}
 	entry := create(t, f, "no-preview", input("course", "autumn", 4))
 	h := httpapi.Handler{Service: f.service, Authenticate: func(*http.Request) (r.Principal, error) { return r.Principal{Subject: "admin"}, nil }}.Routes()
@@ -60,18 +43,18 @@ func TestPresentationMigrationAndHTTPRemovePreviewFieldsPreservingRatingTexts(t 
 		}
 		assertNoPreviewKeys(t, w.Body.Bytes())
 	}
-	// Obsolete configuration cannot silently appear to save successfully.
+	// Unknown fields must be rejected.
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("PUT", "/api/v1/reviews/admin/presentation", strings.NewReader(string(raw)))
-	req.Header.Set("Idempotency-Key", "old")
+	req := httptest.NewRequest("PUT", "/api/v1/reviews/admin/presentation", strings.NewReader(`{"school_id":"school","revision":1,"unknown":true}`))
+	req.Header.Set("Idempotency-Key", "unknown")
 	h.ServeHTTP(w, req)
 	if w.Code != 400 {
-		t.Fatal("obsolete configuration accepted", w.Code, w.Body.String())
+		t.Fatal("unknown field accepted", w.Code, w.Body.String())
 	}
 	settings := view.Effective
 	settings.RatingTexts["en-US"][0][5] = "Excellent"
 	updated, e := f.service.SavePresentation(ctx, r.Principal{Subject: "admin"}, "rating-update", settings)
-	if e != nil || updated.Effective.Revision != 4 || updated.Effective.RatingTexts["en-US"][0][5] != "Excellent" {
+	if e != nil || updated.Effective.Revision != 2 || updated.Effective.RatingTexts["en-US"][0][5] != "Excellent" {
 		t.Fatal("rating update failed", updated, e)
 	}
 	var history int

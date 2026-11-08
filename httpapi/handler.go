@@ -41,8 +41,6 @@ func (h Handler) Routes() http.Handler {
 	m.HandleFunc("POST /api/v1/reviews/me/drafts/{id}/publish", h.publishDraft)
 	m.HandleFunc("POST /api/v1/reviews/me/drafts", h.saveDraft)
 	m.HandleFunc("DELETE /api/v1/reviews/me/drafts/{id}", h.deleteDraft)
-	m.HandleFunc("GET /api/v1/reviews/me/bookmarks", h.bookmarks)
-	m.HandleFunc("POST /api/v1/reviews/me/bookmarks", h.setBookmark)
 	m.HandleFunc("GET /api/v1/reviews/me/votes", h.votes)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
@@ -267,35 +265,6 @@ func (h Handler) deleteDraft(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, e := h.Service.DeleteDraft(r.Context(), p, r.PathValue("id"), r.Header.Get("Idempotency-Key"), in.Revision)
-	respond(w, v, e)
-}
-func (h Handler) bookmarks(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.principal(w, r, true)
-	if !ok {
-		return
-	}
-	n, e := limit(r)
-	if e != nil {
-		respond(w, nil, e)
-		return
-	}
-	v, e := h.Service.Bookmarks(r.Context(), p, r.URL.Query().Get("after"), n)
-	respond(w, v, e)
-}
-func (h Handler) setBookmark(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.principal(w, r, true)
-	if !ok {
-		return
-	}
-	var in struct {
-		TargetID string `json:"target_id"`
-		Set      bool   `json:"set"`
-	}
-	if e := decode(w, r, &in); e != nil {
-		respond(w, nil, e)
-		return
-	}
-	v, e := h.Service.SetBookmark(r.Context(), p, in.TargetID, r.Header.Get("Idempotency-Key"), in.Set)
 	respond(w, v, e)
 }
 func (h Handler) votes(w http.ResponseWriter, r *http.Request) {

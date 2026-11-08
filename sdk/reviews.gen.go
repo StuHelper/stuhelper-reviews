@@ -340,12 +340,6 @@ type Band struct {
 	Samples int `json:"samples"`
 }
 
-// Bookmark defines model for Bookmark.
-type Bookmark struct {
-	Set      bool   `json:"set"`
-	TargetId string `json:"target_id"`
-}
-
 // Composer defines model for Composer.
 type Composer struct {
 	Allowed      bool                `json:"allowed"`
@@ -614,17 +608,6 @@ type GetComposerParams struct {
 	ParentId *string `form:"parent_id,omitempty" json:"parent_id,omitempty"`
 }
 
-// MyBookmarksParams defines parameters for MyBookmarks.
-type MyBookmarksParams struct {
-	After *string `form:"after,omitempty" json:"after,omitempty"`
-	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
-// SetBookmarkParams defines parameters for SetBookmark.
-type SetBookmarkParams struct {
-	IdempotencyKey string `json:"Idempotency-Key"`
-}
-
 // MyDraftsParams defines parameters for MyDrafts.
 type MyDraftsParams struct {
 	After *string `form:"after,omitempty" json:"after,omitempty"`
@@ -714,9 +697,6 @@ type PreviewAttributionJSONRequestBody = AttributionInput
 
 // SavePresentationJSONRequestBody defines body for SavePresentation for application/json ContentType.
 type SavePresentationJSONRequestBody = Presentation
-
-// SetBookmarkJSONRequestBody defines body for SetBookmark for application/json ContentType.
-type SetBookmarkJSONRequestBody = Bookmark
 
 // SaveDraftJSONRequestBody defines body for SaveDraft for application/json ContentType.
 type SaveDraftJSONRequestBody = DraftWrite
@@ -852,23 +832,6 @@ type ClientInterface interface {
 	//
 	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// MyBookmarks performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
-	//
-	//  When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-	MyBookmarks(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SetBookmarkWithBody performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
-	// with any type of body and a specified content type.
-	//
-	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-	SetBookmarkWithBody(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SetBookmark performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
-	// Takes a body of the `application/json` content type.
-	//
-	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-	SetBookmark(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyDrafts performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
 	MyDrafts(ctx context.Context, params *MyDraftsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1112,53 +1075,6 @@ func (c *Client) SavePresentation(ctx context.Context, params *SavePresentationP
 // Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetComposerRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// MyBookmarks performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
-//
-//	When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-func (c *Client) MyBookmarks(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMyBookmarksRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SetBookmarkWithBody performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
-// with any type of body and a specified content type.
-//
-// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-func (c *Client) SetBookmarkWithBody(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSetBookmarkRequestWithBody(c.Server, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SetBookmark performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
-// Takes a body of the `application/json` content type.
-//
-// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-func (c *Client) SetBookmark(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSetBookmarkRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2107,125 +2023,6 @@ func NewGetComposerRequest(server string, params *GetComposerParams) (*http.Requ
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewMyBookmarksRequest constructs an http.Request for the MyBookmarks method
-func NewMyBookmarksRequest(server string, params *MyBookmarksParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/reviews/me/bookmarks")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.After != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", *params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewSetBookmarkRequest calls the generic SetBookmark builder with application/json body
-func NewSetBookmarkRequest(server string, params *SetBookmarkParams, body SetBookmarkJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewSetBookmarkRequestWithBody(server, params, "application/json", bodyReader)
-}
-
-// NewSetBookmarkRequestWithBody constructs an http.Request for the SetBookmark method, with any body, and a specified content type
-func NewSetBookmarkRequestWithBody(server string, params *SetBookmarkParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/reviews/me/bookmarks")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		var headerParam0 string
-
-		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-		if err != nil {
-			return nil, err
-		}
-
-		req.Header.Set("Idempotency-Key", headerParam0)
-
 	}
 
 	return req, nil
@@ -3206,27 +3003,6 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	GetComposerWithResponse(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*GetComposerResponse, error)
 
-	// MyBookmarksWithResponse performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
-	//
-	//  When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	MyBookmarksWithResponse(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*MyBookmarksResponse, error)
-
-	// SetBookmarkWithBodyWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
-	// with any type of body and a specified content type.
-	//
-	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	SetBookmarkWithBodyWithResponse(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error)
-
-	// SetBookmarkWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-	SetBookmarkWithResponse(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error)
-
 	// MyDraftsWithResponse performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -4082,172 +3858,6 @@ func (r GetComposerResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetComposerResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type MyBookmarksResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]string
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Error
-	// JSON503 the response for an HTTP 503 `application/json` response
-	JSON503 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r MyBookmarksResponse) GetJSON200() *[]string {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r MyBookmarksResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r MyBookmarksResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r MyBookmarksResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r MyBookmarksResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r MyBookmarksResponse) GetJSON409() *Error {
-	return r.JSON409
-}
-
-// GetJSON503 returns the response for an HTTP 503 `application/json` response
-func (r MyBookmarksResponse) GetJSON503() *Error {
-	return r.JSON503
-}
-
-// GetBody returns the raw response body bytes
-func (r MyBookmarksResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r MyBookmarksResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r MyBookmarksResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r MyBookmarksResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type SetBookmarkResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Result
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Error
-	// JSON503 the response for an HTTP 503 `application/json` response
-	JSON503 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r SetBookmarkResponse) GetJSON200() *Result {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r SetBookmarkResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r SetBookmarkResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r SetBookmarkResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r SetBookmarkResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r SetBookmarkResponse) GetJSON409() *Error {
-	return r.JSON409
-}
-
-// GetJSON503 returns the response for an HTTP 503 `application/json` response
-func (r SetBookmarkResponse) GetJSON503() *Error {
-	return r.JSON503
-}
-
-// GetBody returns the raw response body bytes
-func (r SetBookmarkResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r SetBookmarkResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r SetBookmarkResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SetBookmarkResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5552,45 +5162,6 @@ func (c *ClientWithResponses) GetComposerWithResponse(ctx context.Context, param
 	return ParseGetComposerResponse(rsp)
 }
 
-// MyBookmarksWithResponse performs a GET /api/v1/reviews/me/bookmarks (the `MyBookmarks` operationId) request.
-//
-//	When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-//
-// Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) MyBookmarksWithResponse(ctx context.Context, params *MyBookmarksParams, reqEditors ...RequestEditorFn) (*MyBookmarksResponse, error) {
-	rsp, err := c.MyBookmarks(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseMyBookmarksResponse(rsp)
-}
-
-// SetBookmarkWithBodyWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request,
-// with any type of body and a specified content type.
-//
-// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-//
-// Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) SetBookmarkWithBodyWithResponse(ctx context.Context, params *SetBookmarkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error) {
-	rsp, err := c.SetBookmarkWithBody(ctx, params, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSetBookmarkResponse(rsp)
-}
-
-// SetBookmarkWithResponse performs a POST /api/v1/reviews/me/bookmarks (the `SetBookmark` operationId) request.
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Adding a course bookmark requires current content admission. Removal checks only login and ownership and remains available when qualification or the catalog is unavailable. When favorites is composed, this endpoint delegates to the independent favorites owner after resumable migration. Historical unexpired idempotency receipts replay their original result without recreating a removed favorite.
-func (c *ClientWithResponses) SetBookmarkWithResponse(ctx context.Context, params *SetBookmarkParams, body SetBookmarkJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBookmarkResponse, error) {
-	rsp, err := c.SetBookmark(ctx, params, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSetBookmarkResponse(rsp)
-}
-
 // MyDraftsWithResponse performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -6378,142 +5949,6 @@ func ParseGetComposerResponse(rsp *http.Response) (*GetComposerResponse, error) 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Composer
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON503 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseMyBookmarksResponse parses an HTTP response from a MyBookmarksWithResponse call
-func ParseMyBookmarksResponse(rsp *http.Response) (*MyBookmarksResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &MyBookmarksResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON503 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseSetBookmarkResponse parses an HTTP response from a SetBookmarkWithResponse call
-func ParseSetBookmarkResponse(rsp *http.Response) (*SetBookmarkResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SetBookmarkResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Result
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

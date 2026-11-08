@@ -178,39 +178,6 @@ func (t *transaction) Voted(subject, after string, limit int, now time.Time) ([]
  AND (e.expires_at IS NULL OR e.expires_at>$4) AND (root.expires_at IS NULL OR root.expires_at>$4)
  ORDER BY e.id LIMIT $3`, subject, after, limit, now)
 }
-func (t *transaction) Bookmark(subject, target string, set bool) error {
-	if e := t.bookmarkWritable(subject); e != nil {
-		return e
-	}
-	q := `DELETE FROM reviews.bookmarks WHERE subject=$1 AND target_id=$2`
-	if set {
-		q = `INSERT INTO reviews.bookmarks(subject,target_id) VALUES($1,$2) ON CONFLICT DO NOTHING`
-	}
-	_, e := t.tx.ExecContext(t.ctx, q, subject, target)
-	return safe(e)
-}
-func (t *transaction) Bookmarks(subject, after string, limit int) ([]string, error) {
-	if e := t.bookmarkWritable(subject); e != nil {
-		return nil, e
-	}
-	return t.bookmarkPage(subject, after, limit)
-}
-func (t *transaction) bookmarkPage(subject, after string, limit int) ([]string, error) {
-	rows, e := t.tx.QueryContext(t.ctx, `SELECT target_id FROM reviews.bookmarks WHERE subject=$1 AND target_id>$2 ORDER BY target_id LIMIT $3`, subject, after, limit)
-	if e != nil {
-		return nil, safe(e)
-	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var id string
-		if rows.Scan(&id) != nil {
-			return nil, reviews.ErrUnavailable
-		}
-		out = append(out, id)
-	}
-	return out, safe(rows.Err())
-}
 func (t *transaction) Draft(id string) (reviews.Draft, error) {
 	return read[reviews.Draft](t, `SELECT data FROM reviews.drafts WHERE id=$1`, id)
 }

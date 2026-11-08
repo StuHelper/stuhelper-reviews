@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+// FavoriteReferences verifies current ownership through the favorites module.
+type FavoriteReferences interface {
+	CourseReferences(context.Context, string, []string) ([]string, error)
+}
+
 type Reference struct {
 	ID          string `json:"id"`
 	Kind        string `json:"kind"`
@@ -50,7 +55,7 @@ func (s *Service) MyReferences(ctx context.Context, p Principal, ids []string) (
 	if err != nil {
 		return References{}, err
 	}
-	if !slices.Equal(owned, ids) && s.BookmarksProvider != nil {
+	if !slices.Equal(owned, ids) && s.Favorites != nil {
 		remaining := []string{}
 		for _, id := range ids {
 			if !slices.Contains(owned, id) {
@@ -58,7 +63,7 @@ func (s *Service) MyReferences(ctx context.Context, p Principal, ids []string) (
 			}
 		}
 		call, cancel := context.WithTimeout(ctx, 3*time.Second)
-		extra, e := s.BookmarksProvider.CourseReferences(call, p.Subject, remaining)
+		extra, e := s.Favorites.CourseReferences(call, p.Subject, remaining)
 		cancel()
 		if e != nil {
 			return References{}, e

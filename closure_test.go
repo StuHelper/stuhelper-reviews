@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestClosureRetainsAnonymousVotesAndRemovesLegacyBookmarks(t *testing.T) {
+func TestClosureRetainsAnonymousVotes(t *testing.T) {
 	f := fixture(t)
 	ctx := context.Background()
 	entry := create(t, f, "entry", input("course", "autumn", 4))
@@ -19,9 +19,7 @@ func TestClosureRetainsAnonymousVotesAndRemovesLegacyBookmarks(t *testing.T) {
 		if _, e := f.service.Action(ctx, p, entry.ID, "vote", r.Action{Action: "vote", Vote: 1}); e != nil {
 			t.Fatal(e)
 		}
-		if _, e := f.service.SetBookmark(ctx, p, "course", "bookmark", true); e != nil {
-			t.Fatal(e)
-		}
+
 	}
 	for range 2 {
 		if e := f.service.AnonymizeOwner(ctx, voter.Subject, "11111111-1111-4111-8111-111111111111"); e != nil {
@@ -36,18 +34,13 @@ func TestClosureRetainsAnonymousVotesAndRemovesLegacyBookmarks(t *testing.T) {
 	if e != nil || len(votes) != 0 {
 		t.Fatal("votes still associated with closed account", votes, e)
 	}
-	marks, e := f.service.Bookmarks(ctx, voter, "", 20)
-	if !errors.Is(e, r.ErrUnavailable) || len(marks) != 0 {
-		t.Fatal("sealed legacy store became readable", marks, e)
-	}
+
 	if _, e = f.service.Action(ctx, voter, entry.ID, "vote", r.Action{Action: "vote", Vote: 1}); !errors.Is(e, r.ErrForbidden) {
 		t.Fatal("closed vote replay accepted", e)
 	}
 	db := f.service.Repo.(*postgres.Repository).DB
 	var n int
-	if e = db.QueryRow(`SELECT count(*) FROM reviews.bookmarks WHERE subject=$1`, voter.Subject).Scan(&n); e != nil || n != 0 {
-		t.Fatal("legacy favorites retained", n, e)
-	}
+
 	if e = db.QueryRow(`SELECT count(*) FROM reviews.audit WHERE data->>'Actor'=$1 AND data->>'Type'='reviews.voted.v1'`, voter.Subject).Scan(&n); e != nil || n != 0 {
 		t.Fatal("vote audit still identifies account", n, e)
 	}

@@ -285,7 +285,6 @@ type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
 }
 type Transaction interface {
-	BookmarkTransfer(string, string, int) ([]string, error)
 	ClosedOwners([]string) (map[string]bool, error)
 	CloseOwner(string, string) error
 	OwnedReferences(string, []string, time.Time) ([]string, error)
@@ -305,8 +304,6 @@ type Transaction interface {
 	SetVote(id, subject string, value int) error
 	VoteCounts(id string) (int, int, error)
 	Voted(subject, after string, limit int, now time.Time) ([]Entry, error)
-	Bookmark(subject, target string, set bool) error
-	Bookmarks(subject, after string, limit int) ([]string, error)
 	Draft(string) (Draft, error)
 	SaveDraft(Draft) error
 	DeleteDraft(string) error

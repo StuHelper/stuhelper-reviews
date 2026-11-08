@@ -56,15 +56,15 @@ func TestOwnNamesAndValidatedDraftAssociationsSurviveAdmissionExpiry(t *testing.
 	if _, e = f.service.MyReferences(ctx, member, []string{"draft-course"}); !errors.Is(e, r.ErrNotFound) || names.calls != 0 {
 		t.Fatal("self-typed ID obtained name", e, names.calls)
 	}
-	// Legacy drafts without server proof remain unverified after migration.
-	legacy := r.Draft{ID: "legacy", Revision: 1, Owner: student.Subject, Input: in}
-	if e = f.service.Repo.Transaction(ctx, func(tx r.Transaction) error { return tx.SaveDraft(legacy) }); e != nil {
+	// A saved draft without server proof grants no name access.
+	unverifiedDraft := r.Draft{ID: "unverifiedDraft", Revision: 1, Owner: student.Subject, Input: in}
+	if e = f.service.Repo.Transaction(ctx, func(tx r.Transaction) error { return tx.SaveDraft(unverifiedDraft) }); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = f.service.MyReferences(ctx, student, []string{"draft-course"}); !errors.Is(e, r.ErrNotFound) {
-		t.Fatal("legacy draft invented proof", e)
+		t.Fatal("unverifiedDraft draft invented proof", e)
 	}
-	saved, e = f.service.SaveDraft(ctx, student, "legacy", "validate", in, 1)
+	saved, e = f.service.SaveDraft(ctx, student, "unverifiedDraft", "validate", in, 1)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -158,9 +158,7 @@ func TestOwnReferenceHTTPDoesNotOpenPublicContent(t *testing.T) {
 	if _, e = f.service.Action(ctx, student, other.ID, "vote", r.Action{Action: "vote", Vote: 1}); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = f.service.SetBookmark(ctx, student, "removed", "bookmark", true); e != nil {
-		t.Fatal(e)
-	}
+	f.service.Favorites = favoriteReferences{}
 	f.access.revoked = true
 	f.access.failed = true
 	handler := httpapi.Handler{Service: f.service, Authenticate: func(req *http.Request) (r.Principal, error) {
@@ -200,4 +198,13 @@ func TestOwnReferenceHTTPDoesNotOpenPublicContent(t *testing.T) {
 		t.Fatal(e)
 	}
 	call("/api/v1/reviews/me/references?ids=voted-course", "student", 404)
+}
+
+type favoriteReferences struct{}
+
+func (favoriteReferences) CourseReferences(_ context.Context, owner string, ids []string) ([]string, error) {
+	if owner == student.Subject && slices.Contains(ids, "removed") {
+		return []string{"removed"}, nil
+	}
+	return nil, nil
 }

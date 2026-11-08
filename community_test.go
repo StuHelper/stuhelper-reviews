@@ -10,7 +10,6 @@ import (
 	"time"
 
 	r "github.com/StuHelper/stuhelper-reviews"
-	"github.com/StuHelper/stuhelper-reviews/postgres"
 )
 
 func TestDraftPublicationIsAtomicAndRecoverable(t *testing.T) {
@@ -212,31 +211,6 @@ func TestComposerUsesCurrentFactsAndDiscussionIdentity(t *testing.T) {
 	revoked, err := f.service.Composer(ctx, student, "mentor", "teacher", "", "")
 	if !errors.Is(err, r.ErrForbidden) || revoked.Allowed {
 		t.Fatal(revoked, err)
-	}
-}
-
-func TestCreationTimeMigrationPreservesExistingData(t *testing.T) {
-	repo, migration := database(t)
-	ctx := context.Background()
-	f := fixture(t)
-	f.service.Repo = repo
-	root := create(t, f, "legacy", input("course", "autumn", 3))
-	if _, err := migration.Exec(`ALTER TABLE reviews.entries DROP COLUMN created_at CASCADE`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migration.Exec(postgres.Schema); err != nil {
-		t.Fatal(err)
-	}
-	var at time.Time
-	if err := migration.QueryRow(`SELECT created_at FROM reviews.entries WHERE id=$1`, root.ID).Scan(&at); err != nil {
-		t.Fatal(err)
-	}
-	if !at.Equal(f.now.Round(time.Microsecond)) {
-		t.Fatal("migration changed creation time", at, f.now)
-	}
-	got, err := f.service.Get(ctx, student, root.ID)
-	if err != nil || got.Body != input("course", "autumn", 3).Body {
-		t.Fatal("migration lost entry", got, err)
 	}
 }
 

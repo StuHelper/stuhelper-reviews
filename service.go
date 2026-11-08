@@ -23,15 +23,15 @@ func DefaultConfig() Config {
 }
 
 type Service struct {
-	BookmarksProvider BookmarkProvider
-	Disclosures       DisclosureProvider
-	Repo              Repository
-	Catalog           Catalog
-	Access            Access
-	Moderation        Moderation
-	Profiles          Profiles
-	Config            Config
-	Clock             func() time.Time
+	Favorites   FavoriteReferences
+	Disclosures DisclosureProvider
+	Repo        Repository
+	Catalog     Catalog
+	Access      Access
+	Moderation  Moderation
+	Profiles    Profiles
+	Config      Config
+	Clock       func() time.Time
 }
 
 func New(repo Repository, catalog Catalog, access Access, moderation Moderation, profiles Profiles, c Config) (*Service, error) {
