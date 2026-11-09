@@ -38,6 +38,7 @@ specifications:
   - docs/spec/discovery.md
 scenario_tests:
   REV-ACTIVITY-01:
+    - activity_test.go#TestActivityInactiveTeacherDoesNotBlockCourseReview
     - postgres/activity_test.go#TestActivitySnapshotSchemaRollbackAndBoundedCleanup
     - activity_test.go#TestActivityReviewsVotesRepliesAndOriginalDayCorrections
     - activity_test.go#TestActivityConcurrentReviewsAndVotesDoNotLoseCounts

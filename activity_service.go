@@ -96,7 +96,7 @@ func (s *Service) activityTeacherIDs(ctx context.Context, school string, ids []s
 		if e != nil {
 			return nil, e
 		}
-		if target.Kind != "teacher" || target.SchoolID != school || target.Inactive || !validID(target.ID) {
+		if target.Kind != "teacher" || target.SchoolID != school || !validID(target.ID) {
 			return nil, ErrUnavailable
 		}
 		out = append(out, target.ID)

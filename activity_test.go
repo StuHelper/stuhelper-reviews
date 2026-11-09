@@ -200,3 +200,29 @@ func TestActivityReviewUsesCanonicalCourseFact(t *testing.T) {
 		t.Fatal("alias counted separately")
 	}
 }
+
+// An inactive attribution target suppresses its own heat; it does not revoke a
+// student's established right to evaluate an otherwise active course.
+type inactiveActivityTeacherCatalog struct{ *catalog }
+
+func (c inactiveActivityTeacherCatalog) Target(ctx context.Context, kind, id string) (r.Target, error) {
+	target, e := c.catalog.Target(ctx, kind, id)
+	if kind == "teacher" {
+		target.Inactive = true
+	}
+	return target, e
+}
+func TestActivityInactiveTeacherDoesNotBlockCourseReview(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	f.service.Catalog = inactiveActivityTeacherCatalog{f.catalog}
+	create(t, f, "retired-teacher", input("course", "autumn", 4))
+	repo := f.service.Repo.(*postgres.Repository)
+	d, e := repo.ReadActivity(ctx, r.ActivityID("course", "course", f.now))
+	if e != nil || d.Metrics["reviews"] != 1 {
+		t.Fatal(d, e)
+	}
+	if _, ok, e := f.service.CurrentActivity(ctx, student, r.ActivityID("teacher", "teacher-a", f.now)); e != nil || ok {
+		t.Fatal(ok, e)
+	}
+}
