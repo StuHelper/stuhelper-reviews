@@ -80,3 +80,5 @@ postgres/audit_query_test.go 的 TestPublicAuditQuery 使用独立 PostgreSQL �
 搜索来源、固定快照、有效投票与事件投递见[搜索来源规格](docs/spec/discovery.md)。
 
 热门活动来源、日快照、计数规则与清理接口见[活动来源规格](docs/spec/activity.md)。
+
+按账号信息查询的 Go 接口、能力、字段与范围限制见[账号查询规格](docs/spec/account-query.md)。

@@ -20,6 +20,8 @@ optional:
   - id: identity
     api: 1
 capabilities:
+  - reviews.account-query
+  - reviews.anonymous-author-read
   - reviews.read
   - reviews.write
   - reviews.moderate
@@ -34,9 +36,13 @@ capability_requires:
     - id: identity
       api: 1
 specifications:
+  - docs/spec/account-query.md
   - docs/spec/activity.md
   - docs/spec/discovery.md
 scenario_tests:
+  IQ-02:
+    - accountquery/query_test.go#TestAccountQueryAuthorizationAndFailures
+    - postgres/account_query_test.go#TestAccountQueryScopePaginationAndRuntime
   REV-ACTIVITY-01:
     - activity_test.go#TestActivityInactiveTeacherDoesNotBlockCourseReview
     - postgres/activity_test.go#TestActivitySnapshotSchemaRollbackAndBoundedCleanup
