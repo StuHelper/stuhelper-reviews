@@ -101,14 +101,29 @@ func (t *transaction) SaveEntry(e reviews.Entry) error {
 	if err := t.save(`INSERT INTO reviews.entries(id,root_id,owner,school_id,kind,target_id,term_id,state,expires_at,first_published_at,created_at,data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(id) DO UPDATE SET state=excluded.state,expires_at=excluded.expires_at,first_published_at=excluded.first_published_at,data=excluded.data`, e, e.ID, e.RootID, e.Owner, e.SchoolID, e.Input.Kind, e.Input.TargetID, e.Input.TermID, e.State, e.ExpiresAt, e.FirstPublishedAt, e.CreatedAt.Round(time.Microsecond)); err != nil {
 		return err
 	}
-	return t.save(`INSERT INTO reviews.history(id,revision,data) VALUES($1,$2,$3)`, e, e.ID, e.Revision)
+	if err := t.save(`INSERT INTO reviews.history(id,revision,data) VALUES($1,$2,$3)`, e, e.ID, e.Revision); err != nil {
+		return err
+	}
+	return t.saveDiscovery(e)
 }
 func (t *transaction) DeleteEntry(e reviews.Entry) error {
+	current, err := t.Entry(e.ID)
+	if err != nil {
+		return err
+	}
+	e.Revision = max(e.Revision, current.Revision+1)
+	if e.State != "deleted" && e.ExpiresAt != nil {
+		e.UpdatedAt = *e.ExpiresAt
+	}
+	e.State = "deleted"
+	if err = t.saveDiscovery(e); err != nil {
+		return err
+	}
 	q := `DELETE FROM reviews.entries WHERE id=$1`
 	if e.ID == e.RootID {
 		q = `DELETE FROM reviews.entries WHERE root_id=$1`
 	}
-	_, err := t.tx.ExecContext(t.ctx, q, e.ID)
+	_, err = t.tx.ExecContext(t.ctx, q, e.ID)
 	return safe(err)
 }
 func (t *transaction) projected(q string, args ...any) ([]reviews.Entry, error) {
@@ -204,5 +219,9 @@ func (t *transaction) Event(v reviews.Event) error {
 	if e := t.save(`INSERT INTO reviews.audit(id,reason,result,data) VALUES($1,$2,'success',$3)`, v, v.ID, v.Reason); e != nil {
 		return e
 	}
-	return t.save(`INSERT INTO reviews.outbox(id,data) VALUES($1,$2)`, map[string]any{"specversion": "1.0", "id": v.ID, "source": "reviews", "type": v.Type, "subject": v.Subject, "time": v.At, "schoolid": v.SchoolID, "datacontenttype": "application/json", "data": map[string]any{"revision": v.Revision}}, v.ID)
+	data, e := json.Marshal(map[string]any{"revision": v.Revision})
+	if e != nil {
+		return reviews.ErrInput
+	}
+	return t.saveEnvelope(reviews.Envelope{SpecVersion: "1.0", ID: v.ID, Source: "reviews", Type: v.Type, Subject: v.Subject, Time: v.At, Data: data})
 }

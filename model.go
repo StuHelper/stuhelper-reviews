@@ -254,17 +254,8 @@ type Event struct {
 	Revision                           int64
 	At                                 time.Time
 }
-type DeliveryEvent struct {
-	ID      string `json:"id"`
-	Subject string `json:"subject"`
-	Type    string `json:"type"`
-	Data    struct {
-		Revision int64 `json:"revision"`
-	} `json:"data"`
-	Attempts     int        `json:"-"`
-	FirstFailure *time.Time `json:"-"`
-}
 type Inspection struct {
+	ReviewRequested           bool
 	ID, Kind, SchoolID, Owner string
 	Revision                  int64
 	Visible                   bool
@@ -286,6 +277,7 @@ type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
 }
 type Transaction interface {
+	DiscoveryCurrent(string, []string, time.Time) ([]DiscoveryDocument, error)
 	ClosedOwners([]string) (map[string]bool, error)
 	CloseOwner(string, string) error
 	OwnedReferences(string, []string, time.Time) ([]string, error)
@@ -316,9 +308,6 @@ type Transaction interface {
 	Event(Event) error
 	AuditRead(Event) error
 	AdminEntries(school, kind, state, after string, limit int, now time.Time) ([]Entry, error)
-	Events(time.Time, int) ([]DeliveryEvent, error)
-	CompleteEvent(string) error
-	FailEvent(string, int, time.Time, time.Time, bool) error
 }
 
 // OwnVote is a receipt for the caller's action, not a projection of its target.

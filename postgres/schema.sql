@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS reviews.drafts(id text PRIMARY KEY, owner text NOT NU
 CREATE INDEX IF NOT EXISTS reviews_drafts_owner ON reviews.drafts(owner,id);
 CREATE TABLE IF NOT EXISTS reviews.replays(key text PRIMARY KEY, object_id text NOT NULL, data jsonb NOT NULL);
 CREATE TABLE IF NOT EXISTS reviews.audit(id text PRIMARY KEY, data jsonb NOT NULL, reason text NOT NULL DEFAULT '', result text NOT NULL DEFAULT 'unknown' CHECK(result IN ('success','denied','failed','unknown')), recorded_xid xid8 NOT NULL DEFAULT pg_current_xact_id(), audit_actor text NOT NULL DEFAULT 'unknown', audit_target text NOT NULL DEFAULT 'unknown', audit_action text NOT NULL DEFAULT 'unknown', audit_school text NOT NULL DEFAULT '*', audit_group text NOT NULL DEFAULT '*', audit_time timestamptz NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS reviews.outbox(id text PRIMARY KEY, data jsonb NOT NULL, delivered boolean NOT NULL DEFAULT false, attempts integer NOT NULL DEFAULT 0, next_attempt timestamptz NOT NULL DEFAULT '-infinity', first_failure timestamptz, blocked boolean NOT NULL DEFAULT false);
-CREATE INDEX IF NOT EXISTS reviews_outbox_ready ON reviews.outbox(next_attempt,id) WHERE NOT delivered AND NOT blocked;
+CREATE TABLE IF NOT EXISTS reviews.outbox(id text PRIMARY KEY, data jsonb NOT NULL, seq bigint GENERATED ALWAYS AS IDENTITY UNIQUE, sent_at timestamptz);
+CREATE INDEX IF NOT EXISTS reviews_outbox_pending ON reviews.outbox((data->>'source') COLLATE "C",(data->>'subject') COLLATE "C",seq) WHERE sent_at IS NULL;
 REVOKE ALL ON SCHEMA reviews FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA reviews FROM PUBLIC;
 
@@ -43,3 +43,13 @@ CREATE OR REPLACE FUNCTION reviews.audit_invalidate() RETURNS trigger LANGUAGE p
 REVOKE ALL ON FUNCTION reviews.audit_invalidate() FROM PUBLIC;
 CREATE OR REPLACE TRIGGER audit_invalidate AFTER UPDATE OR DELETE OR TRUNCATE ON reviews.audit FOR EACH STATEMENT EXECUTE FUNCTION reviews.audit_invalidate();
 CREATE INDEX IF NOT EXISTS audit_query_order ON reviews.audit(audit_time DESC,(id::text) COLLATE "C" DESC);
+
+-- Immutable source versions outlive business deletion, so rebuilds include tombstones.
+CREATE TABLE IF NOT EXISTS reviews.discovery_history(id text NOT NULL, revision bigint NOT NULL CHECK(revision>0), data jsonb NOT NULL, recorded_xid xid8 NOT NULL DEFAULT pg_current_xact_id(), PRIMARY KEY(id,revision));
+CREATE INDEX IF NOT EXISTS reviews_discovery_page ON reviews.discovery_history(id COLLATE "C",revision DESC);
+CREATE TABLE IF NOT EXISTS reviews.discovery_retention(singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton), revision bigint NOT NULL DEFAULT 0);
+INSERT INTO reviews.discovery_retention(singleton) VALUES(true) ON CONFLICT DO NOTHING;
+CREATE OR REPLACE FUNCTION reviews.invalidate_discovery() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN UPDATE reviews.discovery_retention SET revision=revision+1 WHERE singleton; RETURN NULL; END $$;
+REVOKE ALL ON FUNCTION reviews.invalidate_discovery() FROM PUBLIC;
+CREATE OR REPLACE TRIGGER invalidate_discovery AFTER UPDATE OR DELETE OR TRUNCATE ON reviews.discovery_history FOR EACH STATEMENT EXECUTE FUNCTION reviews.invalidate_discovery();
+REVOKE ALL ON TABLE reviews.discovery_history,reviews.discovery_retention FROM PUBLIC;

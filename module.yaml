@@ -33,7 +33,17 @@ capability_requires:
   reviews.moderate:
     - id: identity
       api: 1
+specifications:
+  - docs/spec/discovery.md
 scenario_tests:
+  REV-DISCOVERY-01:
+    - discovery_delivery_test.go#TestDiscoverySnapshotStableVersionsTombstonesAndSchema
+    - discovery_service_test.go#TestDiscoveryCourseLifecycleCurrentAdmissionAndAttribution
+  REV-OUTBOX-01:
+    - discovery_service_test.go#TestDiscoveryRelayInspectionUsesCurrentModerationRequest
+    - discovery_delivery_test.go#TestDiscoveryOutboxNotificationRollbackExclusionAndConfirmation
+  REV-DISCOVERY-02:
+    - discovery_service_test.go#TestDiscoveryMyVotesCurrentPermissionsPaginationAndCancellation
   AUDIT-01:
     - postgres/audit_query_test.go#TestPublicAuditQuery
   ACAD-04:

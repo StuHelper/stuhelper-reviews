@@ -39,7 +39,7 @@ bash scripts/check-with-postgres.sh
 
 先修改 `contracts/reviews.openapi.json`，再执行 `make generate`。首次迁移由独立身份执行 `postgres.Schema`，运行身份仅访问 reviews schema。Handler 解析输入，Service 检查当前资格与对象状态，Repository 保存数据。
 
-重复写入使用幂等键；同键不同内容拒绝。业务变化、审计、outbox 在同一事务提交。审核交接通过 Handoff 重试，审核决定按决定 ID 与内容修订拒绝重复效果和旧决定。
+重复写入使用幂等键；同键不同内容拒绝。业务变化、审计、outbox 在同一事务提交。审核交接由 backend relay 按统一 outbox 接口投递和重试，审核决定按决定 ID 与内容修订拒绝重复效果和旧决定。
 
 PostgreSQL 测试覆盖资格缺失、不同学期教师、内容准入、本人记录例外、跨学校统计隔离、身份继承、并发重复提交、统计、撤回、到期、草稿分页、投票和审核。测试使用合成身份与独立数据库。
 
@@ -76,3 +76,5 @@ postgres/audit_query_test.go 的 TestPublicAuditQuery 使用独立 PostgreSQL �
 | 场景 | 验证条件 |
 | --- | --- |
 | AUDIT-01 | 公开审计按授权过滤、稳定分页、脱敏及快照失效；运行身份不能删除审计 |
+
+搜索来源、固定快照、有效投票与事件投递见[搜索来源规格](docs/spec/discovery.md)。
