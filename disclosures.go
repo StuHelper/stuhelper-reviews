@@ -157,8 +157,15 @@ func (s *Service) replyGrant(ctx context.Context, p Principal, root Entry, c dis
 // A dependency failure never reuses cached private values. Required teacher
 // identification must remain available for a teacher reply to be publicly read.
 func (s *Service) disclosed(ctx context.Context, e Entry) ([]DisclosureOption, bool) {
+	options, visible, _ := s.disclosedFacts(ctx, e)
+	return options, visible
+}
+
+// disclosedFacts lets aggregate readers distinguish revoked disclosure from an
+// unavailable fact provider instead of silently treating an outage as zero heat.
+func (s *Service) disclosedFacts(ctx context.Context, e Entry) ([]DisclosureOption, bool, error) {
 	if len(e.Input.Disclosures) == 0 && !e.TeacherReply {
-		return nil, true
+		return nil, true, nil
 	}
 	course, term := e.DisclosureCourse, e.DisclosureTerm
 	if e.Input.Kind == "course" {
@@ -167,7 +174,7 @@ func (s *Service) disclosed(ctx context.Context, e Entry) ([]DisclosureOption, b
 	}
 	c, err := s.disclosureContext(ctx, Principal{Subject: e.Owner}, e.SchoolID, course, term, false)
 	if err != nil {
-		return nil, !e.TeacherReply
+		return nil, !e.TeacherReply, err
 	}
 	out := []DisclosureOption{}
 	for _, o := range c.options {
@@ -179,11 +186,11 @@ func (s *Service) disclosed(ctx context.Context, e Entry) ([]DisclosureOption, b
 	if e.TeacherReply {
 		for _, key := range []string{"real_name", "teacher"} {
 			if !slices.ContainsFunc(out, func(o DisclosureOption) bool { return o.Key == key }) {
-				return nil, false
+				return nil, false, nil
 			}
 		}
 	}
-	return out, true
+	return out, true, nil
 }
 
 func (s *Service) requirePublicDisclosure(ctx context.Context, id string) error {

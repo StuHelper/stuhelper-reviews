@@ -78,3 +78,5 @@ postgres/audit_query_test.go 的 TestPublicAuditQuery 使用独立 PostgreSQL �
 | AUDIT-01 | 公开审计按授权过滤、稳定分页、脱敏及快照失效；运行身份不能删除审计 |
 
 搜索来源、固定快照、有效投票与事件投递见[搜索来源规格](docs/spec/discovery.md)。
+
+热门活动来源、日快照、计数规则与清理接口见[活动来源规格](docs/spec/activity.md)。

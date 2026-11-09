@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS reviews_expiry ON reviews.entries(expires_at) WHERE e
 CREATE INDEX IF NOT EXISTS reviews_teachers ON reviews.entries USING gin((data->'teacher_ids')) WHERE kind='course';
 CREATE TABLE IF NOT EXISTS reviews.history(id text NOT NULL REFERENCES reviews.entries(id) ON DELETE CASCADE, revision bigint NOT NULL, data jsonb NOT NULL, PRIMARY KEY(id,revision));
 CREATE TABLE IF NOT EXISTS reviews.identities(root_id text NOT NULL REFERENCES reviews.entries(id) ON DELETE CASCADE, subject text NOT NULL, data jsonb NOT NULL, PRIMARY KEY(root_id,subject));
-CREATE TABLE IF NOT EXISTS reviews.votes(id text NOT NULL REFERENCES reviews.entries(id) ON DELETE CASCADE, subject text NOT NULL, value integer NOT NULL CHECK(value IN(-1,1)), PRIMARY KEY(id,subject));
+CREATE TABLE IF NOT EXISTS reviews.votes(id text NOT NULL REFERENCES reviews.entries(id) ON DELETE CASCADE, subject text NOT NULL, value integer NOT NULL CHECK(value IN(-1,1)), created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(id,subject));
 CREATE INDEX IF NOT EXISTS reviews_votes_owner ON reviews.votes(subject,id);
 CREATE TABLE IF NOT EXISTS reviews.drafts(id text PRIMARY KEY, owner text NOT NULL, data jsonb NOT NULL);
 CREATE INDEX IF NOT EXISTS reviews_drafts_owner ON reviews.drafts(owner,id);
@@ -53,3 +53,22 @@ CREATE OR REPLACE FUNCTION reviews.invalidate_discovery() RETURNS trigger LANGUA
 REVOKE ALL ON FUNCTION reviews.invalidate_discovery() FROM PUBLIC;
 CREATE OR REPLACE TRIGGER invalidate_discovery AFTER UPDATE OR DELETE OR TRUNCATE ON reviews.discovery_history FOR EACH STATEMENT EXECUTE FUNCTION reviews.invalidate_discovery();
 REVOKE ALL ON TABLE reviews.discovery_history,reviews.discovery_retention FROM PUBLIC;
+
+-- Provider-owned daily aggregates and immutable versions used by rebuild cursors.
+CREATE TABLE IF NOT EXISTS reviews.activity_buckets(id text PRIMARY KEY,kind text NOT NULL CHECK(kind IN('course','teacher')),target_id text NOT NULL,school_id text NOT NULL,day date NOT NULL,first_count bigint NOT NULL,second_count bigint NOT NULL,revision bigint NOT NULL CHECK(revision>0),visible boolean NOT NULL,data jsonb NOT NULL DEFAULT '{}',UNIQUE(kind,target_id,day));
+CREATE INDEX IF NOT EXISTS reviews_activity_target ON reviews.activity_buckets(kind,target_id,day);
+CREATE TABLE IF NOT EXISTS reviews.activity_history(id text NOT NULL,revision bigint NOT NULL,day date NOT NULL,data jsonb NOT NULL,recorded_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),PRIMARY KEY(id,revision));
+CREATE INDEX IF NOT EXISTS reviews_activity_history_page ON reviews.activity_history(id COLLATE "C",revision DESC);
+CREATE INDEX IF NOT EXISTS reviews_activity_history_day ON reviews.activity_history(day,id,revision);
+CREATE TABLE IF NOT EXISTS reviews.activity_retention(singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton),revision bigint NOT NULL DEFAULT 0);
+INSERT INTO reviews.activity_retention(singleton) VALUES(true) ON CONFLICT DO NOTHING;
+CREATE OR REPLACE FUNCTION reviews.invalidate_activity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN UPDATE reviews.activity_retention SET revision=revision+1 WHERE singleton;RETURN NULL;END $$;
+REVOKE ALL ON FUNCTION reviews.invalidate_activity() FROM PUBLIC;
+CREATE OR REPLACE TRIGGER invalidate_activity AFTER UPDATE OR DELETE ON reviews.activity_history FOR EACH ROW EXECUTE FUNCTION reviews.invalidate_activity();
+CREATE OR REPLACE TRIGGER truncate_activity AFTER TRUNCATE ON reviews.activity_history FOR EACH STATEMENT EXECUTE FUNCTION reviews.invalidate_activity();
+REVOKE ALL ON TABLE reviews.activity_buckets,reviews.activity_history,reviews.activity_retention FROM PUBLIC;
+
+CREATE TABLE IF NOT EXISTS reviews.activity_contributions(root_id text NOT NULL,id text NOT NULL,kind text NOT NULL,target_id text NOT NULL,school_id text NOT NULL,day date NOT NULL,reviews bigint NOT NULL,interactions bigint NOT NULL,PRIMARY KEY(root_id,id));
+REVOKE ALL ON reviews.activity_contributions FROM PUBLIC;
+
+CREATE INDEX IF NOT EXISTS reviews_vote_activity_day ON reviews.votes(id,created_at);

@@ -171,6 +171,10 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 		}
 		ids = []string{in.TeacherID}
 	}
+	ids, e = s.activityTeacherIDs(ctx, target.SchoolID, ids)
+	if e != nil {
+		return target, nil, nil, g, e
+	}
 	return target, evidence, ids, g, nil
 }
 func (s *Service) check(ctx context.Context, e Entry) (string, error) {
@@ -248,7 +252,7 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 		h = hash(PublishDraft{Revision: draftRevision, Input: in})
 	}
 	now := s.now()
-	entry := Entry{ChangeOrigin: "author", ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
+	entry := Entry{ActivityTargetID: target.ID, ChangeOrigin: "author", ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
 	state, err := s.check(ctx, entry)
 	if err != nil {
 		return out, err
@@ -499,7 +503,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 					return e
 				}
 			}
-			if e = t.SetVote(id, p.Subject, in.Vote); e != nil {
+			if e = t.SetVote(id, p.Subject, in.Vote, s.now()); e != nil {
 				return e
 			}
 			if e = s.record(t, rk, h, "voted", p, entry); e != nil {

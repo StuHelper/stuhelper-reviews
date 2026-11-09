@@ -96,6 +96,7 @@ type Input struct {
 
 // Entry is a private persistence model. Public responses always use View.
 type Entry struct {
+	ActivityTargetID string      `json:"activity_target_id"`
 	ChangeReason     string      `json:"change_reason,omitempty"`
 	ChangeOrigin     string      `json:"change_origin,omitempty"`
 	Featured         bool        `json:"featured,omitempty"`
@@ -294,7 +295,7 @@ type Transaction interface {
 	IdentityByHandle(root, handle string) (Identity, error)
 	SaveIdentity(Identity) error
 	Vote(id, subject string) (int, error)
-	SetVote(id, subject string, value int) error
+	SetVote(id, subject string, value int, at time.Time) error
 	VoteCounts(id string) (int, int, error)
 	Voted(subject, after string, limit int, now time.Time) ([]Entry, error)
 	Draft(string) (Draft, error)

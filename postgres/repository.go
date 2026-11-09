@@ -104,7 +104,10 @@ func (t *transaction) SaveEntry(e reviews.Entry) error {
 	if err := t.save(`INSERT INTO reviews.history(id,revision,data) VALUES($1,$2,$3)`, e, e.ID, e.Revision); err != nil {
 		return err
 	}
-	return t.saveDiscovery(e)
+	if err := t.saveDiscovery(e); err != nil {
+		return err
+	}
+	return t.refreshActivity(e.RootID, e.UpdatedAt)
 }
 func (t *transaction) DeleteEntry(e reviews.Entry) error {
 	current, err := t.Entry(e.ID)
@@ -124,7 +127,10 @@ func (t *transaction) DeleteEntry(e reviews.Entry) error {
 		q = `DELETE FROM reviews.entries WHERE root_id=$1`
 	}
 	_, err = t.tx.ExecContext(t.ctx, q, e.ID)
-	return safe(err)
+	if err != nil {
+		return safe(err)
+	}
+	return t.refreshActivity(e.RootID, e.UpdatedAt)
 }
 func (t *transaction) projected(q string, args ...any) ([]reviews.Entry, error) {
 	rows, err := t.tx.QueryContext(t.ctx, q, args...)
@@ -159,7 +165,7 @@ func (t *transaction) Vote(id, subject string) (int, error) {
 	e := t.tx.QueryRowContext(t.ctx, `SELECT value FROM reviews.votes WHERE id=$1 AND subject=$2`, id, subject).Scan(&v)
 	return v, safe(e)
 }
-func (t *transaction) SetVote(id, subject string, v int) error {
+func (t *transaction) SetVote(id, subject string, v int, at time.Time) error {
 	if e := t.Lock("closure-owner:" + subject); e != nil {
 		return e
 	}
@@ -172,10 +178,24 @@ func (t *transaction) SetVote(id, subject string, v int) error {
 	}
 	if v == 0 {
 		_, e := t.tx.ExecContext(t.ctx, `DELETE FROM reviews.votes WHERE id=$1 AND subject=$2`, id, subject)
+		if e != nil {
+			return safe(e)
+		}
+		entry, e := t.Entry(id)
+		if e != nil {
+			return e
+		}
+		return t.refreshActivity(entry.RootID, at)
+	}
+	_, e = t.tx.ExecContext(t.ctx, `INSERT INTO reviews.votes(id,subject,value,created_at) VALUES($1,$2,$3,$4) ON CONFLICT(id,subject) DO UPDATE SET value=excluded.value`, id, subject, v, at)
+	if e != nil {
 		return safe(e)
 	}
-	_, e = t.tx.ExecContext(t.ctx, `INSERT INTO reviews.votes(id,subject,value) VALUES($1,$2,$3) ON CONFLICT(id,subject) DO UPDATE SET value=excluded.value`, id, subject, v)
-	return safe(e)
+	entry, e := t.Entry(id)
+	if e != nil {
+		return e
+	}
+	return t.refreshActivity(entry.RootID, at)
 }
 func (t *transaction) VoteCounts(id string) (int, int, error) {
 	var up, down int

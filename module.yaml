@@ -34,8 +34,15 @@ capability_requires:
     - id: identity
       api: 1
 specifications:
+  - docs/spec/activity.md
   - docs/spec/discovery.md
 scenario_tests:
+  REV-ACTIVITY-01:
+    - postgres/activity_test.go#TestActivitySnapshotSchemaRollbackAndBoundedCleanup
+    - activity_test.go#TestActivityReviewsVotesRepliesAndOriginalDayCorrections
+    - activity_test.go#TestActivityConcurrentReviewsAndVotesDoNotLoseCounts
+    - activity_test.go#TestActivityHidesBucketsWithUndisclosableTeacherReplies
+    - activity_test.go#TestActivityReviewUsesCanonicalCourseFact
   REV-DISCOVERY-01:
     - discovery_delivery_test.go#TestDiscoverySnapshotStableVersionsTombstonesAndSchema
     - discovery_service_test.go#TestDiscoveryCourseLifecycleCurrentAdmissionAndAttribution

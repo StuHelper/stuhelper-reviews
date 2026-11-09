@@ -30,6 +30,9 @@ func (c *catalog) Target(_ context.Context, kind, id string) (r.Target, error) {
 		return r.Target{}, r.ErrNotFound
 	}
 	school := "school"
+	if kind == "teacher" && strings.Contains(id, ":teacher-") {
+		school = strings.SplitN(id, ":", 2)[0]
+	}
 	if c.schools[id] != "" {
 		school = c.schools[id]
 	}
@@ -43,6 +46,9 @@ func (c *catalog) Evidence(_ context.Context, p r.Principal, course, term string
 		return []r.Evidence{}, nil
 	}
 	teachers := []string{"teacher-a", "teacher-b"}
+	if school := c.schools[course]; school != "" && school != "school" {
+		teachers = []string{school + ":teacher-a", school + ":teacher-b"}
+	}
 	if term == "spring" {
 		teachers = []string{"teacher-a", "teacher-c"}
 	}

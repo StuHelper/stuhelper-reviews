@@ -39,7 +39,7 @@ func (r *Repository) ConfirmOutbox(ctx context.Context, id string) error {
 	return nil
 }
 func (t *transaction) saveEnvelope(v m.Envelope) error {
-	if v.SpecVersion != "1.0" || v.Source != "reviews" || v.ID == "" || len(v.ID) > 200 || v.Subject == "" || len(v.Subject) > 200 || v.Type == "" || v.Time.IsZero() {
+	if v.SpecVersion != "1.0" || v.Source != "reviews" || v.ID == "" || len(v.ID) > 200 || v.Subject == "" || len(v.Subject) > 512 || v.Type == "" || v.Time.IsZero() {
 		return m.ErrInput
 	}
 	if e := t.save(`INSERT INTO reviews.outbox(id,data) VALUES($1,$2)`, v, v.ID); e != nil {

@@ -163,6 +163,10 @@ func (s *Service) attribution(ctx context.Context, p Principal, id, teacher stri
 		}
 		ids = []string{teacher}
 	}
+	ids, err = s.activityTeacherIDs(ctx, entry.SchoolID, ids)
+	if err != nil {
+		return out, nil, err
+	}
 	out = AttributionPreview{entry.Revision, hash(evidence), ids, entry.TeacherIDs}
 	return out, evidence, nil
 }
