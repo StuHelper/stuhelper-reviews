@@ -1,5 +1,6 @@
 id: reviews
-version: 0.2.0
+version: 0.5.1
+kind: module
 api: 1
 critical: false
 requires:
@@ -10,6 +11,8 @@ requires:
   - id: moderation
     api: 1
 optional:
+  - id: favorites
+    api: 1
   - id: profiles
     api: 1
   - id: verification
@@ -17,12 +20,48 @@ optional:
   - id: identity
     api: 1
 capabilities:
+  - reviews.account-query
+  - reviews.anonymous-author-read
   - reviews.read
   - reviews.write
-capability_requires: {}
+  - reviews.moderate
+capability_requires:
+  reviews.read:
+    - id: identity
+      api: 1
+  reviews.write:
+    - id: identity
+      api: 1
+  reviews.moderate:
+    - id: identity
+      api: 1
+specifications:
+  - docs/spec/account-query.md
+  - docs/spec/activity.md
+  - docs/spec/discovery.md
 scenario_tests:
+  IQ-02:
+    - accountquery/query_test.go#TestAccountQueryAuthorizationAndFailures
+    - postgres/account_query_test.go#TestAccountQueryScopePaginationAndRuntime
+  REV-ACTIVITY-01:
+    - activity_test.go#TestActivityInactiveTeacherDoesNotBlockCourseReview
+    - postgres/activity_test.go#TestActivitySnapshotSchemaRollbackAndBoundedCleanup
+    - activity_test.go#TestActivityReviewsVotesRepliesAndOriginalDayCorrections
+    - activity_test.go#TestActivityConcurrentReviewsAndVotesDoNotLoseCounts
+    - activity_test.go#TestActivityHidesBucketsWithUndisclosableTeacherReplies
+    - activity_test.go#TestActivityReviewUsesCanonicalCourseFact
+  REV-DISCOVERY-01:
+    - discovery_delivery_test.go#TestDiscoverySnapshotStableVersionsTombstonesAndSchema
+    - discovery_service_test.go#TestDiscoveryCourseLifecycleCurrentAdmissionAndAttribution
+  REV-OUTBOX-01:
+    - discovery_service_test.go#TestDiscoveryRelayInspectionUsesCurrentModerationRequest
+    - discovery_delivery_test.go#TestDiscoveryOutboxNotificationRollbackExclusionAndConfirmation
+  REV-DISCOVERY-02:
+    - discovery_service_test.go#TestDiscoveryMyVotesCurrentPermissionsPaginationAndCancellation
+  AUDIT-01:
+    - postgres/audit_query_test.go#TestPublicAuditQuery
   ACAD-04:
-    - integration_test.go#TestAnonymousPreviewAndCurrentAccessCannotLeakIdentity
+    - integration_test.go#TestContentAdmissionAndCurrentAccessCannotLeakIdentity
   ACAD-05:
     - integration_test.go#TestCourseTermEligibilityAndImmutableTeacherAttribution
   ACAD-13:
@@ -59,7 +98,24 @@ scenario_tests:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   ACAD-40:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
+    - presentation_test.go#TestPresentationHTTPPreservesRatingTexts
   CM-09:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   CM-14:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
+  AE-ACCESS-05:
+    - own_references_test.go#TestOwnNamesAndValidatedDraftAssociationsSurviveAdmissionExpiry
+    - own_references_test.go#TestOwnReferenceHTTPDoesNotOpenPublicContent
+    - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
+    - content_security_regression_test.go#TestVoteReceiptsDoNotExposeTargetContentAfterAdmissionExpires
+  AE-ACCESS-07:
+    - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
+    - content_test.go#TestContentListsStatisticsAndComposerRespectServedSchool
+  ACAD-16:
+    - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
+  ACAD-15:
+    - interaction_test.go#TestExpiredAdmissionAllowsOnlyOwnVoteRemoval
+  PC-07:
+    - closure_test.go#TestClosureRetainsAnonymousVotes
+    - closure_test.go#TestClosedOwnerKeepsContentWithoutProfileOrDisclosures
+    - closure_test.go#TestClosureRejectsPublicationAlreadyWaitingForExternalModeration

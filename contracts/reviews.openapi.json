@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "StuHelper Reviews",
-    "version": "0.2.0"
+    "version": "0.5.1"
   },
   "servers": [
     {
@@ -85,7 +85,11 @@
             }
           }
         },
-        "security": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "query",
@@ -154,7 +158,8 @@
             },
             "description": "Course reviews attributed to this teacher at publication."
           }
-        ]
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       },
       "post": {
         "operationId": "createReview",
@@ -334,7 +339,11 @@
             }
           }
         },
-        "security": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
@@ -344,7 +353,8 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       }
     },
     "/api/v1/reviews/{id}/actions": {
@@ -456,7 +466,8 @@
               "maxLength": 128
             }
           }
-        ]
+        ],
+        "description": "New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content."
       }
     },
     "/api/v1/reviews/{id}/replies": {
@@ -646,7 +657,11 @@
             }
           }
         },
-        "security": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "query",
@@ -693,7 +708,8 @@
               "default": 20
             }
           }
-        ]
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       }
     },
     "/api/v1/reviews/me/entries": {
@@ -1043,7 +1059,8 @@
               "maxLength": 128
             }
           }
-        ]
+        ],
+        "description": "Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names."
       }
     },
     "/api/v1/reviews/me/drafts/{id}": {
@@ -1258,212 +1275,6 @@
         ]
       }
     },
-    "/api/v1/reviews/me/bookmarks": {
-      "get": {
-        "operationId": "myBookmarks",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not permitted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Revision or idempotency conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Required dependency unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "after",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20
-            }
-          }
-        ]
-      },
-      "post": {
-        "operationId": "setBookmark",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Result"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not permitted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Revision or idempotency conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Required dependency unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Bookmark"
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            }
-          }
-        ]
-      }
-    },
     "/api/v1/reviews/me/votes": {
       "get": {
         "operationId": "myVotes",
@@ -1475,7 +1286,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/View"
+                    "$ref": "#/components/schemas/OwnVote"
                   }
                 }
               }
@@ -1565,7 +1376,8 @@
               "default": 20
             }
           }
-        ]
+        ],
+        "description": "Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized."
       }
     },
     "/api/v1/reviews/me/drafts/{id}/publish": {
@@ -1883,7 +1695,12 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       }
     },
     "/api/v1/reviews/admin/entries": {
@@ -2108,7 +1925,11 @@
     "/api/v1/reviews/presentation": {
       "get": {
         "operationId": "getPresentation",
-        "security": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -2190,7 +2011,8 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       }
     },
     "/api/v1/reviews/admin/presentation": {
@@ -2614,6 +2436,101 @@
           }
         ]
       }
+    },
+    "/api/v1/reviews/me/references": {
+      "get": {
+        "operationId": "myReviewsReferences",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true,
+            "description": "Comma-separated IDs referenced by own records, at most 100. Any unowned ID rejects the whole batch.",
+            "schema": {
+              "type": "string",
+              "maxLength": 12899
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/References"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision or idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required."
+      }
     }
   },
   "components": {
@@ -2833,9 +2750,6 @@
               "maximum": 5
             }
           },
-          "preview": {
-            "type": "boolean"
-          },
           "author": {
             "$ref": "#/components/schemas/Author"
           },
@@ -2874,7 +2788,6 @@
           "title",
           "body",
           "ratings",
-          "preview",
           "author",
           "revision",
           "published_at",
@@ -3038,31 +2951,33 @@
           },
           "parent_id": {
             "type": "string"
+          },
+          "reference_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only associations previously validated by the server under content admission. These IDs may be sent to myReviewsReferences."
+          },
+          "reference_state": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "unverified",
+              "unavailable"
+            ],
+            "description": "Historical proof coverage after the latest save. Previously validated associations remain usable after qualification expiry. unavailable means unvalidated associations could not be checked; draft text was saved."
           }
         },
         "required": [
           "id",
           "revision",
           "input",
-          "withdrawn"
+          "withdrawn",
+          "reference_ids",
+          "reference_state"
         ],
         "description": "A private draft owned by the requester. Withdrawn drafts retain their original expiry. Saving a draft does not publish it."
-      },
-      "Bookmark": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "target_id": {
-            "type": "string"
-          },
-          "set": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "target_id",
-          "set"
-        ]
       },
       "Decision": {
         "type": "object",
@@ -3353,23 +3268,6 @@
           "revision": {
             "type": "integer"
           },
-          "guest_preview": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1000
-          },
-          "member_preview": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1000
-          },
-          "preview_ratio": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "exclusiveMinimum": true,
-            "exclusiveMaximum": true
-          },
           "rating_texts": {
             "$ref": "#/components/schemas/RatingTexts"
           }
@@ -3377,9 +3275,6 @@
         "required": [
           "school_id",
           "revision",
-          "guest_preview",
-          "member_preview",
-          "preview_ratio",
           "rating_texts"
         ]
       },
@@ -3400,23 +3295,6 @@
               "revision": {
                 "type": "integer"
               },
-              "guest_preview": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 1000
-              },
-              "member_preview": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 1000
-              },
-              "preview_ratio": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1,
-                "exclusiveMinimum": true,
-                "exclusiveMaximum": true
-              },
               "rating_texts": {
                 "$ref": "#/components/schemas/RatingTexts"
               }
@@ -3424,9 +3302,6 @@
             "required": [
               "school_id",
               "revision",
-              "guest_preview",
-              "member_preview",
-              "preview_ratio",
               "rating_texts"
             ],
             "nullable": true
@@ -3482,6 +3357,91 @@
           "teacher_ids",
           "previous_teacher_ids"
         ]
+      },
+      "OwnVote": {
+        "type": "object",
+        "required": [
+          "id",
+          "root_id",
+          "school_id",
+          "kind",
+          "target_id",
+          "term_id",
+          "my_vote"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "root_id": {
+            "type": "string"
+          },
+          "school_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "term_id": {
+            "type": "string"
+          },
+          "my_vote": {
+            "type": "integer",
+            "enum": [
+              -1,
+              1
+            ]
+          }
+        },
+        "description": "Caller-owned vote receipt. Does not contain another author's title, body, rating, identity or aggregate counts."
+      },
+      "Reference": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "canonical_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "References": {
+        "type": "object",
+        "required": [
+          "items",
+          "missing_ids"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Reference"
+            }
+          },
+          "missing_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

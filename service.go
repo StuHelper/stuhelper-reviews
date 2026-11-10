@@ -14,17 +14,16 @@ import (
 )
 
 type Config struct {
-	GuestPreview, MemberPreview int
-	PreviewRatio                float64
-	EditWindow, DraftLifetime   time.Duration
-	MinSamples                  int
+	EditWindow, DraftLifetime time.Duration
+	MinSamples                int
 }
 
 func DefaultConfig() Config {
-	return Config{GuestPreview: 80, MemberPreview: 160, PreviewRatio: 0.3, EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1}
+	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1}
 }
 
 type Service struct {
+	Favorites   FavoriteReferences
 	Disclosures DisclosureProvider
 	Repo        Repository
 	Catalog     Catalog
@@ -36,7 +35,7 @@ type Service struct {
 }
 
 func New(repo Repository, catalog Catalog, access Access, moderation Moderation, profiles Profiles, c Config) (*Service, error) {
-	if repo == nil || catalog == nil || access == nil || moderation == nil || c.GuestPreview < 0 || c.GuestPreview > 1000 || c.MemberPreview < 0 || c.MemberPreview > 1000 || c.PreviewRatio <= 0 || c.PreviewRatio >= 1 || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 {
+	if repo == nil || catalog == nil || access == nil || moderation == nil || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 {
 		return nil, ErrInput
 	}
 	return &Service{Repo: repo, Catalog: catalog, Access: access, Moderation: moderation, Profiles: profiles, Config: c}, nil
@@ -172,6 +171,10 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 		}
 		ids = []string{in.TeacherID}
 	}
+	ids, e = s.activityTeacherIDs(ctx, target.SchoolID, ids)
+	if e != nil {
+		return target, nil, nil, g, e
+	}
 	return target, evidence, ids, g, nil
 }
 func (s *Service) check(ctx context.Context, e Entry) (string, error) {
@@ -204,7 +207,11 @@ func replay(t Transaction, key, digest string, now time.Time) (Result, bool, err
 	return r.Result, true, nil
 }
 func (s *Service) record(t Transaction, key, digest, action string, p Principal, e Entry) error {
-	if err := t.Event(Event{ID: key, Type: "reviews." + action + ".v1", Subject: "entry/" + e.ID, SchoolID: e.SchoolID, Actor: p.Subject, Revision: e.Revision, At: s.now()}); err != nil {
+	reason := ""
+	if action == "moderated" {
+		reason = e.ChangeReason
+	}
+	if err := t.Event(Event{ID: key, Type: "reviews." + action + ".v1", Reason: reason, Subject: "entry/" + e.ID, SchoolID: e.SchoolID, Actor: p.Subject, Revision: e.Revision, At: s.now()}); err != nil {
 		return err
 	}
 	return t.SaveReplay(key, Replay{Digest: digest, Result: result(e), Until: s.now().Add(24 * time.Hour), ObjectID: e.ID})
@@ -245,7 +252,7 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 		h = hash(PublishDraft{Revision: draftRevision, Input: in})
 	}
 	now := s.now()
-	entry := Entry{ChangeOrigin: "author", ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
+	entry := Entry{ActivityTargetID: target.ID, ChangeOrigin: "author", ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
 	state, err := s.check(ctx, entry)
 	if err != nil {
 		return out, err
@@ -445,7 +452,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	if !validID(id) || !validKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
 		return out, ErrInput
 	}
-	if in.Action == "vote" {
+	if in.Action == "vote" && in.Vote != 0 {
 		if err := s.requirePublicDisclosure(ctx, id); err != nil {
 			return out, err
 		}
@@ -486,13 +493,17 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			return e
 		}
 		if in.Action == "vote" {
-			if _, e = s.authorize(ctx, p, "vote", entry.SchoolID); e != nil {
-				return e
+			// Removal only affects this caller's row and must survive qualification
+			// expiry, hidden content and unavailable external facts.
+			if in.Vote != 0 {
+				if _, e = s.authorize(ctx, p, "vote", entry.SchoolID); e != nil {
+					return e
+				}
+				if _, e = s.accessible(t, id); e != nil {
+					return e
+				}
 			}
-			if _, e = s.accessible(t, id); e != nil {
-				return e
-			}
-			if e = t.SetVote(id, p.Subject, in.Vote); e != nil {
+			if e = t.SetVote(id, p.Subject, in.Vote, s.now()); e != nil {
 				return e
 			}
 			if e = s.record(t, rk, h, "voted", p, entry); e != nil {
@@ -650,28 +661,13 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 	*out = result(e)
 	return nil
 }
-func preview(body string, max int, ratio float64) string {
-	line := ""
-	for _, v := range strings.Split(body, "\n") {
-		if strings.TrimSpace(v) != "" {
-			line = strings.TrimSpace(v)
-			break
-		}
-	}
-	n := int(math.Floor(float64(utf8.RuneCountInString(body)) * ratio))
-	if n > max {
-		n = max
-	}
-	r := []rune(line)
-	if n < len(r) {
-		r = r[:n]
-	}
-	return string(r)
-}
 func (s *Service) Stats(ctx context.Context, kind, target string, from, until *time.Time) (Statistics, error) {
 	return s.StatsPage(ctx, kind, target, from, until, "", 20)
 }
 func (s *Service) StatsPage(ctx context.Context, kind, target string, from, until *time.Time, after string, limit int) (Statistics, error) {
+	return s.statsPage(ctx, kind, target, from, until, after, limit, "")
+}
+func (s *Service) statsPage(ctx context.Context, kind, target string, from, until *time.Time, after string, limit int, school string) (Statistics, error) {
 	out := Statistics{From: from, Until: until, Courses: []CourseStatistic{}}
 	if limit < 1 || limit > 100 {
 		return out, ErrInput
@@ -684,7 +680,11 @@ func (s *Service) StatsPage(ctx context.Context, kind, target string, from, unti
 		return out, err
 	}
 	var rows []Aggregate
-	err = s.Repo.Transaction(ctx, func(t Transaction) error { var e error; rows, e = t.Aggregates(kind, ids, from, until); return e })
+	err = s.Repo.Transaction(ctx, func(t Transaction) error {
+		var e error
+		rows, e = t.Aggregates(kind, ids, school, from, until)
+		return e
+	})
 	if err != nil {
 		return out, err
 	}

@@ -26,6 +26,8 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
 	args = append(args, f.EquivalentTargets)
 	teacherIndex := strconv.Itoa(len(args) + 1)
 	args = append(args, f.EquivalentTeachers)
+	schoolIndex := strconv.Itoa(len(args) + 1)
+	args = append(args, f.SchoolID)
 	q := `SELECT e.data,i.data,
  (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=1),
  (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=-1),
@@ -38,6 +40,7 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
  AND ($1='' OR e.kind=$1) AND ($2='' OR e.target_id=$2 OR e.target_id=ANY($` + targetIndex + `::text[])) AND ($3='' OR e.term_id=$3)
  AND ($4='' OR e.root_id=$4) AND ($5='' OR e.owner=$5)
  AND ($9='' OR (e.kind='course' AND ((e.data->'teacher_ids') ? $9 OR (e.data->'teacher_ids') ?| $` + teacherIndex + `::text[])))
+ AND ($` + schoolIndex + `='' OR e.school_id=$` + schoolIndex + `)
  AND ` + cursor + ` ORDER BY ` + order + ` LIMIT $7`
 	return t.projected(q, args...)
 }
@@ -64,5 +67,5 @@ func (t *transaction) IdentityByHandle(root, handle string) (reviews.Identity, e
 	return rows[0], nil
 }
 func (t *transaction) AuditRead(event reviews.Event) error {
-	return t.save(`INSERT INTO reviews.audit(id,data) VALUES($1,$2) ON CONFLICT(id) DO NOTHING`, event, event.ID)
+	return t.save(`INSERT INTO reviews.audit(id,reason,result,data) VALUES($1,$2,'success',$3) ON CONFLICT(id) DO NOTHING`, event, event.ID, event.Reason)
 }

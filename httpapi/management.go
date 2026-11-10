@@ -30,7 +30,11 @@ func (h Handler) managementRoutes(m *http.ServeMux) {
 	})
 
 	m.HandleFunc("GET /api/v1/reviews/presentation", func(w http.ResponseWriter, req *http.Request) {
-		v, e := h.Service.Presentation(req.Context(), req.URL.Query().Get("school_id"))
+		p, ok := h.principal(w, req, true)
+		if !ok {
+			return
+		}
+		v, e := h.Service.ReadPresentation(req.Context(), p, req.URL.Query().Get("school_id"))
 		respond(w, v, e)
 	})
 	m.HandleFunc("GET /api/v1/reviews/admin/presentation", func(w http.ResponseWriter, req *http.Request) {

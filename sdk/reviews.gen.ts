@@ -11,6 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["listReviews"];
         put?: never;
         post: operations["createReview"];
@@ -27,6 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["getReview"];
         put?: never;
         post?: never;
@@ -45,6 +47,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. */
         post: operations["reviewAction"];
         delete?: never;
         options?: never;
@@ -75,6 +78,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["statistics"];
         put?: never;
         post?: never;
@@ -109,6 +113,7 @@ export interface paths {
         };
         get: operations["myDrafts"];
         put?: never;
+        /** @description Saving draft text requires login only. The server validates new associations under current content admission when available. Invalid, denied or unavailable associations remain unverified without blocking the text save. References already validated remain usable until removed from the draft. Read the saved draft reference_ids and reference_state before requesting names. */
         post: operations["saveDraft"];
         delete?: never;
         options?: never;
@@ -132,22 +137,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reviews/me/bookmarks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["myBookmarks"];
-        put?: never;
-        post: operations["setBookmark"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/reviews/me/votes": {
         parameters: {
             query?: never;
@@ -155,6 +144,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Read only the caller's vote receipts after login, including when content admission has expired. Public review reads remain independently authorized. */
         get: operations["myVotes"];
         put?: never;
         post?: never;
@@ -203,6 +193,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["getComposer"];
         put?: never;
         post?: never;
@@ -251,6 +242,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["getPresentation"];
         put?: never;
         post?: never;
@@ -300,6 +292,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["entryHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/me/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required. */
+        get: operations["myReviewsReferences"];
         put?: never;
         post?: never;
         delete?: never;
@@ -364,7 +373,6 @@ export interface components {
             title: string;
             body: string;
             ratings: number[];
-            preview: boolean;
             author: components["schemas"]["Author"];
             revision: number;
             /** Format: date-time */
@@ -414,10 +422,13 @@ export interface components {
             withdrawn: boolean;
             root_id?: string;
             parent_id?: string;
-        };
-        Bookmark: {
-            target_id: string;
-            set: boolean;
+            /** @description Only associations previously validated by the server under content admission. These IDs may be sent to myReviewsReferences. */
+            reference_ids: string[];
+            /**
+             * @description Historical proof coverage after the latest save. Previously validated associations remain usable after qualification expiry. unavailable means unvalidated associations could not be checked; draft text was saved.
+             * @enum {string}
+             */
+            reference_state: "verified" | "unverified" | "unavailable";
         };
         Decision: {
             id: string;
@@ -486,9 +497,6 @@ export interface components {
         Presentation: {
             school_id: string;
             revision: number;
-            guest_preview: number;
-            member_preview: number;
-            preview_ratio: number;
             rating_texts: components["schemas"]["RatingTexts"];
         };
         PresentationView: {
@@ -496,9 +504,6 @@ export interface components {
             configured: {
                 school_id: string;
                 revision: number;
-                guest_preview: number;
-                member_preview: number;
-                preview_ratio: number;
                 rating_texts: components["schemas"]["RatingTexts"];
             } | null;
             source: string;
@@ -511,6 +516,27 @@ export interface components {
             evidence_revision: string;
             teacher_ids: string[];
             previous_teacher_ids: string[];
+        };
+        /** @description Caller-owned vote receipt. Does not contain another author's title, body, rating, identity or aggregate counts. */
+        OwnVote: {
+            id: string;
+            root_id: string;
+            school_id: string;
+            kind: string;
+            target_id: string;
+            term_id: string;
+            /** @enum {integer} */
+            my_vote: -1 | 1;
+        };
+        Reference: {
+            id: string;
+            kind: string;
+            name: string;
+            canonical_id?: string;
+        };
+        References: {
+            items: components["schemas"]["Reference"][];
+            missing_ids: string[];
         };
     };
     responses: never;
@@ -1408,163 +1434,6 @@ export interface operations {
             };
         };
     };
-    myBookmarks: {
-        parameters: {
-            query?: {
-                after?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
-                };
-            };
-            /** @description Invalid input */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not permitted */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Revision or idempotency conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Required dependency unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    setBookmark: {
-        parameters: {
-            query?: never;
-            header: {
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Bookmark"];
-            };
-        };
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Result"];
-                };
-            };
-            /** @description Invalid input */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not permitted */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Revision or idempotency conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Required dependency unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     myVotes: {
         parameters: {
             query?: {
@@ -1583,7 +1452,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["View"][];
+                    "application/json": components["schemas"]["OwnVote"][];
                 };
             };
             /** @description Invalid input */
@@ -2372,6 +2241,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminEntry"][];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not permitted */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Revision or idempotency conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Required dependency unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    myReviewsReferences: {
+        parameters: {
+            query: {
+                /** @description Comma-separated IDs referenced by own records, at most 100. Any unowned ID rejects the whole batch. */
+                ids: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["References"];
                 };
             };
             /** @description Invalid input */

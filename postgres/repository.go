@@ -95,18 +95,42 @@ func (t *transaction) Entry(id string) (reviews.Entry, error) {
 	return read[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE id=$1`, id)
 }
 func (t *transaction) SaveEntry(e reviews.Entry) error {
+	if err := t.closedEntry(&e); err != nil {
+		return err
+	}
 	if err := t.save(`INSERT INTO reviews.entries(id,root_id,owner,school_id,kind,target_id,term_id,state,expires_at,first_published_at,created_at,data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(id) DO UPDATE SET state=excluded.state,expires_at=excluded.expires_at,first_published_at=excluded.first_published_at,data=excluded.data`, e, e.ID, e.RootID, e.Owner, e.SchoolID, e.Input.Kind, e.Input.TargetID, e.Input.TermID, e.State, e.ExpiresAt, e.FirstPublishedAt, e.CreatedAt.Round(time.Microsecond)); err != nil {
 		return err
 	}
-	return t.save(`INSERT INTO reviews.history(id,revision,data) VALUES($1,$2,$3)`, e, e.ID, e.Revision)
+	if err := t.save(`INSERT INTO reviews.history(id,revision,data) VALUES($1,$2,$3)`, e, e.ID, e.Revision); err != nil {
+		return err
+	}
+	if err := t.saveDiscovery(e); err != nil {
+		return err
+	}
+	return t.refreshActivity(e.RootID, e.UpdatedAt)
 }
 func (t *transaction) DeleteEntry(e reviews.Entry) error {
+	current, err := t.Entry(e.ID)
+	if err != nil {
+		return err
+	}
+	e.Revision = max(e.Revision, current.Revision+1)
+	if e.State != "deleted" && e.ExpiresAt != nil {
+		e.UpdatedAt = *e.ExpiresAt
+	}
+	e.State = "deleted"
+	if err = t.saveDiscovery(e); err != nil {
+		return err
+	}
 	q := `DELETE FROM reviews.entries WHERE id=$1`
 	if e.ID == e.RootID {
 		q = `DELETE FROM reviews.entries WHERE root_id=$1`
 	}
-	_, err := t.tx.ExecContext(t.ctx, q, e.ID)
-	return safe(err)
+	_, err = t.tx.ExecContext(t.ctx, q, e.ID)
+	if err != nil {
+		return safe(err)
+	}
+	return t.refreshActivity(e.RootID, e.UpdatedAt)
 }
 func (t *transaction) projected(q string, args ...any) ([]reviews.Entry, error) {
 	rows, err := t.tx.QueryContext(t.ctx, q, args...)
@@ -141,13 +165,37 @@ func (t *transaction) Vote(id, subject string) (int, error) {
 	e := t.tx.QueryRowContext(t.ctx, `SELECT value FROM reviews.votes WHERE id=$1 AND subject=$2`, id, subject).Scan(&v)
 	return v, safe(e)
 }
-func (t *transaction) SetVote(id, subject string, v int) error {
+func (t *transaction) SetVote(id, subject string, v int, at time.Time) error {
+	if e := t.Lock("closure-owner:" + subject); e != nil {
+		return e
+	}
+	closed, e := t.ClosedOwners([]string{subject})
+	if e != nil {
+		return e
+	}
+	if closed[subject] {
+		return reviews.ErrForbidden
+	}
 	if v == 0 {
 		_, e := t.tx.ExecContext(t.ctx, `DELETE FROM reviews.votes WHERE id=$1 AND subject=$2`, id, subject)
+		if e != nil {
+			return safe(e)
+		}
+		entry, e := t.Entry(id)
+		if e != nil {
+			return e
+		}
+		return t.refreshActivity(entry.RootID, at)
+	}
+	_, e = t.tx.ExecContext(t.ctx, `INSERT INTO reviews.votes(id,subject,value,created_at) VALUES($1,$2,$3,$4) ON CONFLICT(id,subject) DO UPDATE SET value=excluded.value`, id, subject, v, at)
+	if e != nil {
 		return safe(e)
 	}
-	_, e := t.tx.ExecContext(t.ctx, `INSERT INTO reviews.votes(id,subject,value) VALUES($1,$2,$3) ON CONFLICT(id,subject) DO UPDATE SET value=excluded.value`, id, subject, v)
-	return safe(e)
+	entry, e := t.Entry(id)
+	if e != nil {
+		return e
+	}
+	return t.refreshActivity(entry.RootID, at)
 }
 func (t *transaction) VoteCounts(id string) (int, int, error) {
 	var up, down int
@@ -164,30 +212,6 @@ func (t *transaction) Voted(subject, after string, limit int, now time.Time) ([]
  WHERE e.id>$2 AND e.state='published' AND root.state='published'
  AND (e.expires_at IS NULL OR e.expires_at>$4) AND (root.expires_at IS NULL OR root.expires_at>$4)
  ORDER BY e.id LIMIT $3`, subject, after, limit, now)
-}
-func (t *transaction) Bookmark(subject, target string, set bool) error {
-	q := `DELETE FROM reviews.bookmarks WHERE subject=$1 AND target_id=$2`
-	if set {
-		q = `INSERT INTO reviews.bookmarks(subject,target_id) VALUES($1,$2) ON CONFLICT DO NOTHING`
-	}
-	_, e := t.tx.ExecContext(t.ctx, q, subject, target)
-	return safe(e)
-}
-func (t *transaction) Bookmarks(subject, after string, limit int) ([]string, error) {
-	rows, e := t.tx.QueryContext(t.ctx, `SELECT target_id FROM reviews.bookmarks WHERE subject=$1 AND target_id>$2 ORDER BY target_id LIMIT $3`, subject, after, limit)
-	if e != nil {
-		return nil, safe(e)
-	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var id string
-		if rows.Scan(&id) != nil {
-			return nil, reviews.ErrUnavailable
-		}
-		out = append(out, id)
-	}
-	return out, safe(rows.Err())
 }
 func (t *transaction) Draft(id string) (reviews.Draft, error) {
 	return read[reviews.Draft](t, `SELECT data FROM reviews.drafts WHERE id=$1`, id)
@@ -212,8 +236,12 @@ func (t *transaction) SaveReplay(key string, v reviews.Replay) error {
 	return t.save(`INSERT INTO reviews.replays(key,object_id,data) VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE SET data=excluded.data`, v, key, v.ObjectID)
 }
 func (t *transaction) Event(v reviews.Event) error {
-	if e := t.save(`INSERT INTO reviews.audit(id,data) VALUES($1,$2)`, v, v.ID); e != nil {
+	if e := t.save(`INSERT INTO reviews.audit(id,reason,result,data) VALUES($1,$2,'success',$3)`, v, v.ID, v.Reason); e != nil {
 		return e
 	}
-	return t.save(`INSERT INTO reviews.outbox(id,data) VALUES($1,$2)`, map[string]any{"specversion": "1.0", "id": v.ID, "source": "reviews", "type": v.Type, "subject": v.Subject, "time": v.At, "schoolid": v.SchoolID, "datacontenttype": "application/json", "data": map[string]any{"revision": v.Revision}}, v.ID)
+	data, e := json.Marshal(map[string]any{"revision": v.Revision})
+	if e != nil {
+		return reviews.ErrInput
+	}
+	return t.saveEnvelope(reviews.Envelope{SpecVersion: "1.0", ID: v.ID, Source: "reviews", Type: v.Type, Subject: v.Subject, Time: v.At, Data: data})
 }
