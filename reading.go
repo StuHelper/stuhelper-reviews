@@ -13,6 +13,7 @@ type pageCursor struct {
 	Scope string    `json:"scope"`
 	Time  time.Time `json:"time"`
 	ID    string    `json:"id"`
+	Votes *int      `json:"votes,omitempty"`
 }
 
 func cursorScope(f Filter) string {
@@ -22,7 +23,7 @@ func decodeCursor(f *Filter) error {
 	if f.Sort == "" {
 		f.Sort = "id"
 	}
-	if !slices.Contains([]string{"id", "newest", "oldest"}, f.Sort) || len(f.After) > 512 {
+	if !slices.Contains([]string{"id", "newest", "oldest", "upvotes"}, f.Sort) || len(f.After) > 512 {
 		return ErrInput
 	}
 	if f.After == "" {
@@ -44,13 +45,23 @@ func decodeCursor(f *Filter) error {
 	}
 	f.CursorTime = &cursor.Time
 	f.CursorID = cursor.ID
+	if f.Sort == "upvotes" {
+		if cursor.Votes == nil || *cursor.Votes < 0 {
+			return ErrInput
+		}
+		f.CursorVotes = cursor.Votes
+	}
 	return nil
 }
 func encodeCursor(f Filter, entry Entry) string {
 	if f.Sort == "id" {
 		return entry.ID
 	}
-	b, _ := json.Marshal(pageCursor{cursorScope(f), entry.CreatedAt.Round(time.Microsecond), entry.ID})
+	cursor := pageCursor{Scope: cursorScope(f), Time: entry.CreatedAt.Round(time.Microsecond), ID: entry.ID}
+	if f.Sort == "upvotes" && entry.Projection != nil {
+		cursor.Votes = &entry.Projection.Upvotes
+	}
+	b, _ := json.Marshal(cursor)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 

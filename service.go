@@ -16,10 +16,11 @@ import (
 type Config struct {
 	EditWindow, DraftLifetime time.Duration
 	MinSamples                int
+	Recommendations           RecommendationPolicy
 }
 
 func DefaultConfig() Config {
-	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1}
+	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1, Recommendations: DefaultRecommendationPolicy()}
 }
 
 type Service struct {
@@ -35,6 +36,12 @@ type Service struct {
 }
 
 func New(repo Repository, catalog Catalog, access Access, moderation Moderation, profiles Profiles, c Config) (*Service, error) {
+	if c.Recommendations == (RecommendationPolicy{}) {
+		c.Recommendations = DefaultRecommendationPolicy()
+	}
+	if !c.Recommendations.valid() {
+		return nil, ErrInput
+	}
 	if repo == nil || catalog == nil || access == nil || moderation == nil || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 {
 		return nil, ErrInput
 	}

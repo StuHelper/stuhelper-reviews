@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "StuHelper Reviews",
-    "version": "0.5.1"
+    "version": "0.6.0"
   },
   "servers": [
     {
@@ -144,7 +144,8 @@
               "enum": [
                 "id",
                 "newest",
-                "oldest"
+                "oldest",
+                "upvotes"
               ],
               "default": "id"
             },
@@ -818,7 +819,8 @@
               "enum": [
                 "id",
                 "newest",
-                "oldest"
+                "oldest",
+                "upvotes"
               ],
               "default": "id"
             },
@@ -2531,6 +2533,207 @@
         ],
         "description": "Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required."
       }
+    },
+    "/api/v1/reviews/summaries": {
+      "get": {
+        "operationId": "getReviewSummaries",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSummaries"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision or idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "course",
+                "teacher"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 12899,
+              "description": "Comma-separated target IDs, 1–100, duplicate IDs coalesce."
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_charts",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "description": "Current-school, current-visible course review summaries. Teachers use their persisted review attribution and equal weights across canonical courses. Mentor comments are excluded. Optional charts use the same visible samples, grouped by term. Missing or unmarked targets return 404; another school returns 403. Recomputed on every request; no cross-request cache."
+      }
+    },
+    "/api/v1/reviews/me/overview": {
+      "get": {
+        "operationId": "getOwnReviewOverview",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnOverview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision or idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "description": "Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count."
+      }
     }
   },
   "components": {
@@ -3442,6 +3645,273 @@
           }
         },
         "additionalProperties": false
+      },
+      "Recommendation": {
+        "type": "string",
+        "enum": [
+          "unrated",
+          "not_recommended",
+          "average",
+          "recommended",
+          "strongly_recommended"
+        ],
+        "description": "Accepted: four bands from the mean recommendation dimension. Fewer than the configured minimum samples is unrated. No exact mean is exposed."
+      },
+      "RecommendationPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "Accepted"
+            ]
+          },
+          "minimum_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "strongly_recommended_at": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "recommended_at": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "average_at": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "status",
+          "minimum_samples",
+          "strongly_recommended_at",
+          "recommended_at",
+          "average_at"
+        ]
+      },
+      "RatingDistribution": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "samples": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "weights": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "minItems": 5,
+            "maxItems": 5
+          }
+        },
+        "required": [
+          "samples",
+          "weights"
+        ],
+        "description": "Five relative bar lengths, normalized to the largest bin and rounded to twentieths. They are not bucket counts or percentages. Insufficient samples produce zero weights."
+      },
+      "TermSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "term_id": {
+            "type": "string"
+          },
+          "review_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Band"
+            },
+            "minItems": 5,
+            "maxItems": 5
+          },
+          "recommendation": {
+            "$ref": "#/components/schemas/Recommendation"
+          },
+          "term_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "term_id",
+          "review_count",
+          "dimensions",
+          "recommendation",
+          "term_name"
+        ]
+      },
+      "ReviewSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "course",
+              "teacher"
+            ]
+          },
+          "review_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Band"
+            },
+            "minItems": 5,
+            "maxItems": 5
+          },
+          "recommendation": {
+            "$ref": "#/components/schemas/Recommendation"
+          },
+          "distribution": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RatingDistribution"
+            },
+            "minItems": 5,
+            "maxItems": 5
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TermSummary"
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "target_id",
+          "kind",
+          "review_count",
+          "dimensions",
+          "recommendation"
+        ]
+      },
+      "ReviewSummaries": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewSummary"
+            },
+            "maxItems": 100
+          },
+          "policy": {
+            "$ref": "#/components/schemas/RecommendationPolicy"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "policy",
+          "generated_at"
+        ]
+      },
+      "PendingCourse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "course_id": {
+            "type": "string"
+          },
+          "course_name": {
+            "type": "string"
+          },
+          "term_id": {
+            "type": "string"
+          },
+          "term_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "course_id",
+          "course_name",
+          "term_id",
+          "term_name"
+        ]
+      },
+      "PendingCourses": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingCourse"
+            },
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "state",
+          "reason",
+          "count",
+          "items"
+        ]
+      },
+      "OwnOverview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "review_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "draft_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pending_courses": {
+            "$ref": "#/components/schemas/PendingCourses"
+          }
+        },
+        "required": [
+          "review_count",
+          "draft_count",
+          "pending_courses"
+        ]
       }
     }
   }
