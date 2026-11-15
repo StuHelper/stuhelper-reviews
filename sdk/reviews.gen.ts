@@ -14,6 +14,7 @@ export interface paths {
         /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["listReviews"];
         put?: never;
+        /** @description Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term. */
         post: operations["createReview"];
         delete?: never;
         options?: never;
@@ -47,7 +48,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. */
+        /** @description New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term. */
         post: operations["reviewAction"];
         delete?: never;
         options?: never;
@@ -64,6 +65,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term. */
         post: operations["reply"];
         delete?: never;
         options?: never;
@@ -193,7 +195,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
+        /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term. */
         get: operations["getComposer"];
         put?: never;
         post?: never;
