@@ -262,8 +262,7 @@
               "maxLength": 128
             }
           }
-        ],
-        "description": " Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term."
+        ]
       }
     },
     "/api/v1/reviews/{id}": {
@@ -469,7 +468,7 @@
             }
           }
         ],
-        "description": "New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term."
+        "description": "New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content."
       }
     },
     "/api/v1/reviews/{id}/replies": {
@@ -581,8 +580,7 @@
               "maxLength": 128
             }
           }
-        ],
-        "description": " Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term."
+        ]
       }
     },
     "/api/v1/reviews/statistics": {
@@ -1704,7 +1702,7 @@
             "bearerAuth": []
           }
         ],
-        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term."
+        "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
       }
     },
     "/api/v1/reviews/admin/entries": {
