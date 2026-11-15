@@ -17,7 +17,12 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
 		cursor = "($10::timestamptz IS NULL OR (e.created_at,e.id)>($10,$11))"
 		order = "e.created_at,e.id"
 	}
-	if f.Sort == "newest" || f.Sort == "oldest" {
+	if f.Sort == "upvotes" {
+		upvotes := "(SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=1)"
+		cursor = "($10::integer IS NULL OR (" + upvotes + ",e.created_at,e.id)<($10,$11,$12))"
+		order = upvotes + " DESC,e.created_at DESC,e.id DESC"
+		args = append(args, f.CursorVotes, f.CursorTime, f.CursorID)
+	} else if f.Sort == "newest" || f.Sort == "oldest" {
 		args = append(args, f.CursorTime, f.CursorID)
 	} else {
 		args = append(args, f.After)
