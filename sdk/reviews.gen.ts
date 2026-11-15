@@ -317,6 +317,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reviews/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Current-school, current-visible course review summaries. Teachers use their persisted review attribution and equal weights across canonical courses. Mentor comments are excluded. Optional charts use the same visible samples, grouped by term. Missing or unmarked targets return 404; another school returns 403. Recomputed on every request; no cross-request cache. */
+        get: operations["getReviewSummaries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/me/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count. */
+        get: operations["getOwnReviewOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -538,6 +572,65 @@ export interface components {
             items: components["schemas"]["Reference"][];
             missing_ids: string[];
         };
+        /**
+         * @description Accepted: four bands from the mean recommendation dimension. Fewer than the configured minimum samples is unrated. No exact mean is exposed.
+         * @enum {string}
+         */
+        Recommendation: "unrated" | "not_recommended" | "average" | "recommended" | "strongly_recommended";
+        RecommendationPolicy: {
+            /** @enum {string} */
+            status: "Accepted";
+            minimum_samples: number;
+            strongly_recommended_at: number;
+            recommended_at: number;
+            average_at: number;
+        };
+        /** @description Five relative bar lengths, normalized to the largest bin and rounded to twentieths. They are not bucket counts or percentages. Insufficient samples produce zero weights. */
+        RatingDistribution: {
+            samples: number;
+            weights: number[];
+        };
+        TermSummary: {
+            term_id: string;
+            review_count: number;
+            dimensions: components["schemas"]["Band"][];
+            recommendation: components["schemas"]["Recommendation"];
+            term_name: string;
+        };
+        ReviewSummary: {
+            target_id: string;
+            /** @enum {string} */
+            kind: "course" | "teacher";
+            review_count: number;
+            dimensions: components["schemas"]["Band"][];
+            recommendation: components["schemas"]["Recommendation"];
+            distribution?: components["schemas"]["RatingDistribution"][];
+            terms?: components["schemas"]["TermSummary"][];
+        };
+        ReviewSummaries: {
+            items: components["schemas"]["ReviewSummary"][];
+            policy: components["schemas"]["RecommendationPolicy"];
+            /** Format: date-time */
+            generated_at: string;
+        };
+        PendingCourse: {
+            course_id: string;
+            course_name: string;
+            term_id: string;
+            term_name: string;
+        };
+        PendingCourses: {
+            /** @enum {string} */
+            state: "available" | "unavailable";
+            reason: string;
+            count: number | null;
+            items: components["schemas"]["PendingCourse"][];
+        };
+        OwnOverview: {
+            review_count: number;
+            draft_count: number;
+            pending_courses: components["schemas"]["PendingCourses"];
+        };
     };
     responses: never;
     parameters: never;
@@ -557,7 +650,7 @@ export interface operations {
                 after?: string;
                 limit?: number;
                 /** @description Stable ID order by default; newest/oldest use creation time with an opaque cursor. */
-                sort?: "id" | "newest" | "oldest";
+                sort?: "id" | "newest" | "oldest" | "upvotes";
                 /** @description Course reviews attributed to this teacher at publication. */
                 teacher_id?: string;
             };
@@ -1039,7 +1132,7 @@ export interface operations {
                 after?: string;
                 limit?: number;
                 /** @description Stable ID order by default; newest/oldest use creation time with an opaque cursor. */
-                sort?: "id" | "newest" | "oldest";
+                sort?: "id" | "newest" | "oldest" | "upvotes";
                 /** @description Course reviews attributed to this teacher at publication. */
                 teacher_id?: string;
                 kind?: string;
@@ -2318,6 +2411,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["References"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not permitted */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Revision or idempotency conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Required dependency unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getReviewSummaries: {
+        parameters: {
+            query: {
+                kind: "course" | "teacher";
+                ids: string;
+                include_charts?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewSummaries"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not permitted */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Revision or idempotency conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Required dependency unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getOwnReviewOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnOverview"];
                 };
             };
             /** @description Invalid input */

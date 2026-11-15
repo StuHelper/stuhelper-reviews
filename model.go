@@ -196,6 +196,7 @@ type Filter struct {
 	Kind, TargetID, TermID, RootID, Owner, Viewer, After string
 	TeacherID, Sort, CursorID                            string
 	CursorTime                                           *time.Time
+	CursorVotes                                          *int
 	Now                                                  time.Time
 	Limit                                                int
 }

@@ -100,28 +100,28 @@ func (e ComposerState) Valid() bool {
 
 // Defines values for DisclosureKey.
 const (
-	Department   DisclosureKey = "department"
-	Enrollment   DisclosureKey = "enrollment"
-	Gender       DisclosureKey = "gender"
-	Organization DisclosureKey = "organization"
-	RealName     DisclosureKey = "real_name"
-	Teacher      DisclosureKey = "teacher"
+	DisclosureKeyDepartment   DisclosureKey = "department"
+	DisclosureKeyEnrollment   DisclosureKey = "enrollment"
+	DisclosureKeyGender       DisclosureKey = "gender"
+	DisclosureKeyOrganization DisclosureKey = "organization"
+	DisclosureKeyRealName     DisclosureKey = "real_name"
+	DisclosureKeyTeacher      DisclosureKey = "teacher"
 )
 
 // Valid indicates whether the value is a known member of the DisclosureKey enum.
 func (e DisclosureKey) Valid() bool {
 	switch e {
-	case Department:
+	case DisclosureKeyDepartment:
 		return true
-	case Enrollment:
+	case DisclosureKeyEnrollment:
 		return true
-	case Gender:
+	case DisclosureKeyGender:
 		return true
-	case Organization:
+	case DisclosureKeyOrganization:
 		return true
-	case RealName:
+	case DisclosureKeyRealName:
 		return true
-	case Teacher:
+	case DisclosureKeyTeacher:
 		return true
 	default:
 		return false
@@ -151,19 +151,19 @@ func (e DraftViewReferenceState) Valid() bool {
 
 // Defines values for InputKind.
 const (
-	Course InputKind = "course"
-	Mentor InputKind = "mentor"
-	Reply  InputKind = "reply"
+	InputKindCourse InputKind = "course"
+	InputKindMentor InputKind = "mentor"
+	InputKindReply  InputKind = "reply"
 )
 
 // Valid indicates whether the value is a known member of the InputKind enum.
 func (e InputKind) Valid() bool {
 	switch e {
-	case Course:
+	case InputKindCourse:
 		return true
-	case Mentor:
+	case InputKindMentor:
 		return true
-	case Reply:
+	case InputKindReply:
 		return true
 	default:
 		return false
@@ -182,6 +182,66 @@ func (e OwnVoteMyVote) Valid() bool {
 	case Minus1:
 		return true
 	case N1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PendingCoursesState.
+const (
+	PendingCoursesStateAvailable   PendingCoursesState = "available"
+	PendingCoursesStateUnavailable PendingCoursesState = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the PendingCoursesState enum.
+func (e PendingCoursesState) Valid() bool {
+	switch e {
+	case PendingCoursesStateAvailable:
+		return true
+	case PendingCoursesStateUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Recommendation.
+const (
+	Average             Recommendation = "average"
+	NotRecommended      Recommendation = "not_recommended"
+	Recommended         Recommendation = "recommended"
+	StronglyRecommended Recommendation = "strongly_recommended"
+	Unrated             Recommendation = "unrated"
+)
+
+// Valid indicates whether the value is a known member of the Recommendation enum.
+func (e Recommendation) Valid() bool {
+	switch e {
+	case Average:
+		return true
+	case NotRecommended:
+		return true
+	case Recommended:
+		return true
+	case StronglyRecommended:
+		return true
+	case Unrated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecommendationPolicyStatus.
+const (
+	Accepted RecommendationPolicyStatus = "Accepted"
+)
+
+// Valid indicates whether the value is a known member of the RecommendationPolicyStatus enum.
+func (e RecommendationPolicyStatus) Valid() bool {
+	switch e {
+	case Accepted:
 		return true
 	default:
 		return false
@@ -236,11 +296,30 @@ func (e RequirementState) Valid() bool {
 	}
 }
 
+// Defines values for ReviewSummaryKind.
+const (
+	ReviewSummaryKindCourse  ReviewSummaryKind = "course"
+	ReviewSummaryKindTeacher ReviewSummaryKind = "teacher"
+)
+
+// Valid indicates whether the value is a known member of the ReviewSummaryKind enum.
+func (e ReviewSummaryKind) Valid() bool {
+	switch e {
+	case ReviewSummaryKindCourse:
+		return true
+	case ReviewSummaryKindTeacher:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListReviewsParamsSort.
 const (
-	ListReviewsParamsSortId     ListReviewsParamsSort = "id"
-	ListReviewsParamsSortNewest ListReviewsParamsSort = "newest"
-	ListReviewsParamsSortOldest ListReviewsParamsSort = "oldest"
+	ListReviewsParamsSortId      ListReviewsParamsSort = "id"
+	ListReviewsParamsSortNewest  ListReviewsParamsSort = "newest"
+	ListReviewsParamsSortOldest  ListReviewsParamsSort = "oldest"
+	ListReviewsParamsSortUpvotes ListReviewsParamsSort = "upvotes"
 )
 
 // Valid indicates whether the value is a known member of the ListReviewsParamsSort enum.
@@ -252,6 +331,8 @@ func (e ListReviewsParamsSort) Valid() bool {
 		return true
 	case ListReviewsParamsSortOldest:
 		return true
+	case ListReviewsParamsSortUpvotes:
+		return true
 	default:
 		return false
 	}
@@ -259,9 +340,10 @@ func (e ListReviewsParamsSort) Valid() bool {
 
 // Defines values for MyReviewsParamsSort.
 const (
-	MyReviewsParamsSortId     MyReviewsParamsSort = "id"
-	MyReviewsParamsSortNewest MyReviewsParamsSort = "newest"
-	MyReviewsParamsSortOldest MyReviewsParamsSort = "oldest"
+	MyReviewsParamsSortId      MyReviewsParamsSort = "id"
+	MyReviewsParamsSortNewest  MyReviewsParamsSort = "newest"
+	MyReviewsParamsSortOldest  MyReviewsParamsSort = "oldest"
+	MyReviewsParamsSortUpvotes MyReviewsParamsSort = "upvotes"
 )
 
 // Valid indicates whether the value is a known member of the MyReviewsParamsSort enum.
@@ -272,6 +354,26 @@ func (e MyReviewsParamsSort) Valid() bool {
 	case MyReviewsParamsSortNewest:
 		return true
 	case MyReviewsParamsSortOldest:
+		return true
+	case MyReviewsParamsSortUpvotes:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetReviewSummariesParamsKind.
+const (
+	GetReviewSummariesParamsKindCourse  GetReviewSummariesParamsKind = "course"
+	GetReviewSummariesParamsKindTeacher GetReviewSummariesParamsKind = "teacher"
+)
+
+// Valid indicates whether the value is a known member of the GetReviewSummariesParamsKind enum.
+func (e GetReviewSummariesParamsKind) Valid() bool {
+	switch e {
+	case GetReviewSummariesParamsKindCourse:
+		return true
+	case GetReviewSummariesParamsKindTeacher:
 		return true
 	default:
 		return false
@@ -424,6 +526,13 @@ type Input struct {
 // InputKind defines model for Input.Kind.
 type InputKind string
 
+// OwnOverview defines model for OwnOverview.
+type OwnOverview struct {
+	DraftCount     int            `json:"draft_count"`
+	PendingCourses PendingCourses `json:"pending_courses"`
+	ReviewCount    int            `json:"review_count"`
+}
+
 // OwnVote Caller-owned vote receipt. Does not contain another author's title, body, rating, identity or aggregate counts.
 type OwnVote struct {
 	Id       string        `json:"id"`
@@ -443,6 +552,25 @@ type Page struct {
 	Items []View `json:"items"`
 	Next  string `json:"next"`
 }
+
+// PendingCourse defines model for PendingCourse.
+type PendingCourse struct {
+	CourseId   string `json:"course_id"`
+	CourseName string `json:"course_name"`
+	TermId     string `json:"term_id"`
+	TermName   string `json:"term_name"`
+}
+
+// PendingCourses defines model for PendingCourses.
+type PendingCourses struct {
+	Count  *int                `json:"count"`
+	Items  []PendingCourse     `json:"items"`
+	Reason string              `json:"reason"`
+	State  PendingCoursesState `json:"state"`
+}
+
+// PendingCoursesState defines model for PendingCourses.State.
+type PendingCoursesState string
 
 // Presentation defines model for Presentation.
 type Presentation struct {
@@ -474,8 +602,29 @@ type PublishDraft struct {
 	Revision int   `json:"revision"`
 }
 
+// RatingDistribution Five relative bar lengths, normalized to the largest bin and rounded to twentieths. They are not bucket counts or percentages. Insufficient samples produce zero weights.
+type RatingDistribution struct {
+	Samples int   `json:"samples"`
+	Weights []int `json:"weights"`
+}
+
 // RatingTexts defines model for RatingTexts.
 type RatingTexts map[string][][]string
+
+// Recommendation Accepted: four bands from the mean recommendation dimension. Fewer than the configured minimum samples is unrated. No exact mean is exposed.
+type Recommendation string
+
+// RecommendationPolicy defines model for RecommendationPolicy.
+type RecommendationPolicy struct {
+	AverageAt             float32                    `json:"average_at"`
+	MinimumSamples        int                        `json:"minimum_samples"`
+	RecommendedAt         float32                    `json:"recommended_at"`
+	Status                RecommendationPolicyStatus `json:"status"`
+	StronglyRecommendedAt float32                    `json:"strongly_recommended_at"`
+}
+
+// RecommendationPolicyStatus defines model for RecommendationPolicy.Status.
+type RecommendationPolicyStatus string
 
 // Reference defines model for Reference.
 type Reference struct {
@@ -511,6 +660,29 @@ type Result struct {
 	State     string     `json:"state"`
 }
 
+// ReviewSummaries defines model for ReviewSummaries.
+type ReviewSummaries struct {
+	GeneratedAt time.Time            `json:"generated_at"`
+	Items       []ReviewSummary      `json:"items"`
+	Policy      RecommendationPolicy `json:"policy"`
+}
+
+// ReviewSummary defines model for ReviewSummary.
+type ReviewSummary struct {
+	Dimensions   []Band                `json:"dimensions"`
+	Distribution *[]RatingDistribution `json:"distribution,omitempty"`
+	Kind         ReviewSummaryKind     `json:"kind"`
+
+	// Recommendation Accepted: four bands from the mean recommendation dimension. Fewer than the configured minimum samples is unrated. No exact mean is exposed.
+	Recommendation Recommendation `json:"recommendation"`
+	ReviewCount    int            `json:"review_count"`
+	TargetId       string         `json:"target_id"`
+	Terms          *[]TermSummary `json:"terms,omitempty"`
+}
+
+// ReviewSummaryKind defines model for ReviewSummary.Kind.
+type ReviewSummaryKind string
+
 // Statistics defines model for Statistics.
 type Statistics struct {
 	Courses    []CourseStatistic `json:"courses"`
@@ -518,6 +690,17 @@ type Statistics struct {
 	From       *time.Time        `json:"from"`
 	Next       string            `json:"next"`
 	Until      *time.Time        `json:"until"`
+}
+
+// TermSummary defines model for TermSummary.
+type TermSummary struct {
+	Dimensions []Band `json:"dimensions"`
+
+	// Recommendation Accepted: four bands from the mean recommendation dimension. Fewer than the configured minimum samples is unrated. No exact mean is exposed.
+	Recommendation Recommendation `json:"recommendation"`
+	ReviewCount    int            `json:"review_count"`
+	TermId         string         `json:"term_id"`
+	TermName       string         `json:"term_name"`
 }
 
 // View defines model for View.
@@ -678,6 +861,16 @@ type StatisticsParams struct {
 	After    *string `form:"after,omitempty" json:"after,omitempty"`
 	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// GetReviewSummariesParams defines parameters for GetReviewSummaries.
+type GetReviewSummariesParams struct {
+	Kind          GetReviewSummariesParamsKind `form:"kind" json:"kind"`
+	Ids           string                       `form:"ids" json:"ids"`
+	IncludeCharts *bool                        `form:"include_charts,omitempty" json:"include_charts,omitempty"`
+}
+
+// GetReviewSummariesParamsKind defines parameters for GetReviewSummaries.
+type GetReviewSummariesParamsKind string
 
 // ReviewActionParams defines parameters for ReviewAction.
 type ReviewActionParams struct {
@@ -873,6 +1066,11 @@ type ClientInterface interface {
 	// GetOwnEntry performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
 	GetOwnEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetOwnReviewOverview performs a GET /api/v1/reviews/me/overview (the `GetOwnReviewOverview` operationId) request.
+	//
+	// Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count.
+	GetOwnReviewOverview(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// MyReviewsReferences performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
 	//
 	// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
@@ -892,6 +1090,11 @@ type ClientInterface interface {
 	//
 	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	Statistics(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetReviewSummaries performs a GET /api/v1/reviews/summaries (the `GetReviewSummaries` operationId) request.
+	//
+	// Current-school, current-visible course review summaries. Teachers use their persisted review attribution and equal weights across canonical courses. Mentor comments are excluded. Optional charts use the same visible samples, grouped by term. Missing or unmarked targets return 404; another school returns 403. Recomputed on every request; no cross-request cache.
+	GetReviewSummaries(ctx context.Context, params *GetReviewSummariesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetReview performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
 	//
@@ -1225,6 +1428,21 @@ func (c *Client) GetOwnEntry(ctx context.Context, id string, reqEditors ...Reque
 	return c.Client.Do(req)
 }
 
+// GetOwnReviewOverview performs a GET /api/v1/reviews/me/overview (the `GetOwnReviewOverview` operationId) request.
+//
+// Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count.
+func (c *Client) GetOwnReviewOverview(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOwnReviewOverviewRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // MyReviewsReferences performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
 //
 // Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
@@ -1275,6 +1493,21 @@ func (c *Client) GetPresentation(ctx context.Context, params *GetPresentationPar
 // Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) Statistics(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStatisticsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetReviewSummaries performs a GET /api/v1/reviews/summaries (the `GetReviewSummaries` operationId) request.
+//
+// Current-school, current-visible course review summaries. Teachers use their persisted review attribution and equal weights across canonical courses. Mentor comments are excluded. Optional charts use the same visible samples, grouped by term. Missing or unmarked targets return 404; another school returns 403. Recomputed on every request; no cross-request cache.
+func (c *Client) GetReviewSummaries(ctx context.Context, params *GetReviewSummariesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetReviewSummariesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2461,6 +2694,33 @@ func NewGetOwnEntryRequest(server string, id string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewGetOwnReviewOverviewRequest constructs an http.Request for the GetOwnReviewOverview method
+func NewGetOwnReviewOverviewRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/me/overview")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewMyReviewsReferencesRequest constructs an http.Request for the MyReviewsReferences method
 func NewMyReviewsReferencesRequest(server string, params *MyReviewsReferencesParams) (*http.Request, error) {
 	var err error
@@ -2718,6 +2978,76 @@ func NewStatisticsRequest(server string, params *StatisticsParams) (*http.Reques
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetReviewSummariesRequest constructs an http.Request for the GetReviewSummaries method
+func NewGetReviewSummariesRequest(server string, params *GetReviewSummariesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/summaries")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "ids", params.Ids, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.IncludeCharts != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_charts", *params.IncludeCharts, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3057,6 +3387,13 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	GetOwnEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetOwnEntryResponse, error)
 
+	// GetOwnReviewOverviewWithResponse performs a GET /api/v1/reviews/me/overview (the `GetOwnReviewOverview` operationId) request.
+	//
+	// Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetOwnReviewOverviewWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOwnReviewOverviewResponse, error)
+
 	// MyReviewsReferencesWithResponse performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
 	//
 	// Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
@@ -3084,6 +3421,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	StatisticsWithResponse(ctx context.Context, params *StatisticsParams, reqEditors ...RequestEditorFn) (*StatisticsResponse, error)
+
+	// GetReviewSummariesWithResponse performs a GET /api/v1/reviews/summaries (the `GetReviewSummaries` operationId) request.
+	//
+	// Current-school, current-visible course review summaries. Teachers use their persisted review attribution and equal weights across canonical courses. Mentor comments are excluded. Optional charts use the same visible samples, grouped by term. Missing or unmarked targets return 404; another school returns 403. Recomputed on every request; no cross-request cache.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetReviewSummariesWithResponse(ctx context.Context, params *GetReviewSummariesParams, reqEditors ...RequestEditorFn) (*GetReviewSummariesResponse, error)
 
 	// GetReviewWithResponse performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
 	//
@@ -4445,6 +4789,89 @@ func (r GetOwnEntryResponse) ContentType() string {
 	return ""
 }
 
+type GetOwnReviewOverviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OwnOverview
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOwnReviewOverviewResponse) GetJSON200() *OwnOverview {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetOwnReviewOverviewResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetOwnReviewOverviewResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetOwnReviewOverviewResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetOwnReviewOverviewResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r GetOwnReviewOverviewResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetOwnReviewOverviewResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOwnReviewOverviewResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOwnReviewOverviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOwnReviewOverviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOwnReviewOverviewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type MyReviewsReferencesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -4771,6 +5198,89 @@ func (r StatisticsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r StatisticsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetReviewSummariesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReviewSummaries
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetReviewSummariesResponse) GetJSON200() *ReviewSummaries {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetReviewSummariesResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetReviewSummariesResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetReviewSummariesResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetReviewSummariesResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r GetReviewSummariesResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetReviewSummariesResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetReviewSummariesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetReviewSummariesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetReviewSummariesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetReviewSummariesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5276,6 +5786,19 @@ func (c *ClientWithResponses) GetOwnEntryWithResponse(ctx context.Context, id st
 	return ParseGetOwnEntryResponse(rsp)
 }
 
+// GetOwnReviewOverviewWithResponse performs a GET /api/v1/reviews/me/overview (the `GetOwnReviewOverview` operationId) request.
+//
+// Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetOwnReviewOverviewWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOwnReviewOverviewResponse, error) {
+	rsp, err := c.GetOwnReviewOverview(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOwnReviewOverviewResponse(rsp)
+}
+
 // MyReviewsReferencesWithResponse performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
 //
 // Returns only names referenced by the caller own reviews, votes, bookmarks or server-validated draft associations. Unowned IDs reject the whole batch with 404; current content admission is not required.
@@ -5326,6 +5849,19 @@ func (c *ClientWithResponses) StatisticsWithResponse(ctx context.Context, params
 		return nil, err
 	}
 	return ParseStatisticsResponse(rsp)
+}
+
+// GetReviewSummariesWithResponse performs a GET /api/v1/reviews/summaries (the `GetReviewSummaries` operationId) request.
+//
+// Current-school, current-visible course review summaries. Teachers use their persisted review attribution and equal weights across canonical courses. Mentor comments are excluded. Optional charts use the same visible samples, grouped by term. Missing or unmarked targets return 404; another school returns 403. Recomputed on every request; no cross-request cache.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetReviewSummariesWithResponse(ctx context.Context, params *GetReviewSummariesParams, reqEditors ...RequestEditorFn) (*GetReviewSummariesResponse, error) {
+	rsp, err := c.GetReviewSummaries(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetReviewSummariesResponse(rsp)
 }
 
 // GetReviewWithResponse performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
@@ -6477,6 +7013,74 @@ func ParseGetOwnEntryResponse(rsp *http.Response) (*GetOwnEntryResponse, error) 
 	return response, nil
 }
 
+// ParseGetOwnReviewOverviewResponse parses an HTTP response from a GetOwnReviewOverviewWithResponse call
+func ParseGetOwnReviewOverviewResponse(rsp *http.Response) (*GetOwnReviewOverviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOwnReviewOverviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OwnOverview
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseMyReviewsReferencesResponse parses an HTTP response from a MyReviewsReferencesWithResponse call
 func ParseMyReviewsReferencesResponse(rsp *http.Response) (*MyReviewsReferencesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -6697,6 +7301,74 @@ func ParseStatisticsResponse(rsp *http.Response) (*StatisticsResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Statistics
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetReviewSummariesResponse parses an HTTP response from a GetReviewSummariesWithResponse call
+func ParseGetReviewSummariesResponse(rsp *http.Response) (*GetReviewSummariesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetReviewSummariesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReviewSummaries
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
