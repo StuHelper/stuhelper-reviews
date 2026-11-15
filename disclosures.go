@@ -148,31 +148,10 @@ func (s *Service) validateDisclosures(ctx context.Context, p Principal, school, 
 	return c, nil
 }
 func (s *Service) replyGrant(ctx context.Context, p Principal, root Entry, c disclosureContext) (Grant, error) {
-	if err := s.writableDiscussion(ctx, root); err != nil {
-		return Grant{}, err
-	}
 	if c.teacher {
 		return s.authorize(ctx, p, "reply_teacher", root.SchoolID)
 	}
 	return s.authorize(ctx, p, "reply", root.SchoolID)
-}
-
-// Read-only catalog targets keep existing discussions available. The caller
-// checks this only for new public writes; own removal and moderation keep their
-// established authorization and retention rules.
-func (s *Service) writableDiscussion(ctx context.Context, root Entry) error {
-	kind := "course"
-	if root.Input.Kind == "mentor" {
-		kind = "teacher"
-	}
-	target, err := s.Catalog.Target(ctx, kind, root.Input.TargetID)
-	if err != nil {
-		return err
-	}
-	if target.ReadOnly || target.Inactive {
-		return ErrForbidden
-	}
-	return nil
 }
 
 // A dependency failure never reuses cached private values. Required teacher
