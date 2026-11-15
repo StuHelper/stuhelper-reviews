@@ -53,6 +53,7 @@ scenario_tests:
     - postgres/activity_test.go#TestActivitySnapshotSchemaRollbackAndBoundedCleanup
     - activity_test.go#TestActivityReviewsVotesRepliesAndOriginalDayCorrections
     - activity_test.go#TestActivityConcurrentReviewsAndVotesDoNotLoseCounts
+    - activity_test.go#TestActivityConcurrentFirstPublicationsAcrossNewBuckets
     - activity_test.go#TestActivityHidesBucketsWithUndisclosableTeacherReplies
     - activity_test.go#TestActivityReviewUsesCanonicalCourseFact
   REV-DISCOVERY-01:
