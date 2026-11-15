@@ -26,9 +26,13 @@ func (t *transaction) PendingReviewCourses(owner string, candidates []r.PendingC
 	if err != nil {
 		return r.PendingCourses{}, r.ErrInput
 	}
-	return read[r.PendingCourses](t, `WITH candidates AS (
- SELECT DISTINCT COALESCE($3::jsonb->>course_id,course_id) AS course_id,course_name,COALESCE($4::jsonb->>term_id,term_id) AS term_id,term_name
+	return read[r.PendingCourses](t, `WITH normalized AS (
+ SELECT COALESCE($3::jsonb->>course_id,course_id) AS course_id,course_name,COALESCE($4::jsonb->>term_id,term_id) AS term_id,term_name,
+ ($3::jsonb->>course_id IS NULL AND $4::jsonb->>term_id IS NULL) AS canonical_name
  FROM jsonb_to_recordset($2::jsonb) AS v(course_id text,course_name text,term_id text,term_name text)
+ ), candidates AS (
+ SELECT DISTINCT ON (course_id,term_id) course_id,course_name,term_id,term_name FROM normalized
+ ORDER BY course_id,term_id,canonical_name DESC,course_name,term_name
  ), pending AS MATERIALIZED (
  SELECT c.* FROM candidates c WHERE NOT EXISTS(SELECT 1 FROM reviews.entries e WHERE e.owner=$1 AND e.kind='course' AND e.id=e.root_id
  AND e.state<>'deleted' AND (e.expires_at IS NULL OR e.expires_at>$5)

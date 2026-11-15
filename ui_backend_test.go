@@ -165,6 +165,8 @@ func TestUIOwnOverviewPendingOwnershipExpiryAndUnavailable(t *testing.T) {
 	ctx := context.Background()
 	root := create(t, f, "mine", input("course", "autumn", 4))
 	port.items = []r.PendingCourse{{CourseID: "course", CourseName: "Course", TermID: "autumn", TermName: "Autumn"}, {CourseID: "pending", CourseName: "Pending", TermID: "autumn", TermName: "Autumn"}, {CourseID: "pending", CourseName: "Pending", TermID: "autumn", TermName: "Autumn"}}
+	port.aliases["course"] = map[string]string{"pending-alias": "pending"}
+	port.items = append(port.items, r.PendingCourse{CourseID: "pending-alias", CourseName: "Old pending name", TermID: "autumn", TermName: "Old term label"})
 	if _, err := f.service.SaveDraft(ctx, student, "", "draft-one", input("pending", "autumn", 3), 0); err != nil {
 		t.Fatal(err)
 	}
