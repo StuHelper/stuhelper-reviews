@@ -128,7 +128,7 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	if e != nil {
 		return target, nil, nil, Grant{}, e
 	}
-	if target.Inactive || target.ReadOnly {
+	if target.Inactive {
 		return target, nil, nil, Grant{}, ErrForbidden
 	}
 	g, e := s.authorize(ctx, p, action, target.SchoolID)
@@ -144,9 +144,6 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	}
 	if term.SchoolID != target.SchoolID {
 		return target, nil, nil, g, ErrInput
-	}
-	if term.Inactive || term.ReadOnly {
-		return target, nil, nil, g, ErrForbidden
 	}
 	evidence, e := s.Catalog.Evidence(ctx, p, in.TargetID, in.TermID)
 	if e != nil {
@@ -512,13 +509,6 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 				if _, e = s.accessible(t, id); e != nil {
 					return e
 				}
-				root, e := t.Entry(entry.RootID)
-				if e != nil {
-					return e
-				}
-				if e = s.writableDiscussion(ctx, root); e != nil {
-					return e
-				}
 			}
 			if e = t.SetVote(id, p.Subject, in.Vote, s.now()); e != nil {
 				return e
@@ -626,11 +616,7 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 	var g Grant
 	if e.Input.Kind == "reply" {
 		var err error
-		root, err := t.Entry(e.RootID)
-		if err != nil {
-			return err
-		}
-		g, err = s.replyGrant(ctx, p, root, disclosure)
+		g, err = s.replyGrant(ctx, p, e, disclosure)
 		if e.TeacherReply && !disclosure.ownCourse {
 			return ErrForbidden
 		}

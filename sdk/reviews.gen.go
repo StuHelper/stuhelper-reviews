@@ -987,14 +987,10 @@ type ClientInterface interface {
 
 	// CreateReviewWithBody performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
 	// with any type of body and a specified content type.
-	//
-	//  Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 	CreateReviewWithBody(ctx context.Context, params *CreateReviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateReview performs a POST /api/v1/reviews (the `CreateReview` operationId) request.
 	// Takes a body of the `application/json` content type.
-	//
-	//  Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 	CreateReview(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAdminEntries performs a GET /api/v1/reviews/admin/entries (the `ListAdminEntries` operationId) request.
@@ -1027,7 +1023,7 @@ type ClientInterface interface {
 
 	// GetComposer performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
 	//
-	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyDrafts performs a GET /api/v1/reviews/me/drafts (the `MyDrafts` operationId) request.
@@ -1108,25 +1104,21 @@ type ClientInterface interface {
 	// ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
 	//
-	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	ReviewActionWithBody(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReviewAction performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 	// Takes a body of the `application/json` content type.
 	//
-	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	ReviewAction(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplyWithBody performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
 	// with any type of body and a specified content type.
-	//
-	//  Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 	ReplyWithBody(ctx context.Context, id string, params *ReplyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// Reply performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request.
 	// Takes a body of the `application/json` content type.
-	//
-	//  Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 	Reply(ctx context.Context, id string, params *ReplyParams, body ReplyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
@@ -1147,8 +1139,6 @@ func (c *Client) ListReviews(ctx context.Context, params *ListReviewsParams, req
 
 // CreateReviewWithBody performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
 // with any type of body and a specified content type.
-//
-//	Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 func (c *Client) CreateReviewWithBody(ctx context.Context, params *CreateReviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateReviewRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -1163,8 +1153,6 @@ func (c *Client) CreateReviewWithBody(ctx context.Context, params *CreateReviewP
 
 // CreateReview performs a POST /api/v1/reviews (the `CreateReview` operationId) request.
 // Takes a body of the `application/json` content type.
-//
-//	Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 func (c *Client) CreateReview(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateReviewRequest(c.Server, params, body)
 	if err != nil {
@@ -1287,7 +1275,7 @@ func (c *Client) SavePresentation(ctx context.Context, params *SavePresentationP
 
 // GetComposer performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
 //
-// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 func (c *Client) GetComposer(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetComposerRequest(c.Server, params)
 	if err != nil {
@@ -1548,7 +1536,7 @@ func (c *Client) GetReview(ctx context.Context, id string, reqEditors ...Request
 // ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 // with any type of body and a specified content type.
 //
-// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 func (c *Client) ReviewActionWithBody(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReviewActionRequestWithBody(c.Server, id, params, contentType, body)
 	if err != nil {
@@ -1564,7 +1552,7 @@ func (c *Client) ReviewActionWithBody(ctx context.Context, id string, params *Re
 // ReviewAction performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 // Takes a body of the `application/json` content type.
 //
-// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 func (c *Client) ReviewAction(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReviewActionRequest(c.Server, id, params, body)
 	if err != nil {
@@ -1579,8 +1567,6 @@ func (c *Client) ReviewAction(ctx context.Context, id string, params *ReviewActi
 
 // ReplyWithBody performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
 // with any type of body and a specified content type.
-//
-//	Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 func (c *Client) ReplyWithBody(ctx context.Context, id string, params *ReplyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReplyRequestWithBody(c.Server, id, params, contentType, body)
 	if err != nil {
@@ -1595,8 +1581,6 @@ func (c *Client) ReplyWithBody(ctx context.Context, id string, params *ReplyPara
 
 // Reply performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request.
 // Takes a body of the `application/json` content type.
-//
-//	Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 func (c *Client) Reply(ctx context.Context, id string, params *ReplyParams, body ReplyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReplyRequest(c.Server, id, params, body)
 	if err != nil {
@@ -3295,15 +3279,11 @@ type ClientWithResponsesInterface interface {
 	// CreateReviewWithBodyWithResponse performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
 	// with any type of body and a specified content type.
 	//
-	//  Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
-	//
 	// Returns a wrapper object for the known response body format(s).
 	CreateReviewWithBodyWithResponse(ctx context.Context, params *CreateReviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateReviewResponse, error)
 
 	// CreateReviewWithResponse performs a POST /api/v1/reviews (the `CreateReview` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	//  Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 	CreateReviewWithResponse(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateReviewResponse, error)
 
 	// ListAdminEntriesWithResponse performs a GET /api/v1/reviews/admin/entries (the `ListAdminEntries` operationId) request.
@@ -3348,7 +3328,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetComposerWithResponse performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
 	//
-	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetComposerWithResponse(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*GetComposerResponse, error)
@@ -3459,7 +3439,7 @@ type ClientWithResponsesInterface interface {
 	// ReviewActionWithBodyWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
 	//
-	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	ReviewActionWithBodyWithResponse(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error)
@@ -3467,21 +3447,17 @@ type ClientWithResponsesInterface interface {
 	// ReviewActionWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 	ReviewActionWithResponse(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error)
 
 	// ReplyWithBodyWithResponse performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
 	// with any type of body and a specified content type.
-	//
-	//  Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	ReplyWithBodyWithResponse(ctx context.Context, id string, params *ReplyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplyResponse, error)
 
 	// ReplyWithResponse performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	//  Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 	ReplyWithResponse(ctx context.Context, id string, params *ReplyParams, body ReplyJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplyResponse, error)
 }
 
@@ -5576,8 +5552,6 @@ func (c *ClientWithResponses) ListReviewsWithResponse(ctx context.Context, param
 // CreateReviewWithBodyWithResponse performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
 // with any type of body and a specified content type.
 //
-//	Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
-//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) CreateReviewWithBodyWithResponse(ctx context.Context, params *CreateReviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateReviewResponse, error) {
 	rsp, err := c.CreateReviewWithBody(ctx, params, contentType, body, reqEditors...)
@@ -5589,8 +5563,6 @@ func (c *ClientWithResponses) CreateReviewWithBodyWithResponse(ctx context.Conte
 
 // CreateReviewWithResponse performs a POST /api/v1/reviews (the `CreateReview` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-//	Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 func (c *ClientWithResponses) CreateReviewWithResponse(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateReviewResponse, error) {
 	rsp, err := c.CreateReview(ctx, params, body, reqEditors...)
 	if err != nil {
@@ -5689,7 +5661,7 @@ func (c *ClientWithResponses) SavePresentationWithResponse(ctx context.Context, 
 
 // GetComposerWithResponse performs a GET /api/v1/reviews/compose (the `GetComposer` operationId) request.
 //
-// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) GetComposerWithResponse(ctx context.Context, params *GetComposerParams, reqEditors ...RequestEditorFn) (*GetComposerResponse, error) {
@@ -5908,7 +5880,7 @@ func (c *ClientWithResponses) GetReviewWithResponse(ctx context.Context, id stri
 // ReviewActionWithBodyWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 // with any type of body and a specified content type.
 //
-// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) ReviewActionWithBodyWithResponse(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error) {
@@ -5922,7 +5894,7 @@ func (c *ClientWithResponses) ReviewActionWithBodyWithResponse(ctx context.Conte
 // ReviewActionWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
 func (c *ClientWithResponses) ReviewActionWithResponse(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error) {
 	rsp, err := c.ReviewAction(ctx, id, params, body, reqEditors...)
 	if err != nil {
@@ -5933,8 +5905,6 @@ func (c *ClientWithResponses) ReviewActionWithResponse(ctx context.Context, id s
 
 // ReplyWithBodyWithResponse performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
 // with any type of body and a specified content type.
-//
-//	Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) ReplyWithBodyWithResponse(ctx context.Context, id string, params *ReplyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplyResponse, error) {
@@ -5947,8 +5917,6 @@ func (c *ClientWithResponses) ReplyWithBodyWithResponse(ctx context.Context, id 
 
 // ReplyWithResponse performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-//	Catalog read-only courses remain readable. New reviews, replies, republication and nonzero votes are denied for a read-only course. Removing an own vote and existing withdrawal/deletion operations retain their ownership and time-window rules. Course review publication also requires a writable term.
 func (c *ClientWithResponses) ReplyWithResponse(ctx context.Context, id string, params *ReplyParams, body ReplyJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplyResponse, error) {
 	rsp, err := c.Reply(ctx, id, params, body, reqEditors...)
 	if err != nil {

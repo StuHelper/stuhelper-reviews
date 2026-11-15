@@ -87,10 +87,6 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 			return out, err
 		}
 		school = object.SchoolID
-		if object.Inactive || object.ReadOnly {
-			out.State = "forbidden"
-			return out, nil
-		}
 		if school != scope {
 			return Composer{}, ErrForbidden
 		}
