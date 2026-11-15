@@ -20,6 +20,7 @@ import (
 type catalog struct {
 	missing, failed bool
 	schools         map[string]string
+	readOnly        map[string]bool
 }
 
 func (c *catalog) Target(_ context.Context, kind, id string) (r.Target, error) {
@@ -36,7 +37,7 @@ func (c *catalog) Target(_ context.Context, kind, id string) (r.Target, error) {
 	if c.schools[id] != "" {
 		school = c.schools[id]
 	}
-	return r.Target{ID: id, Kind: kind, SchoolID: school}, nil
+	return r.Target{ID: id, Kind: kind, SchoolID: school, ReadOnly: c.readOnly[id]}, nil
 }
 func (c *catalog) Evidence(_ context.Context, p r.Principal, course, term string) ([]r.Evidence, error) {
 	if c.failed {

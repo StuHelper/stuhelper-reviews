@@ -22,6 +22,7 @@ type Principal struct{ Subject string }
 type Target struct {
 	ID, SchoolID, Kind string
 	Inactive           bool
+	ReadOnly           bool
 }
 type Evidence struct {
 	ID         string    `json:"id"`

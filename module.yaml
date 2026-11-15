@@ -41,6 +41,10 @@ specifications:
   - docs/spec/discovery.md
   - docs/spec/ui-data.md
 scenario_tests:
+  REV-ARCHIVE-01:
+    - readonly_test.go#TestCatalogReadOnlyKeepsHistoryAndRejectsNewPublicWrites
+  REV-ARCHIVE-02:
+    - readonly_test.go#TestCatalogReadOnlyTermRejectsNewReviewOnCurrentCourse
   IQ-02:
     - accountquery/query_test.go#TestAccountQueryAuthorizationAndFailures
     - postgres/account_query_test.go#TestAccountQueryScopePaginationAndRuntime
