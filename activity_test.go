@@ -144,6 +144,45 @@ func TestActivityConcurrentReviewsAndVotesDoNotLoseCounts(t *testing.T) {
 	}
 }
 
+func TestActivityConcurrentFirstPublicationsAcrossNewBuckets(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	repo := f.service.Repo.(*postgres.Repository)
+	const authors = 16
+	for round := range 8 {
+		course := fmt.Sprintf("new-course-%d", round)
+		// Keep every round's course and teacher buckets new. A row lock cannot
+		// protect the first insert before the bucket exists.
+		f.now = f.now.AddDate(0, 0, 1)
+		start := make(chan struct{})
+		errs := make(chan error, authors)
+		var wg sync.WaitGroup
+		for i := range authors {
+			wg.Go(func() {
+				<-start
+				_, err := f.service.Create(ctx, r.Principal{Subject: fmt.Sprintf("author-%d", i)}, "create", input(course, "autumn", 4))
+				errs <- err
+			})
+		}
+		close(start)
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				t.Fatalf("round %d: %v", round, err)
+			}
+		}
+		for kind, targets := range map[string][]string{"course": {course}, "teacher": {"teacher-a", "teacher-b"}} {
+			for _, target := range targets {
+				activity, err := repo.ReadActivity(ctx, r.ActivityID(kind, target, f.now))
+				if err != nil || activity.Metrics["reviews"] != authors || activity.Revision != authors {
+					t.Fatalf("round %d %s %s: %+v %v", round, kind, target, activity, err)
+				}
+			}
+		}
+	}
+}
+
 func TestActivityHidesBucketsWithUndisclosableTeacherReplies(t *testing.T) {
 	f := fixture(t)
 	ctx := context.Background()

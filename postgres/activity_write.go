@@ -8,12 +8,16 @@ import (
 	"time"
 )
 
-// Bucket row locks serialize independent actors. Callers update keys in ID order
-// when an operation affects multiple buckets, avoiding inverse lock acquisition.
+// The advisory lock also serializes a bucket's first insert, when no row exists
+// yet. ON CONFLICT(id) alone can race with the separate (kind,target_id,day)
+// unique constraint. Callers acquire bucket locks in ID order.
 func (t *transaction) changeActivity(kind, target, school string, day time.Time, firstDelta, secondDelta int64, forcedVisibility *bool, at time.Time) error {
 	day = day.UTC().Truncate(24 * time.Hour)
 	id := m.ActivityID(kind, target, day)
 	if _, _, e := m.ParseActivityID(id); e != nil {
+		return e
+	}
+	if e := t.Lock("activity-bucket:" + id); e != nil {
 		return e
 	}
 	var first, second, revision int64
