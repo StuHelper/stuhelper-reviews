@@ -16,6 +16,7 @@ import (
 )
 
 type summaryCatalog struct {
+	orderKeys map[string]int
 	*catalog
 	aliases map[string]map[string]string
 	items   []r.PendingCourse
@@ -36,7 +37,7 @@ func (c *summaryCatalog) SummaryTargets(ctx context.Context, kind string, ids []
 		if err != nil {
 			return nil, err
 		}
-		out[id] = r.SummaryReference{ID: id, CanonicalID: c.aliases[kind][id], SchoolID: target.SchoolID, Kind: kind, Name: id}
+		out[id] = r.SummaryReference{ID: id, CanonicalID: c.aliases[kind][id], SchoolID: target.SchoolID, Kind: kind, Name: id, TermOrderKey: c.orderKeys[id]}
 	}
 	return out, nil
 }
@@ -240,5 +241,21 @@ func TestUIReviewHTTPAndUpvotePagination(t *testing.T) {
 		if w.Code != tc.status {
 			t.Fatalf("%s: %d %s", tc.path, w.Code, w.Body.String())
 		}
+	}
+}
+
+func TestSummaryTermsUseCatalogOrderInsteadOfDisplayNames(t *testing.T) {
+	f, port := uiReviewFixture(t)
+	port.orderKeys = map[string]int{"z-old": 20233, "a-new": 20243}
+	for _, term := range []string{"z-old", "a-new", "unknown"} {
+		create(t, f, "term-"+term, input("course", term, 3))
+	}
+	out, err := f.service.ReadSummaries(context.Background(), student, "course", []string{"course"}, true)
+	if err != nil || len(out.Items) != 1 {
+		t.Fatal(out, err)
+	}
+	terms := out.Items[0].Terms
+	if len(terms) != 3 || terms[0].TermID != "a-new" || terms[0].TermOrderKey != 20243 || terms[1].TermID != "z-old" || terms[2].TermOrderKey != 0 {
+		t.Fatal("structured summary order", terms)
 	}
 }

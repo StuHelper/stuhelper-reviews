@@ -207,6 +207,7 @@ func (s *Service) get(ctx context.Context, p Principal, id string, own bool) (Vi
 	return views[0], nil
 }
 func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error) {
+	s = s.withReadCache()
 	out := Page{Items: []View{}}
 	if f.Limit < 1 || f.Limit > 100 || f.Owner != "" && f.Owner != p.Subject || (f.Kind != "" && !slices.Contains([]string{"course", "mentor", "reply"}, f.Kind)) {
 		return out, ErrInput
@@ -287,5 +288,9 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 		entries = entries[:f.Limit]
 	}
 	out.Items, err = s.render(ctx, p, entries, f.Owner != "", f.SchoolID)
+	if err != nil {
+		return out, err
+	}
+	err = s.addReplyPreviews(ctx, p, &out, f.SchoolID, f.Owner != "")
 	return out, err
 }
