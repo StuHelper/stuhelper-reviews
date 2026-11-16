@@ -1,5 +1,5 @@
 id: reviews
-version: 0.7.0
+version: 0.7.1
 kind: module
 api: 1
 critical: false
@@ -129,6 +129,7 @@ scenario_tests:
   REV-UI-03:
     - ui_backend_test.go#TestUIOwnOverviewPendingOwnershipExpiryAndUnavailable
   REV-UI-04:
+    - http_compatibility_test.go#TestLegacyReviewHTTPShapeAndExplicitPreviews
     - reply_previews_test.go#TestReplyPreviewsAreBoundedOrderedAndMatchVisibleReplies
     - reply_previews_test.go#TestReplyPreviewsRecheckMandatoryTeacherDisclosure
     - reply_previews_test.go#TestReplyPreviewPageUsesOneBatchForOneHundredRoots

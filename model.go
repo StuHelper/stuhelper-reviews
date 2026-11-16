@@ -193,6 +193,7 @@ type DraftView struct {
 	ParentID       string     `json:"parent_id,omitempty"`
 }
 type Filter struct {
+	IncludeReplyPreview                                  bool
 	SchoolID                                             string
 	EquivalentTargets, EquivalentTeachers                []string
 	Kind, TargetID, TermID, RootID, Owner, Viewer, After string
