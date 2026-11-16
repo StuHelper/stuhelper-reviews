@@ -136,27 +136,29 @@ type Author struct {
 	Profile     *Profile           `json:"profile,omitempty"`
 }
 type View struct {
-	Featured    bool       `json:"featured,omitempty"`
-	CanEdit     bool       `json:"can_edit"`
-	State       string     `json:"state"`
-	ID          string     `json:"id"`
-	RootID      string     `json:"root_id"`
-	ParentID    string     `json:"parent_id,omitempty"`
-	Kind        string     `json:"kind"`
-	SchoolID    string     `json:"school_id"`
-	TargetID    string     `json:"target_id"`
-	TermID      string     `json:"term_id,omitempty"`
-	TeacherID   string     `json:"teacher_id,omitempty"`
-	Title       string     `json:"title"`
-	Body        string     `json:"body"`
-	Ratings     [5]int     `json:"ratings"`
-	Author      Author     `json:"author"`
-	Revision    int64      `json:"revision"`
-	PublishedAt *time.Time `json:"published_at"`
-	Upvotes     int        `json:"upvotes"`
-	Downvotes   int        `json:"downvotes"`
-	MyVote      int        `json:"my_vote"`
-	Mine        bool       `json:"mine"`
+	ReplyCount   *int       `json:"reply_count,omitempty"`
+	ReplyPreview *[]View    `json:"reply_preview,omitempty"`
+	Featured     bool       `json:"featured,omitempty"`
+	CanEdit      bool       `json:"can_edit"`
+	State        string     `json:"state"`
+	ID           string     `json:"id"`
+	RootID       string     `json:"root_id"`
+	ParentID     string     `json:"parent_id,omitempty"`
+	Kind         string     `json:"kind"`
+	SchoolID     string     `json:"school_id"`
+	TargetID     string     `json:"target_id"`
+	TermID       string     `json:"term_id,omitempty"`
+	TeacherID    string     `json:"teacher_id,omitempty"`
+	Title        string     `json:"title"`
+	Body         string     `json:"body"`
+	Ratings      [5]int     `json:"ratings"`
+	Author       Author     `json:"author"`
+	Revision     int64      `json:"revision"`
+	PublishedAt  *time.Time `json:"published_at"`
+	Upvotes      int        `json:"upvotes"`
+	Downvotes    int        `json:"downvotes"`
+	MyVote       int        `json:"my_vote"`
+	Mine         bool       `json:"mine"`
 }
 type Result struct {
 	ID        string     `json:"id"`

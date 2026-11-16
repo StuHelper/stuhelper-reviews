@@ -57,6 +57,7 @@ type RatingDistribution struct {
 	Weights [5]int `json:"weights"`
 }
 type TermSummary struct {
+	TermOrderKey   int     `json:"term_order_key"`
 	TermID         string  `json:"term_id"`
 	TermName       string  `json:"term_name"`
 	ReviewCount    int     `json:"review_count"`
@@ -94,6 +95,7 @@ type SummaryAggregate struct {
 	Histogram                  [5][5]int64
 }
 type SummaryReference struct {
+	TermOrderKey                          int
 	ID, CanonicalID, SchoolID, Kind, Name string
 	Inactive                              bool
 }
@@ -371,11 +373,11 @@ func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kin
 				if term := termNames[termID]; term.Kind == "term" && term.SchoolID == school {
 					name = term.Name
 				}
-				summary.Terms = append(summary.Terms, TermSummary{termID, name, v.ReviewCount, v.Dimensions, v.Recommendation})
+				summary.Terms = append(summary.Terms, TermSummary{TermOrderKey: termNames[termID].TermOrderKey, TermID: termID, TermName: name, ReviewCount: v.ReviewCount, Dimensions: v.Dimensions, Recommendation: v.Recommendation})
 			}
 			slices.SortFunc(summary.Terms, func(a, b TermSummary) int {
-				if cmp := strings.Compare(a.TermName, b.TermName); cmp != 0 {
-					return cmp
+				if a.TermOrderKey != b.TermOrderKey {
+					return b.TermOrderKey - a.TermOrderKey
 				}
 				return strings.Compare(a.TermID, b.TermID)
 			})

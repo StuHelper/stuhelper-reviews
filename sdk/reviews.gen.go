@@ -701,6 +701,9 @@ type TermSummary struct {
 	ReviewCount    int            `json:"review_count"`
 	TermId         string         `json:"term_id"`
 	TermName       string         `json:"term_name"`
+
+	// TermOrderKey catalog 的自然年 × 10 + 季节排序键（春 1、夏 2、秋 3）；0 为未知。terms 按键倒序、term_id 升序。
+	TermOrderKey *int `json:"term_order_key,omitempty"`
 }
 
 // View defines model for View.
@@ -717,15 +720,21 @@ type View struct {
 	ParentId    *string    `json:"parent_id,omitempty"`
 	PublishedAt *time.Time `json:"published_at"`
 	Ratings     []int      `json:"ratings"`
-	Revision    int        `json:"revision"`
-	RootId      string     `json:"root_id"`
-	SchoolId    string     `json:"school_id"`
-	State       string     `json:"state"`
-	TargetId    string     `json:"target_id"`
-	TeacherId   *string    `json:"teacher_id,omitempty"`
-	TermId      *string    `json:"term_id,omitempty"`
-	Title       string     `json:"title"`
-	Upvotes     int        `json:"upvotes"`
+
+	// ReplyCount 评价列表中的根评价附带当前请求人可见的已发布回复总数，包括嵌套回复。删除、隐藏、撤回、到期及必需实名授权撤销的回复不计入。本人列表仅在仍有当前内容阅读权限时提供；详情和回复行可省略。
+	ReplyCount *int `json:"reply_count,omitempty"`
+
+	// ReplyPreview 与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。
+	ReplyPreview *[]View `json:"reply_preview,omitempty"`
+	Revision     int     `json:"revision"`
+	RootId       string  `json:"root_id"`
+	SchoolId     string  `json:"school_id"`
+	State        string  `json:"state"`
+	TargetId     string  `json:"target_id"`
+	TeacherId    *string `json:"teacher_id,omitempty"`
+	TermId       *string `json:"term_id,omitempty"`
+	Title        string  `json:"title"`
+	Upvotes      int     `json:"upvotes"`
 }
 
 // ListReviewsParams defines parameters for ListReviews.
