@@ -291,6 +291,8 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 	if err != nil {
 		return out, err
 	}
-	err = s.addReplyPreviews(ctx, p, &out, f.SchoolID, f.Owner != "")
+	if f.IncludeReplyPreview {
+		err = s.addReplyPreviews(ctx, p, &out, f.SchoolID, f.Owner != "")
+	}
 	return out, err
 }

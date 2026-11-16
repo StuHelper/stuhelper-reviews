@@ -51,7 +51,7 @@ GET /api/v1/reviews 新增 sort=upvotes，按赞同数、时间、ID 降序分�
 
 ## 列表回复预览与通知名称
 
-评价列表中的已发布根评价增加 reply_count 和 reply_preview。reply_count 统计当前可见的全部回复，包括嵌套回复。reply_preview 最多三条，按创建时间、ID 升序，保留既有匿名、署名、投票和公开标签字段。
+请求 include_reply_preview=true 时，评价列表中的已发布根评价增加 reply_count 和 reply_preview。reply_count 统计当前可见的全部回复，包括嵌套回复。reply_preview 最多三条，按创建时间、ID 升序，保留既有匿名、署名、投票和公开标签字段。
 
 撤回、隐藏、删除、到期以及必需实名授权失效的回复不计入。本人列表在内容准入失效后仍提供本人的原有记录，同时省略其他用户的回复统计和预览。根评价分页及原游标保持不变。
 
@@ -62,3 +62,5 @@ Repository 对整页根评价批量检查教师回复，再批量读取计数与
 NotificationTitles 是供宿主使用的公开 Go 接口，每次接收一至一百个 ID，只返回当前可见的标题。回复使用根评价标题。接口检查当前学校准入、目录可见性、公开标签、根内容状态和修订，缺失或不可见对象省略。
 
 学期摘要增加 term_order_key，使用 catalog 的自然年乘十加季节顺序。terms 按键倒序、term_id 升序；未知键为零，排在已知学期后。
+
+未指定 include_reply_preview 或设为 false 时，保持旧 View 结构且不读取预览。该参数只接受单个 true 或 false。Go 调用方通过 Filter.IncludeReplyPreview 显式选择增强结果。

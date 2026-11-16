@@ -721,10 +721,10 @@ type View struct {
 	PublishedAt *time.Time `json:"published_at"`
 	Ratings     []int      `json:"ratings"`
 
-	// ReplyCount 评价列表中的根评价附带当前请求人可见的已发布回复总数，包括嵌套回复。删除、隐藏、撤回、到期及必需实名授权撤销的回复不计入。本人列表仅在仍有当前内容阅读权限时提供；详情和回复行可省略。
+	// ReplyCount 评价列表中的根评价附带当前请求人可见的已发布回复总数，包括嵌套回复。删除、隐藏、撤回、到期及必需实名授权撤销的回复不计入。本人列表仅在仍有当前内容阅读权限时提供；详情和回复行可省略。 仅 include_reply_preview=true 时返回。
 	ReplyCount *int `json:"reply_count,omitempty"`
 
-	// ReplyPreview 与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。
+	// ReplyPreview 与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 仅 include_reply_preview=true 时返回。
 	ReplyPreview *[]View `json:"reply_preview,omitempty"`
 	Revision     int     `json:"revision"`
 	RootId       string  `json:"root_id"`
@@ -751,6 +751,9 @@ type ListReviewsParams struct {
 
 	// TeacherId Course reviews attributed to this teacher at publication.
 	TeacherId *string `form:"teacher_id,omitempty" json:"teacher_id,omitempty"`
+
+	// IncludeReplyPreview 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。
+	IncludeReplyPreview *bool `form:"include_reply_preview,omitempty" json:"include_reply_preview,omitempty"`
 }
 
 // ListReviewsParamsSort defines parameters for ListReviews.
@@ -839,6 +842,9 @@ type MyReviewsParams struct {
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty"`
 	TargetId  *string `form:"target_id,omitempty" json:"target_id,omitempty"`
 	TermId    *string `form:"term_id,omitempty" json:"term_id,omitempty"`
+
+	// IncludeReplyPreview 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。
+	IncludeReplyPreview *bool `form:"include_reply_preview,omitempty" json:"include_reply_preview,omitempty"`
 }
 
 // MyReviewsParamsSort defines parameters for MyReviews.
@@ -1717,6 +1723,18 @@ func NewListReviewsRequest(server string, params *ListReviewsParams) (*http.Requ
 		if params.TeacherId != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "teacher_id", *params.TeacherId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeReplyPreview != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_reply_preview", *params.IncludeReplyPreview, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2646,6 +2664,18 @@ func NewMyReviewsRequest(server string, params *MyReviewsParams) (*http.Request,
 		if params.TermId != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "term_id", *params.TermId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeReplyPreview != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_reply_preview", *params.IncludeReplyPreview, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

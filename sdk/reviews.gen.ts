@@ -416,9 +416,9 @@ export interface components {
             my_vote: number;
             mine: boolean;
             featured?: boolean;
-            /** @description 评价列表中的根评价附带当前请求人可见的已发布回复总数，包括嵌套回复。删除、隐藏、撤回、到期及必需实名授权撤销的回复不计入。本人列表仅在仍有当前内容阅读权限时提供；详情和回复行可省略。 */
+            /** @description 评价列表中的根评价附带当前请求人可见的已发布回复总数，包括嵌套回复。删除、隐藏、撤回、到期及必需实名授权撤销的回复不计入。本人列表仅在仍有当前内容阅读权限时提供；详情和回复行可省略。 仅 include_reply_preview=true 时返回。 */
             readonly reply_count?: number;
-            /** @description 与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 */
+            /** @description 与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 仅 include_reply_preview=true 时返回。 */
             readonly reply_preview?: components["schemas"]["View"][];
         };
         Page: {
@@ -659,6 +659,8 @@ export interface operations {
                 sort?: "id" | "newest" | "oldest" | "upvotes";
                 /** @description Course reviews attributed to this teacher at publication. */
                 teacher_id?: string;
+                /** @description 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。 */
+                include_reply_preview?: boolean;
             };
             header?: never;
             path?: never;
@@ -1144,6 +1146,8 @@ export interface operations {
                 kind?: string;
                 target_id?: string;
                 term_id?: string;
+                /** @description 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。 */
+                include_reply_preview?: boolean;
             };
             header?: never;
             path?: never;

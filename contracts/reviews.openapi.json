@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "StuHelper Reviews",
-    "version": "0.7.0"
+    "version": "0.7.1"
   },
   "servers": [
     {
@@ -158,6 +158,16 @@
               "type": "string"
             },
             "description": "Course reviews attributed to this teacher at publication."
+          },
+          {
+            "name": "include_reply_preview",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。"
           }
         ],
         "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
@@ -854,6 +864,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_reply_preview",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。"
           }
         ]
       }
@@ -2983,7 +3003,7 @@
             "type": "integer",
             "minimum": 0,
             "readOnly": true,
-            "description": "评价列表中的根评价附带当前请求人可见的已发布回复总数，包括嵌套回复。删除、隐藏、撤回、到期及必需实名授权撤销的回复不计入。本人列表仅在仍有当前内容阅读权限时提供；详情和回复行可省略。"
+            "description": "评价列表中的根评价附带当前请求人可见的已发布回复总数，包括嵌套回复。删除、隐藏、撤回、到期及必需实名授权撤销的回复不计入。本人列表仅在仍有当前内容阅读权限时提供；详情和回复行可省略。 仅 include_reply_preview=true 时返回。"
           },
           "reply_preview": {
             "type": "array",
@@ -2992,7 +3012,7 @@
             "items": {
               "$ref": "#/components/schemas/View"
             },
-            "description": "与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。"
+            "description": "与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 仅 include_reply_preview=true 时返回。"
           }
         },
         "required": [
