@@ -43,7 +43,7 @@ func TestReplyPreviewsAreBoundedOrderedAndMatchVisibleReplies(t *testing.T) {
 	f.moderation.outcome = "pending"
 	addReply(t, f, root.ID, "pending", student)
 	f.moderation.outcome = "published"
-	page, err := f.service.List(ctx, student, r.Filter{Kind: "course", Limit: 100})
+	page, err := f.service.List(ctx, student, r.Filter{IncludeReplyPreview: true, Kind: "course", Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,20 +73,20 @@ func TestReplyPreviewsAreBoundedOrderedAndMatchVisibleReplies(t *testing.T) {
 	}
 	handler := httpapi.Handler{Service: f.service, Authenticate: func(*http.Request) (r.Principal, error) { return student, nil }}
 	rec := httptest.NewRecorder()
-	handler.Routes().ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/reviews?kind=course&limit=1", nil))
+	handler.Routes().ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/reviews?kind=course&limit=1&include_reply_preview=true", nil))
 	var first r.Page
 	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &first) != nil || len(first.Items) != 1 || first.Next == "" {
 		t.Fatal("HTTP pagination", rec.Code, rec.Body.String())
 	}
-	second, err := f.service.List(ctx, student, r.Filter{Kind: "course", After: first.Next, Limit: 1})
+	second, err := f.service.List(ctx, student, r.Filter{IncludeReplyPreview: true, Kind: "course", After: first.Next, Limit: 1})
 	if err != nil || len(second.Items) != 1 || second.Items[0].ID == first.Items[0].ID {
 		t.Fatal("pagination changed", second, err)
 	}
 	f.access.revoked = true
-	if _, err := f.service.List(ctx, student, r.Filter{Kind: "course", Limit: 20}); !errors.Is(err, r.ErrForbidden) {
+	if _, err := f.service.List(ctx, student, r.Filter{IncludeReplyPreview: true, Kind: "course", Limit: 20}); !errors.Is(err, r.ErrForbidden) {
 		t.Fatal("revoked reader", err)
 	}
-	mine, err := f.service.List(ctx, student, r.Filter{Owner: student.Subject, Kind: "course", Limit: 20})
+	mine, err := f.service.List(ctx, student, r.Filter{IncludeReplyPreview: true, Owner: student.Subject, Kind: "course", Limit: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestReplyPreviewsRecheckMandatoryTeacherDisclosure(t *testing.T) {
 	}
 	check := func(want int) {
 		t.Helper()
-		page, e := f.service.List(ctx, student, r.Filter{Kind: "course", Limit: 20})
+		page, e := f.service.List(ctx, student, r.Filter{IncludeReplyPreview: true, Kind: "course", Limit: 20})
 		if e != nil || len(page.Items) != 1 || page.Items[0].ReplyCount == nil || *page.Items[0].ReplyCount != want || len(*page.Items[0].ReplyPreview) != want {
 			t.Fatal("current visibility", page, e)
 		}
@@ -133,7 +133,7 @@ func TestReplyPreviewsRecheckMandatoryTeacherDisclosure(t *testing.T) {
 	if _, err = f.service.Action(ctx, student, root.ID, "root-withdraw", r.Action{Action: "withdraw", Revision: 1}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := f.service.List(ctx, student, r.Filter{Kind: "course", Limit: 20})
+	page, err := f.service.List(ctx, student, r.Filter{IncludeReplyPreview: true, Kind: "course", Limit: 20})
 	if err != nil || len(page.Items) != 0 {
 		t.Fatal("withdrawn root", page, err)
 	}
@@ -171,7 +171,7 @@ func TestReplyPreviewPageUsesOneBatchForOneHundredRoots(t *testing.T) {
 	}
 	repo := &previewCountingRepo{Repository: f.service.Repo}
 	f.service.Repo = repo
-	page, err := f.service.List(context.Background(), student, r.Filter{Kind: "course", Limit: 100})
+	page, err := f.service.List(context.Background(), student, r.Filter{IncludeReplyPreview: true, Kind: "course", Limit: 100})
 	if err != nil || len(page.Items) != 100 {
 		t.Fatal(len(page.Items), err)
 	}

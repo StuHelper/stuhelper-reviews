@@ -135,7 +135,12 @@ func (h Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
+	preview, e := previewRequested(r)
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeReplyPreview: preview, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
 	respond(w, v, e)
 }
 func (h Handler) get(w http.ResponseWriter, r *http.Request) {
@@ -221,7 +226,12 @@ func (h Handler) mine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
+	preview, e := previewRequested(r)
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeReplyPreview: preview, Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
 	respond(w, v, e)
 }
 func (h Handler) drafts(w http.ResponseWriter, r *http.Request) {
@@ -290,4 +300,15 @@ func (h Handler) references(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := h.Service.MyReferences(r.Context(), p, strings.Split(r.URL.Query().Get("ids"), ","))
 	respond(w, out, err)
+}
+
+func previewRequested(r *http.Request) (bool, error) {
+	values, ok := r.URL.Query()["include_reply_preview"]
+	if !ok {
+		return false, nil
+	}
+	if len(values) != 1 || values[0] != "true" && values[0] != "false" {
+		return false, reviews.ErrInput
+	}
+	return values[0] == "true", nil
 }
