@@ -1,5 +1,5 @@
 id: reviews
-version: 0.8.0
+version: 0.9.0
 kind: module
 api: 1
 critical: false
@@ -41,6 +41,8 @@ specifications:
   - docs/spec/discovery.md
   - docs/spec/ui-data.md
 scenario_tests:
+  REV-IDENTITY-01:
+    - course_identity_test.go#TestCourseIdentityPreservesHistoryNewWritesAndCanonicalIdempotency
   REV-SPORTS-01:
     - sports_project_test.go#TestSportsProjectRequiresOwnTeacherAndKeepsAttribution
   IQ-02:

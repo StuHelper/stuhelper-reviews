@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "StuHelper Reviews",
-    "version": "0.8.0"
+    "version": "0.9.0"
   },
   "servers": [
     {
@@ -272,7 +272,8 @@
               "maxLength": 128
             }
           }
-        ]
+        ],
+        "description": " 课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。"
       }
     },
     "/api/v1/reviews/{id}": {
@@ -1512,7 +1513,8 @@
               }
             }
           }
-        }
+        },
+        "description": " 课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。"
       }
     },
     "/api/v1/reviews/me/entries/{id}": {

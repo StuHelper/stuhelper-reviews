@@ -14,6 +14,7 @@ export interface paths {
         /** @description Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection. */
         get: operations["listReviews"];
         put?: never;
+        /** @description 课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。 */
         post: operations["createReview"];
         delete?: never;
         options?: never;
@@ -163,6 +164,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description 课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。 */
         post: operations["publishDraft"];
         delete?: never;
         options?: never;
