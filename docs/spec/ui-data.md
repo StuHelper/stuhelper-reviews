@@ -36,7 +36,9 @@ pending_courses 通过 catalog 的当前授权选课来源取得候选，排除�
 
 本人选课展示授权、选课来源或资格未就绪时，pending_courses.state 为 unavailable，count 为 null，items 为空。本人评价与草稿数量仍可读取。接口不接受目标账号参数，也不从他人的选课推断本人的待办。
 
-GET /api/v1/reviews 新增 sort=upvotes，按赞同数、时间、ID 降序分页。快速查看可使用 limit=1。列表仍执行原有内容与作者展示授权，游标绑定原筛选条件。
+GET /api/v1/reviews 支持 sort=upvotes 与 sort=recommended（精选置顶，再按净赞同、赞同数、时间、ID 降序），以及 featured、has_teacher_reply 和 rating_group 筛选。
+
+列表剔除授权失效回复时最多自动续读三次避免假空页，课程评价 View 返回只读 teacher_ids 快照，分页游标绑定原筛选条件。
 
 新回复和最近动态复用 notifications，草稿正文复用既有 drafts 接口。本任务不增加群聊或私信接口。
 

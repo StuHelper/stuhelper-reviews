@@ -410,6 +410,8 @@ export interface components {
             term_id?: string;
             /** @description 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。 */
             teacher_id?: string;
+            /** @description 课程评价发布时记录的任课教师归属快照（单选教师时为该教师，未单选教师时为该学期本人选课任课教师并集）；非课程评价或无教师归属时省略。 */
+            readonly teacher_ids?: string[];
             title: string;
             body: string;
             ratings: number[];
@@ -663,10 +665,16 @@ export interface operations {
                 root_id?: string;
                 after?: string;
                 limit?: number;
-                /** @description Stable ID order by default; newest/oldest use creation time with an opaque cursor. */
-                sort?: "id" | "newest" | "oldest" | "upvotes";
+                /** @description Stable ID order by default; newest/oldest use creation time; recommended orders featured entries first, then net helpfulness (upvotes minus downvotes), upvotes, creation time and ID descending. */
+                sort?: "id" | "newest" | "oldest" | "upvotes" | "recommended";
                 /** @description Course reviews attributed to this teacher at publication. */
                 teacher_id?: string;
+                /** @description 筛选管理员认定的精选优质内容（true）或普通内容（false）。 */
+                featured?: boolean;
+                /** @description 筛选是否存在当前公开有效认证教师回复的根讨论（true/false），实时核验必需实名与教师授权。 */
+                has_teacher_reply?: boolean;
+                /** @description 按课程评价推荐度维度档位筛选：low 为 1-2 分，mid 为 3 分，high 为 4-5 分。 */
+                rating_group?: "low" | "mid" | "high";
                 /** @description 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。 */
                 include_reply_preview?: boolean;
             };
@@ -1147,10 +1155,16 @@ export interface operations {
             query?: {
                 after?: string;
                 limit?: number;
-                /** @description Stable ID order by default; newest/oldest use creation time with an opaque cursor. */
-                sort?: "id" | "newest" | "oldest" | "upvotes";
+                /** @description Stable ID order by default; newest/oldest use creation time; recommended orders featured entries first, then net helpfulness (upvotes minus downvotes), upvotes, creation time and ID descending. */
+                sort?: "id" | "newest" | "oldest" | "upvotes" | "recommended";
                 /** @description Course reviews attributed to this teacher at publication. */
                 teacher_id?: string;
+                /** @description 筛选管理员认定的精选优质内容（true）或普通内容（false）。 */
+                featured?: boolean;
+                /** @description 筛选是否存在当前公开有效认证教师回复的根讨论（true/false），实时核验必需实名与教师授权。 */
+                has_teacher_reply?: boolean;
+                /** @description 按课程评价推荐度维度档位筛选：low 为 1-2 分，mid 为 3 分，high 为 4-5 分。 */
+                rating_group?: "low" | "mid" | "high";
                 kind?: string;
                 target_id?: string;
                 term_id?: string;

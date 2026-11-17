@@ -140,7 +140,17 @@ func (h Handler) list(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeReplyPreview: preview, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
+	featured, e := optionalBool(r, "featured")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	hasTeacherReply, e := optionalBool(r, "has_teacher_reply")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeReplyPreview: preview, Featured: featured, HasTeacherReply: hasTeacherReply, RatingGroup: q.Get("rating_group"), Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
 	respond(w, v, e)
 }
 func (h Handler) get(w http.ResponseWriter, r *http.Request) {
@@ -231,7 +241,17 @@ func (h Handler) mine(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeReplyPreview: preview, Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
+	featured, e := optionalBool(r, "featured")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	hasTeacherReply, e := optionalBool(r, "has_teacher_reply")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeReplyPreview: preview, Featured: featured, HasTeacherReply: hasTeacherReply, RatingGroup: q.Get("rating_group"), Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
 	respond(w, v, e)
 }
 func (h Handler) drafts(w http.ResponseWriter, r *http.Request) {
@@ -302,13 +322,22 @@ func (h Handler) references(w http.ResponseWriter, r *http.Request) {
 	respond(w, out, err)
 }
 
-func previewRequested(r *http.Request) (bool, error) {
-	values, ok := r.URL.Query()["include_reply_preview"]
+func optionalBool(r *http.Request, name string) (*bool, error) {
+	values, ok := r.URL.Query()[name]
 	if !ok {
-		return false, nil
+		return nil, nil
 	}
 	if len(values) != 1 || values[0] != "true" && values[0] != "false" {
-		return false, reviews.ErrInput
+		return nil, reviews.ErrInput
 	}
-	return values[0] == "true", nil
+	v := values[0] == "true"
+	return &v, nil
+}
+
+func previewRequested(r *http.Request) (bool, error) {
+	v, err := optionalBool(r, "include_reply_preview")
+	if err != nil || v == nil {
+		return false, err
+	}
+	return *v, nil
 }

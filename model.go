@@ -151,6 +151,7 @@ type View struct {
 	TargetID     string     `json:"target_id"`
 	TermID       string     `json:"term_id,omitempty"`
 	TeacherID    string     `json:"teacher_id,omitempty"`
+	TeacherIDs   []string   `json:"teacher_ids,omitempty"`
 	Title        string     `json:"title"`
 	Body         string     `json:"body"`
 	Ratings      [5]int     `json:"ratings"`
@@ -196,12 +197,14 @@ type DraftView struct {
 }
 type Filter struct {
 	IncludeReplyPreview                                  bool
+	Featured, HasTeacherReply                            *bool
+	RatingGroup                                          string
 	SchoolID                                             string
 	EquivalentTargets, EquivalentTeachers                []string
 	Kind, TargetID, TermID, RootID, Owner, Viewer, After string
 	TeacherID, Sort, CursorID                            string
 	CursorTime                                           *time.Time
-	CursorVotes                                          *int
+	CursorVotes, CursorFeatured, CursorScore             *int
 	Now                                                  time.Time
 	Limit                                                int
 }

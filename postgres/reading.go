@@ -9,22 +9,27 @@ import (
 func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
 	cursor, order := "e.id>$10", "e.id"
 	args := []any{f.Kind, f.TargetID, f.TermID, f.RootID, f.Owner, f.Now, f.Limit + 1, f.Viewer, f.TeacherID}
-	if f.Sort == "newest" {
+	upvotes := "(SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=1)"
+	switch f.Sort {
+	case "newest":
 		cursor = "($10::timestamptz IS NULL OR (e.created_at,e.id)<($10,$11))"
 		order = "e.created_at DESC,e.id DESC"
-	}
-	if f.Sort == "oldest" {
+		args = append(args, f.CursorTime, f.CursorID)
+	case "oldest":
 		cursor = "($10::timestamptz IS NULL OR (e.created_at,e.id)>($10,$11))"
 		order = "e.created_at,e.id"
-	}
-	if f.Sort == "upvotes" {
-		upvotes := "(SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=1)"
+		args = append(args, f.CursorTime, f.CursorID)
+	case "upvotes":
 		cursor = "($10::integer IS NULL OR (" + upvotes + ",e.created_at,e.id)<($10,$11,$12))"
 		order = upvotes + " DESC,e.created_at DESC,e.id DESC"
 		args = append(args, f.CursorVotes, f.CursorTime, f.CursorID)
-	} else if f.Sort == "newest" || f.Sort == "oldest" {
-		args = append(args, f.CursorTime, f.CursorID)
-	} else {
+	case "recommended":
+		featured := "(CASE WHEN COALESCE((e.data->>'featured')::boolean,false) THEN 1 ELSE 0 END)"
+		netVotes := "(SELECT COALESCE(sum(v.value),0) FROM reviews.votes v WHERE v.id=e.id)"
+		cursor = "($10::integer IS NULL OR (" + featured + "," + netVotes + "," + upvotes + ",e.created_at,e.id)<($10,$11,$12,$13,$14))"
+		order = featured + " DESC," + netVotes + " DESC," + upvotes + " DESC,e.created_at DESC,e.id DESC"
+		args = append(args, f.CursorFeatured, f.CursorScore, f.CursorVotes, f.CursorTime, f.CursorID)
+	default:
 		args = append(args, f.After)
 	}
 	targetIndex := strconv.Itoa(len(args) + 1)
@@ -33,6 +38,17 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
 	args = append(args, f.EquivalentTeachers)
 	schoolIndex := strconv.Itoa(len(args) + 1)
 	args = append(args, f.SchoolID)
+	featuredIndex := strconv.Itoa(len(args) + 1)
+	args = append(args, f.Featured)
+	ratingIndex := strconv.Itoa(len(args) + 1)
+	args = append(args, f.RatingGroup)
+	teacherReplyClause := ""
+	if f.HasTeacherReply != nil {
+		teacherReplyClause = " AND e.id=e.root_id AND e.kind IN ('course','mentor')"
+		if *f.HasTeacherReply {
+			teacherReplyClause += ` AND EXISTS(SELECT 1 FROM reviews.entries tr WHERE tr.root_id=e.id AND tr.kind='reply' AND tr.state='published' AND (tr.expires_at IS NULL OR tr.expires_at>$6) AND COALESCE((tr.data->>'teacher_reply')::boolean,false) AND NOT EXISTS(SELECT 1 FROM reviews.closed_owners c WHERE c.owner=tr.owner))`
+		}
+	}
 	q := `SELECT e.data,i.data,
  (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=1),
  (SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=-1),
@@ -46,6 +62,8 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
  AND ($4='' OR e.root_id=$4) AND ($5='' OR e.owner=$5)
  AND ($9='' OR (e.kind='course' AND ((e.data->'teacher_ids') ? $9 OR (e.data->'teacher_ids') ?| $` + teacherIndex + `::text[])))
  AND ($` + schoolIndex + `='' OR e.school_id=$` + schoolIndex + `)
+ AND ($` + featuredIndex + `::boolean IS NULL OR COALESCE((e.data->>'featured')::boolean,false)=$` + featuredIndex + `)
+ AND ($` + ratingIndex + `='' OR (e.kind='course' AND (($` + ratingIndex + `='low' AND (e.data->'input'->'ratings'->>0)::integer IN (1,2)) OR ($` + ratingIndex + `='mid' AND (e.data->'input'->'ratings'->>0)::integer=3) OR ($` + ratingIndex + `='high' AND (e.data->'input'->'ratings'->>0)::integer IN (4,5)))))` + teacherReplyClause + `
  AND ` + cursor + ` ORDER BY ` + order + ` LIMIT $7`
 	return t.projected(q, args...)
 }

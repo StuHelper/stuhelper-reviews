@@ -145,11 +145,12 @@
                 "id",
                 "newest",
                 "oldest",
-                "upvotes"
+                "upvotes",
+                "recommended"
               ],
               "default": "id"
             },
-            "description": "Stable ID order by default; newest/oldest use creation time with an opaque cursor."
+            "description": "Stable ID order by default; newest/oldest use creation time; recommended orders featured entries first, then net helpfulness (upvotes minus downvotes), upvotes, creation time and ID descending."
           },
           {
             "name": "teacher_id",
@@ -158,6 +159,38 @@
               "type": "string"
             },
             "description": "Course reviews attributed to this teacher at publication."
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选管理员认定的精选优质内容（true）或普通内容（false）。"
+          },
+          {
+            "name": "has_teacher_reply",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选是否存在当前公开有效认证教师回复的根讨论（true/false），实时核验必需实名与教师授权。"
+          },
+          {
+            "name": "rating_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "low",
+                "mid",
+                "high"
+              ]
+            },
+            "description": "按课程评价推荐度维度档位筛选：low 为 1-2 分，mid 为 3 分，high 为 4-5 分。"
           },
           {
             "name": "include_reply_preview",
@@ -831,11 +864,12 @@
                 "id",
                 "newest",
                 "oldest",
-                "upvotes"
+                "upvotes",
+                "recommended"
               ],
               "default": "id"
             },
-            "description": "Stable ID order by default; newest/oldest use creation time with an opaque cursor."
+            "description": "Stable ID order by default; newest/oldest use creation time; recommended orders featured entries first, then net helpfulness (upvotes minus downvotes), upvotes, creation time and ID descending."
           },
           {
             "name": "teacher_id",
@@ -844,6 +878,38 @@
               "type": "string"
             },
             "description": "Course reviews attributed to this teacher at publication."
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选管理员认定的精选优质内容（true）或普通内容（false）。"
+          },
+          {
+            "name": "has_teacher_reply",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选是否存在当前公开有效认证教师回复的根讨论（true/false），实时核验必需实名与教师授权。"
+          },
+          {
+            "name": "rating_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "low",
+                "mid",
+                "high"
+              ]
+            },
+            "description": "按课程评价推荐度维度档位筛选：low 为 1-2 分，mid 为 3 分，high 为 4-5 分。"
           },
           {
             "name": "kind",
@@ -2962,6 +3028,14 @@
           "teacher_id": {
             "type": "string",
             "description": " 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。"
+          },
+          "teacher_ids": {
+            "type": "array",
+            "readOnly": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "课程评价发布时记录的任课教师归属快照（单选教师时为该教师，未单选教师时为该学期本人选课任课教师并集）；非课程评价或无教师归属时省略。"
           },
           "title": {
             "type": "string"

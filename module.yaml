@@ -139,3 +139,4 @@ scenario_tests:
     - reply_previews_test.go#TestReplyPreviewPageUsesOneBatchForOneHundredRoots
     - notification_titles_test.go#TestNotificationTitlesRespectScopePublicationAndRootNames
     - ui_backend_test.go#TestUIReviewHTTPAndUpvotePagination
+    - list_filtering_test.go#TestRecommendedSortFiltersBoundedRefillAndCoTeachers
