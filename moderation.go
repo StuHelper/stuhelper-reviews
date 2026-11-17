@@ -75,11 +75,18 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			entry.Evidence = evidence
 
 		case "publish":
-			if entry.State != "pending" {
+			hasPendingAppend := slices.ContainsFunc(entry.Appends, func(a Append) bool { return a.State == "pending" })
+			if entry.State != "pending" && !(entry.State == "published" && hasPendingAppend) {
 				return ErrConflict
 			}
 			entry.State = "published"
 			entry.ExpiresAt = nil
+			entry.ReviewRequested = false
+			for i := range entry.Appends {
+				if entry.Appends[i].State == "pending" {
+					entry.Appends[i].State = "published"
+				}
+			}
 			if entry.FirstPublishedAt == nil {
 				now := s.now()
 				entry.FirstPublishedAt = &now

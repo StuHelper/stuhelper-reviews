@@ -14,13 +14,13 @@ import (
 )
 
 type Config struct {
-	EditWindow, DraftLifetime time.Duration
-	MinSamples                int
-	Recommendations           RecommendationPolicy
+	EditWindow, DraftLifetime, AppendCooldown time.Duration
+	MinSamples, MaxAppends                    int
+	Recommendations                           RecommendationPolicy
 }
 
 func DefaultConfig() Config {
-	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1, Recommendations: DefaultRecommendationPolicy()}
+	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1, MaxAppends: 10, Recommendations: DefaultRecommendationPolicy()}
 }
 
 type Service struct {
@@ -42,10 +42,19 @@ func New(repo Repository, catalog Catalog, access Access, moderation Moderation,
 	if !c.Recommendations.valid() {
 		return nil, ErrInput
 	}
-	if repo == nil || catalog == nil || access == nil || moderation == nil || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 {
+	if repo == nil || catalog == nil || access == nil || moderation == nil || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 || c.AppendCooldown < 0 {
 		return nil, ErrInput
 	}
+	if c.MaxAppends <= 0 {
+		c.MaxAppends = 10
+	}
 	return &Service{Repo: repo, Catalog: catalog, Access: access, Moderation: moderation, Profiles: profiles, Config: c}, nil
+}
+func (s *Service) maxAppends() int {
+	if s.Config.MaxAppends <= 0 {
+		return 10
+	}
+	return s.Config.MaxAppends
 }
 func (s *Service) now() time.Time {
 	if s.Clock != nil {
@@ -477,8 +486,14 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(id) || !validKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
+	if !validID(id) || !validKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote", "append"}, in.Action) {
 		return out, ErrInput
+	}
+	if in.Action != "append" && in.Body != "" {
+		return out, ErrInput
+	}
+	if in.Action == "append" {
+		return s.appendEntry(ctx, p, id, key, in)
 	}
 	if in.Action == "vote" && in.Vote != 0 {
 		if err := s.requirePublicDisclosure(ctx, id); err != nil {

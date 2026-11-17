@@ -9,7 +9,11 @@ import (
 func adminView(e Entry) AdminEntry {
 	in := e.Input
 	in.Signed = e.Projection.Identity.Signed
-	return AdminEntry{ChangeOrigin: e.ChangeOrigin, ChangeReason: e.ChangeReason, Featured: e.Featured, ID: e.ID, RootID: e.RootID, SchoolID: e.SchoolID, Input: in, AuthorHandle: e.Projection.Identity.Handle, Anonymous: !in.Signed, State: e.State, Revision: e.Revision, CreatedAt: e.CreatedAt, PublishedAt: e.FirstPublishedAt}
+	var appends []Append
+	if len(e.Appends) > 0 {
+		appends = slices.Clone(e.Appends)
+	}
+	return AdminEntry{ChangeOrigin: e.ChangeOrigin, ChangeReason: e.ChangeReason, Appends: appends, Featured: e.Featured, ID: e.ID, RootID: e.RootID, SchoolID: e.SchoolID, Input: in, AuthorHandle: e.Projection.Identity.Handle, Anonymous: !in.Signed, State: e.State, Revision: e.Revision, CreatedAt: e.CreatedAt, PublishedAt: e.FirstPublishedAt}
 }
 func (s *Service) auditRead(t Transaction, p Principal, school, subject string, revision int64) error {
 	now := s.now()

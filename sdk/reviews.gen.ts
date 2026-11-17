@@ -426,6 +426,8 @@ export interface components {
             readonly reply_count?: number;
             /** @description 与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 仅 include_reply_preview=true 时返回。 */
             readonly reply_preview?: components["schemas"]["View"][];
+            /** @description 作者在主帖发布的追加追评（按追加时间升序），保留首次正文、评分与教师归属不变。公开视图仅包含已发布追评，无可见追评时省略。 */
+            readonly appends?: components["schemas"]["Append"][];
         };
         Page: {
             items: components["schemas"]["View"][];
@@ -444,11 +446,21 @@ export interface components {
             /** Format: date-time */
             until: string | null;
         };
+        Append: {
+            id: string;
+            body: string;
+            /** @enum {string} */
+            state: "published" | "pending";
+            /** Format: date-time */
+            created_at: string;
+        };
         Action: {
             /** @enum {string} */
-            action: "withdraw" | "delete" | "republish" | "vote" | "save_withdrawn";
+            action: "withdraw" | "delete" | "republish" | "vote" | "save_withdrawn" | "append";
             revision?: number;
             input?: components["schemas"]["Input"];
+            /** @description 当 action=append 时提供的追评正文，不修改原帖正文、评分或教师归属。 */
+            body?: string;
             vote?: number;
         };
         DraftWrite: {
@@ -525,6 +537,7 @@ export interface components {
             featured?: boolean;
             change_reason?: string;
             change_origin?: string;
+            appends?: components["schemas"]["Append"][];
         };
         AdminPage: {
             items: components["schemas"]["AdminEntry"][];

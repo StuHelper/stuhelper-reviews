@@ -97,6 +97,12 @@ type Input struct {
 }
 
 // Entry is a private persistence model. Public responses always use View.
+type Append struct {
+	ID        string    `json:"id"`
+	Body      string    `json:"body"`
+	State     string    `json:"state"`
+	CreatedAt time.Time `json:"created_at"`
+}
 type Entry struct {
 	ActivityTargetID string      `json:"activity_target_id"`
 	ChangeReason     string      `json:"change_reason,omitempty"`
@@ -105,6 +111,7 @@ type Entry struct {
 	TeacherReply     bool        `json:"teacher_reply,omitempty"`
 	DisclosureCourse string      `json:"disclosure_course,omitempty"`
 	DisclosureTerm   string      `json:"disclosure_term,omitempty"`
+	Appends          []Append    `json:"appends,omitempty"`
 	ID               string      `json:"id"`
 	RootID           string      `json:"root_id"`
 	ParentID         string      `json:"parent_id,omitempty"`
@@ -140,6 +147,7 @@ type Author struct {
 type View struct {
 	ReplyCount   *int       `json:"reply_count,omitempty"`
 	ReplyPreview *[]View    `json:"reply_preview,omitempty"`
+	Appends      []Append   `json:"appends,omitempty"`
 	Featured     bool       `json:"featured,omitempty"`
 	CanEdit      bool       `json:"can_edit"`
 	State        string     `json:"state"`
@@ -172,6 +180,7 @@ type Action struct {
 	Action   string `json:"action"`
 	Revision int64  `json:"revision"`
 	Input    *Input `json:"input,omitempty"`
+	Body     string `json:"body,omitempty"`
 	Vote     int    `json:"vote,omitempty"`
 }
 type Draft struct {
@@ -212,6 +221,7 @@ type Page struct {
 type AdminEntry struct {
 	ChangeReason string     `json:"change_reason,omitempty"`
 	ChangeOrigin string     `json:"change_origin,omitempty"`
+	Appends      []Append   `json:"appends,omitempty"`
 	Featured     bool       `json:"featured,omitempty"`
 	ID           string     `json:"id"`
 	RootID       string     `json:"root_id"`

@@ -19,25 +19,46 @@ import (
 
 // Defines values for ActionAction.
 const (
-	Delete        ActionAction = "delete"
-	Republish     ActionAction = "republish"
-	SaveWithdrawn ActionAction = "save_withdrawn"
-	Vote          ActionAction = "vote"
-	Withdraw      ActionAction = "withdraw"
+	ActionActionAppend        ActionAction = "append"
+	ActionActionDelete        ActionAction = "delete"
+	ActionActionRepublish     ActionAction = "republish"
+	ActionActionSaveWithdrawn ActionAction = "save_withdrawn"
+	ActionActionVote          ActionAction = "vote"
+	ActionActionWithdraw      ActionAction = "withdraw"
 )
 
 // Valid indicates whether the value is a known member of the ActionAction enum.
 func (e ActionAction) Valid() bool {
 	switch e {
-	case Delete:
+	case ActionActionAppend:
 		return true
-	case Republish:
+	case ActionActionDelete:
 		return true
-	case SaveWithdrawn:
+	case ActionActionRepublish:
 		return true
-	case Vote:
+	case ActionActionSaveWithdrawn:
 		return true
-	case Withdraw:
+	case ActionActionVote:
+		return true
+	case ActionActionWithdraw:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AppendState.
+const (
+	Pending   AppendState = "pending"
+	Published AppendState = "published"
+)
+
+// Valid indicates whether the value is a known member of the AppendState enum.
+func (e AppendState) Valid() bool {
+	switch e {
+	case Pending:
+		return true
+	case Published:
 		return true
 	default:
 		return false
@@ -382,10 +403,13 @@ func (e GetReviewSummariesParamsKind) Valid() bool {
 
 // Action defines model for Action.
 type Action struct {
-	Action   ActionAction `json:"action"`
-	Input    *Input       `json:"input,omitempty"`
-	Revision *int         `json:"revision,omitempty"`
-	Vote     *int         `json:"vote,omitempty"`
+	Action ActionAction `json:"action"`
+
+	// Body 当 action=append 时提供的追评正文，不修改原帖正文、评分或教师归属。
+	Body     *string `json:"body,omitempty"`
+	Input    *Input  `json:"input,omitempty"`
+	Revision *int    `json:"revision,omitempty"`
+	Vote     *int    `json:"vote,omitempty"`
 }
 
 // ActionAction defines model for Action.Action.
@@ -394,6 +418,7 @@ type ActionAction string
 // AdminEntry defines model for AdminEntry.
 type AdminEntry struct {
 	Anonymous    bool       `json:"anonymous"`
+	Appends      *[]Append  `json:"appends,omitempty"`
 	AuthorHandle string     `json:"author_handle"`
 	ChangeOrigin *string    `json:"change_origin,omitempty"`
 	ChangeReason *string    `json:"change_reason,omitempty"`
@@ -413,6 +438,17 @@ type AdminPage struct {
 	Items []AdminEntry `json:"items"`
 	Next  string       `json:"next"`
 }
+
+// Append defines model for Append.
+type Append struct {
+	Body      string      `json:"body"`
+	CreatedAt time.Time   `json:"created_at"`
+	Id        string      `json:"id"`
+	State     AppendState `json:"state"`
+}
+
+// AppendState defines model for Append.State.
+type AppendState string
 
 // AttributionInput defines model for AttributionInput.
 type AttributionInput struct {
@@ -715,6 +751,8 @@ type TermSummary struct {
 
 // View defines model for View.
 type View struct {
+	// Appends 作者在主帖发布的追加追评（按追加时间升序），保留首次正文、评分与教师归属不变。公开视图仅包含已发布追评，无可见追评时省略。
+	Appends     *[]Append  `json:"appends,omitempty"`
 	Author      Author     `json:"author"`
 	Body        string     `json:"body"`
 	CanEdit     bool       `json:"can_edit"`
