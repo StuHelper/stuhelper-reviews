@@ -128,12 +128,15 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		v.Author = Author{Anonymous: !identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }), Handle: identity.Handle, Disclosures: labels}
 		if identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }) {
 			if s.Profiles == nil {
+				s.emitDiagnostic("profile_lookup", "profiles", time.Now(), ErrUnavailable)
 				return nil, ErrUnavailable
 			}
 			profile, ok := profiles[entry.Owner]
 			if !ok {
 				var err error
+				start := time.Now()
 				profile, err = s.Profiles.Lookup(ctx, entry.Owner)
+				s.emitDiagnostic("profile_lookup", "profiles", start, err)
 				if err != nil {
 					return nil, err
 				}

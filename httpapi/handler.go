@@ -15,10 +15,35 @@ import (
 	reviews "github.com/StuHelper/stuhelper-reviews"
 )
 
+const StatusClientClosedRequest = 499
+
 type Authenticate func(*http.Request) (reviews.Principal, error)
 type Handler struct {
 	Service      *reviews.Service
 	Authenticate Authenticate
+	OnDiagnostic reviews.DiagnosticHook
+}
+
+type responseTracker struct {
+	http.ResponseWriter
+	req       *http.Request
+	clientCtx context.Context
+	start     time.Time
+	hook      reviews.DiagnosticHook
+}
+
+func (t *responseTracker) Unwrap() http.ResponseWriter {
+	return t.ResponseWriter
+}
+
+func (t *responseTracker) operationName() string {
+	if t.req == nil {
+		return "http_request"
+	}
+	if t.req.Pattern != "" {
+		return t.req.Pattern
+	}
+	return t.req.Method
 }
 
 func (h Handler) Routes() http.Handler {
@@ -45,23 +70,44 @@ func (h Handler) Routes() http.Handler {
 	m.HandleFunc("DELETE /api/v1/reviews/me/drafts/{id}", h.deleteDraft)
 	m.HandleFunc("GET /api/v1/reviews/me/votes", h.votes)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
+		tracker := &responseTracker{
+			ResponseWriter: w,
+			req:            r,
+			clientCtx:      r.Context(),
+			start:          time.Now(),
+			hook:           h.OnDiagnostic,
+		}
+		tracker.Header().Set("Cache-Control", "no-store")
+		tracker.Header().Set("X-Content-Type-Options", "nosniff")
 		if r.Method != "GET" && r.Header.Get("Origin") != "" {
 			u, e := url.Parse(r.Header.Get("Origin"))
 			if e != nil || u.Host != r.Host {
-				respond(w, nil, reviews.ErrForbidden)
+				respond(tracker, nil, reviews.ErrForbidden)
 				return
 			}
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
-		m.ServeHTTP(w, r.WithContext(ctx))
+		m.ServeHTTP(tracker, r.WithContext(ctx))
 	})
 }
 func respond(w http.ResponseWriter, v any, e error) {
 	w.Header().Set("Content-Type", "application/json")
 	if e != nil {
+		tracker, tracked := w.(*responseTracker)
+		if tracked && errors.Is(e, context.Canceled) && errors.Is(tracker.clientCtx.Err(), context.Canceled) {
+			if tracker.hook != nil {
+				tracker.hook(reviews.DiagnosticEvent{
+					Operation:  tracker.operationName(),
+					Dependency: "http",
+					Category:   "canceled",
+					Duration:   time.Since(tracker.start),
+				})
+			}
+			w.WriteHeader(StatusClientClosedRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"code": "canceled"})
+			return
+		}
 		status := 503
 		code := "unavailable"
 		for _, x := range []struct {
@@ -72,6 +118,14 @@ func respond(w http.ResponseWriter, v any, e error) {
 				status = x.s
 				code = x.e.Error()
 			}
+		}
+		if tracked && tracker.hook != nil {
+			tracker.hook(reviews.DiagnosticEvent{
+				Operation:  tracker.operationName(),
+				Dependency: "http",
+				Category:   reviews.ClassifyDiagnosticCategory(e),
+				Duration:   time.Since(tracker.start),
+			})
 		}
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(map[string]string{"code": code})

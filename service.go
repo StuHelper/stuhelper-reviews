@@ -24,15 +24,16 @@ func DefaultConfig() Config {
 }
 
 type Service struct {
-	Favorites   FavoriteReferences
-	Disclosures DisclosureProvider
-	Repo        Repository
-	Catalog     Catalog
-	Access      Access
-	Moderation  Moderation
-	Profiles    Profiles
-	Config      Config
-	Clock       func() time.Time
+	OnDiagnostic DiagnosticHook
+	Favorites    FavoriteReferences
+	Disclosures  DisclosureProvider
+	Repo         Repository
+	Catalog      Catalog
+	Access       Access
+	Moderation   Moderation
+	Profiles     Profiles
+	Config       Config
+	Clock        func() time.Time
 }
 
 func New(repo Repository, catalog Catalog, access Access, moderation Moderation, profiles Profiles, c Config) (*Service, error) {
@@ -113,9 +114,13 @@ func (s *Service) authorize(ctx context.Context, p Principal, action, school str
 		return Grant{}, ErrForbidden
 	}
 	if s.Access == nil {
+		s.emitDiagnostic("authorize_"+action, "access", time.Now(), ErrUnavailable)
 		return Grant{}, ErrUnavailable
 	}
-	return s.Access.Authorize(ctx, p, action, school)
+	start := time.Now()
+	g, err := s.Access.Authorize(ctx, p, action, school)
+	s.emitDiagnostic("authorize_"+action, "access", start, err)
+	return g, err
 }
 func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, []Evidence, []string, Grant, error) {
 	kind := "course"
@@ -124,7 +129,7 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 		kind = "teacher"
 		action = "publish_mentor"
 	}
-	target, e := s.Catalog.Target(ctx, kind, in.TargetID)
+	target, e := s.catalogTarget(ctx, "prepare_target", kind, in.TargetID)
 	if e != nil {
 		return target, nil, nil, Grant{}, e
 	}
@@ -138,14 +143,14 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	if in.Kind == "mentor" {
 		return target, nil, nil, g, nil
 	}
-	term, e := s.Catalog.Target(ctx, "term", in.TermID)
+	term, e := s.catalogTarget(ctx, "prepare_term", "term", in.TermID)
 	if e != nil {
 		return target, nil, nil, g, e
 	}
 	if term.SchoolID != target.SchoolID {
 		return target, nil, nil, g, ErrInput
 	}
-	evidence, e := s.Catalog.Evidence(ctx, p, in.TargetID, in.TermID)
+	evidence, e := s.catalogEvidence(ctx, "prepare_evidence", p, in.TargetID, in.TermID)
 	if e != nil {
 		return target, nil, nil, g, e
 	}
@@ -185,11 +190,14 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	return target, evidence, ids, g, nil
 }
 func (s *Service) check(ctx context.Context, e Entry) (string, error) {
+	start := time.Now()
 	out, err := s.Moderation.Check(ctx, Candidate{e.ID, e.Input.Kind, e.SchoolID, e.Owner, e.Input.Title, e.Input.Body, e.Revision})
 	if err != nil {
+		s.emitDiagnostic("moderation_check", "moderation", start, err)
 		return "", err
 	}
 	if !slices.Contains([]string{"published", "pending", "blocked", "review"}, out) {
+		s.emitDiagnostic("moderation_check", "moderation", start, ErrUnavailable)
 		return "", ErrUnavailable
 	}
 	if out == "blocked" {

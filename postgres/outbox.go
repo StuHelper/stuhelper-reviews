@@ -2,10 +2,16 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
+	"time"
+
 	m "github.com/StuHelper/stuhelper-reviews"
 )
 
-var _ m.OutboxReader = (*Repository)(nil)
+var (
+	_ m.OutboxReader    = (*Repository)(nil)
+	_ m.OutboxInspector = (*Repository)(nil)
+)
 
 const pendingOutboxSQL = `SELECT data FROM reviews.outbox WHERE sent_at IS NULL AND NOT ((data->>'subject')=ANY(COALESCE($2::text[],ARRAY[]::text[]))) ORDER BY (data->>'source') COLLATE "C",(data->>'subject') COLLATE "C",seq LIMIT $1`
 
@@ -37,6 +43,21 @@ func (r *Repository) ConfirmOutbox(ctx context.Context, id string) error {
 		return m.ErrNotFound
 	}
 	return nil
+}
+func (r *Repository) OutboxMetrics(ctx context.Context) (m.OutboxStats, error) {
+	start := time.Now()
+	var count int64
+	var oldest sql.NullTime
+	err := r.DB.QueryRowContext(ctx, `SELECT count(*),min((data->>'time')::timestamptz) FROM reviews.outbox WHERE sent_at IS NULL`).Scan(&count, &oldest)
+	if err != nil {
+		return m.OutboxStats{}, r.safeOp("outbox_metrics", start, err)
+	}
+	out := m.OutboxStats{PendingCount: count}
+	if count > 0 && oldest.Valid {
+		ts := oldest.Time.UTC()
+		out.OldestPendingAt = &ts
+	}
+	return out, nil
 }
 func (t *transaction) saveEnvelope(v m.Envelope) error {
 	if v.SpecVersion != "1.0" || v.Source != "reviews" || v.ID == "" || len(v.ID) > 200 || v.Subject == "" || len(v.Subject) > 512 || v.Type == "" || v.Time.IsZero() {

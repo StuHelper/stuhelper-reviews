@@ -62,6 +62,7 @@ scenario_tests:
   REV-OUTBOX-01:
     - discovery_service_test.go#TestDiscoveryRelayInspectionUsesCurrentModerationRequest
     - discovery_delivery_test.go#TestDiscoveryOutboxNotificationRollbackExclusionAndConfirmation
+    - observability_test.go#TestDiagnosticsClientCancellationAndOutboxMetrics
   REV-DISCOVERY-02:
     - discovery_service_test.go#TestDiscoveryMyVotesCurrentPermissionsPaginationAndCancellation
   AUDIT-01:

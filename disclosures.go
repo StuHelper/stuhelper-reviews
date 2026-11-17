@@ -59,10 +59,13 @@ func (s *Service) disclosureContext(ctx context.Context, p Principal, school, co
 		return out, nil
 	}
 	if s.Disclosures == nil {
+		s.emitDiagnostic("disclosure_facts", "disclosures", time.Now(), ErrUnavailable)
 		return out, ErrUnavailable
 	}
+	start := time.Now()
 	facts, err := s.Disclosures.Facts(ctx, p, school, course, term)
 	if err != nil {
+		s.emitDiagnostic("disclosure_facts", "disclosures", start, ErrUnavailable)
 		return out, ErrUnavailable
 	}
 	if !s.now().Before(facts.ValidUntil) {
