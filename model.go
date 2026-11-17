@@ -20,6 +20,7 @@ var (
 
 type Principal struct{ Subject string }
 type Target struct {
+	TeacherRequired    bool
 	ID, SchoolID, Kind string
 	Inactive           bool
 }
@@ -51,14 +52,15 @@ type Requirement struct {
 	State string `json:"state"`
 }
 type Composer struct {
-	Disclosures  []DisclosureOption `json:"disclosures,omitempty"`
-	TeacherReply bool               `json:"teacher_reply,omitempty"`
-	Allowed      bool               `json:"allowed"`
-	State        string             `json:"state"`
-	Requirements []Requirement      `json:"requirements"`
-	TeacherIDs   []string           `json:"teacher_ids"`
-	Identity     string             `json:"identity"`
-	RuleVersion  string             `json:"rule_version"`
+	TeacherRequired bool               `json:"teacher_required,omitempty"`
+	Disclosures     []DisclosureOption `json:"disclosures,omitempty"`
+	TeacherReply    bool               `json:"teacher_reply,omitempty"`
+	Allowed         bool               `json:"allowed"`
+	State           string             `json:"state"`
+	Requirements    []Requirement      `json:"requirements"`
+	TeacherIDs      []string           `json:"teacher_ids"`
+	Identity        string             `json:"identity"`
+	RuleVersion     string             `json:"rule_version"`
 }
 type PublishDraft struct {
 	Revision int64 `json:"revision"`

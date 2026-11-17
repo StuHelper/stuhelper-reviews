@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "StuHelper Reviews",
-    "version": "0.7.1"
+    "version": "0.8.0"
   },
   "servers": [
     {
@@ -2789,13 +2789,15 @@
             ]
           },
           "target_id": {
-            "type": "string"
+            "type": "string",
+            "description": " 体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。"
           },
           "term_id": {
             "type": "string"
           },
           "teacher_id": {
-            "type": "string"
+            "type": "string",
+            "description": " 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。"
           },
           "title": {
             "type": "string",
@@ -2949,13 +2951,15 @@
             "type": "string"
           },
           "target_id": {
-            "type": "string"
+            "type": "string",
+            "description": " 体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。"
           },
           "term_id": {
             "type": "string"
           },
           "teacher_id": {
-            "type": "string"
+            "type": "string",
+            "description": " 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。"
           },
           "title": {
             "type": "string"
@@ -3357,6 +3361,10 @@
           },
           "teacher_reply": {
             "type": "boolean"
+          },
+          "teacher_required": {
+            "type": "boolean",
+            "description": "true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。"
           }
         },
         "required": [

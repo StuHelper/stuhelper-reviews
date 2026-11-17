@@ -64,3 +64,15 @@ NotificationTitles 是供宿主使用的公开 Go 接口，每次接收一至一
 学期摘要增加 term_order_key，使用 catalog 的自然年乘十加季节顺序。terms 按键倒序、term_id 升序；未知键为零，排在已知学期后。
 
 未指定 include_reply_preview 或设为 false 时，保持旧 View 结构且不读取预览。该参数只接受单个 true 或 false。Go 调用方通过 Filter.IncludeReplyPreview 显式选择增强结果。
+
+## 体育项目评价
+
+体育项目沿用 course 评价类型，target_id 使用 catalog 项目 ID。编辑器的 teacher_required=true 表示发布必须选择一个教师，teacher_ids 仍只包含本人同一项目及学期的任课教师。项目目录中的全部教师不能直接用作评价资格。
+
+创建、草稿发布和修改均检查教师选择。缺少教师返回 invalid_input，其他教学班的教师返回 forbidden，缺少本人项目选课记录返回 enrollment_required。即使普通课程关闭选课要求，体育项目仍需选课依据。
+
+原编号体育课程被目录规则排除后，详情、统计、列表、编辑器和新写入返回不存在。既有评价和草稿不自动转移到项目，迁移必须能够从原教学班明确还原项目并另行确认。
+
+| 场景 | 通过条件 |
+| --- | --- |
+| REV-SPORTS-01 | 项目评价强制本人教师，拒绝后无写入，幂等重放及教师筛选保持同一归属 |
