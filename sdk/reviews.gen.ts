@@ -221,6 +221,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reviews/admin/entries/batch-approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。 */
+        post: operations["batchApproveAdminEntries"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reviews/admin/entries/{id}": {
         parameters: {
             query?: never;
@@ -426,6 +443,8 @@ export interface components {
             readonly reply_count?: number;
             /** @description 与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 仅 include_reply_preview=true 时返回。 */
             readonly reply_preview?: components["schemas"]["View"][];
+            /** @description 仅在本人专属视图（GetOwn 与 /reviews/me/entries）返回的脱敏结构化审核原因码，与管理员内部备注严格隔离。 */
+            readonly moderation_reason_code?: components["schemas"]["ModerationReasonCode"];
         };
         Page: {
             items: components["schemas"]["View"][];
@@ -474,6 +493,11 @@ export interface components {
              */
             reference_state: "verified" | "unverified" | "unavailable";
         };
+        /**
+         * @description 面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。
+         * @enum {string}
+         */
+        ModerationReasonCode: "pending_review" | "spam" | "personal_attack" | "privacy_leak" | "wrong_teacher" | "academic_integrity" | "low_quality" | "policy_violation" | "other";
         Decision: {
             id: string;
             object_id: string;
@@ -484,6 +508,7 @@ export interface components {
             subject?: string;
             signed?: boolean;
             reason: string;
+            reason_code?: components["schemas"]["ModerationReasonCode"];
         };
         PublishDraft: {
             revision: number;
@@ -512,6 +537,7 @@ export interface components {
         AdminEntry: {
             id: string;
             root_id: string;
+            parent_id?: string;
             school_id: string;
             input: components["schemas"]["Input"];
             author_handle: string;
@@ -521,14 +547,37 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
+            updated_at?: string;
+            /** Format: date-time */
             published_at: string | null;
             featured?: boolean;
+            review_requested?: boolean;
+            moderation_reason_code?: components["schemas"]["ModerationReasonCode"];
             change_reason?: string;
             change_origin?: string;
         };
         AdminPage: {
             items: components["schemas"]["AdminEntry"][];
             next: string;
+        };
+        AdminBatchItem: {
+            object_id: string;
+            revision: number;
+        };
+        AdminBatchApproveRequest: {
+            school_id: string;
+            reason: string;
+            items: components["schemas"]["AdminBatchItem"][];
+        };
+        AdminBatchItemResult: {
+            object_id: string;
+            /** @enum {string} */
+            status: "approved" | "conflict" | "not_found" | "forbidden";
+            state?: string;
+            revision?: number;
+        };
+        AdminBatchApproveResponse: {
+            items: components["schemas"]["AdminBatchItemResult"][];
         };
         /** @enum {string} */
         DisclosureKey: "gender" | "department" | "enrollment" | "real_name" | "teacher" | "organization";
@@ -1867,6 +1916,13 @@ export interface operations {
                 state?: string;
                 after?: string;
                 limit?: number;
+                /** @description 默认按稳定 ID 升序分页；newest/oldest 按创建时间及绑定筛选条件的游标分页。 */
+                sort?: "id" | "newest" | "oldest";
+                /** @description 筛选待人工审核或先发后审复核队列条目（true/false）。 */
+                review_requested?: boolean;
+                target_id?: string;
+                root_id?: string;
+                featured?: boolean;
             };
             header?: never;
             path?: never;
@@ -1920,6 +1976,77 @@ export interface operations {
                 };
             };
             /** @description Revision or idempotency conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Required dependency unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    batchApproveAdminEntries: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminBatchApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminBatchApproveResponse"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not permitted */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Idempotency conflict */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -98,30 +98,31 @@ type Input struct {
 
 // Entry is a private persistence model. Public responses always use View.
 type Entry struct {
-	ActivityTargetID string      `json:"activity_target_id"`
-	ChangeReason     string      `json:"change_reason,omitempty"`
-	ChangeOrigin     string      `json:"change_origin,omitempty"`
-	Featured         bool        `json:"featured,omitempty"`
-	TeacherReply     bool        `json:"teacher_reply,omitempty"`
-	DisclosureCourse string      `json:"disclosure_course,omitempty"`
-	DisclosureTerm   string      `json:"disclosure_term,omitempty"`
-	ID               string      `json:"id"`
-	RootID           string      `json:"root_id"`
-	ParentID         string      `json:"parent_id,omitempty"`
-	Owner            string      `json:"owner"`
-	SchoolID         string      `json:"school_id"`
-	Input            Input       `json:"input"`
-	TeacherIDs       []string    `json:"teacher_ids"`
-	Evidence         []Evidence  `json:"evidence"`
-	State            string      `json:"state"`
-	Revision         int64       `json:"revision"`
-	FirstPublishedAt *time.Time  `json:"first_published_at"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
-	ExpiresAt        *time.Time  `json:"expires_at"`
-	RuleVersion      string      `json:"rule_version"`
-	Projection       *Projection `json:"-"`
-	ReviewRequested  bool        `json:"review_requested"`
+	ActivityTargetID     string      `json:"activity_target_id"`
+	ChangeReason         string      `json:"change_reason,omitempty"`
+	ChangeOrigin         string      `json:"change_origin,omitempty"`
+	ModerationReasonCode string      `json:"moderation_reason_code,omitempty"`
+	Featured             bool        `json:"featured,omitempty"`
+	TeacherReply         bool        `json:"teacher_reply,omitempty"`
+	DisclosureCourse     string      `json:"disclosure_course,omitempty"`
+	DisclosureTerm       string      `json:"disclosure_term,omitempty"`
+	ID                   string      `json:"id"`
+	RootID               string      `json:"root_id"`
+	ParentID             string      `json:"parent_id,omitempty"`
+	Owner                string      `json:"owner"`
+	SchoolID             string      `json:"school_id"`
+	Input                Input       `json:"input"`
+	TeacherIDs           []string    `json:"teacher_ids"`
+	Evidence             []Evidence  `json:"evidence"`
+	State                string      `json:"state"`
+	Revision             int64       `json:"revision"`
+	FirstPublishedAt     *time.Time  `json:"first_published_at"`
+	CreatedAt            time.Time   `json:"created_at"`
+	UpdatedAt            time.Time   `json:"updated_at"`
+	ExpiresAt            *time.Time  `json:"expires_at"`
+	RuleVersion          string      `json:"rule_version"`
+	Projection           *Projection `json:"-"`
+	ReviewRequested      bool        `json:"review_requested"`
 }
 type Projection struct {
 	Identity                   Identity
@@ -138,29 +139,30 @@ type Author struct {
 	Profile     *Profile           `json:"profile,omitempty"`
 }
 type View struct {
-	ReplyCount   *int       `json:"reply_count,omitempty"`
-	ReplyPreview *[]View    `json:"reply_preview,omitempty"`
-	Featured     bool       `json:"featured,omitempty"`
-	CanEdit      bool       `json:"can_edit"`
-	State        string     `json:"state"`
-	ID           string     `json:"id"`
-	RootID       string     `json:"root_id"`
-	ParentID     string     `json:"parent_id,omitempty"`
-	Kind         string     `json:"kind"`
-	SchoolID     string     `json:"school_id"`
-	TargetID     string     `json:"target_id"`
-	TermID       string     `json:"term_id,omitempty"`
-	TeacherID    string     `json:"teacher_id,omitempty"`
-	Title        string     `json:"title"`
-	Body         string     `json:"body"`
-	Ratings      [5]int     `json:"ratings"`
-	Author       Author     `json:"author"`
-	Revision     int64      `json:"revision"`
-	PublishedAt  *time.Time `json:"published_at"`
-	Upvotes      int        `json:"upvotes"`
-	Downvotes    int        `json:"downvotes"`
-	MyVote       int        `json:"my_vote"`
-	Mine         bool       `json:"mine"`
+	ModerationReasonCode string     `json:"moderation_reason_code,omitempty"`
+	ReplyCount           *int       `json:"reply_count,omitempty"`
+	ReplyPreview         *[]View    `json:"reply_preview,omitempty"`
+	Featured             bool       `json:"featured,omitempty"`
+	CanEdit              bool       `json:"can_edit"`
+	State                string     `json:"state"`
+	ID                   string     `json:"id"`
+	RootID               string     `json:"root_id"`
+	ParentID             string     `json:"parent_id,omitempty"`
+	Kind                 string     `json:"kind"`
+	SchoolID             string     `json:"school_id"`
+	TargetID             string     `json:"target_id"`
+	TermID               string     `json:"term_id,omitempty"`
+	TeacherID            string     `json:"teacher_id,omitempty"`
+	Title                string     `json:"title"`
+	Body                 string     `json:"body"`
+	Ratings              [5]int     `json:"ratings"`
+	Author               Author     `json:"author"`
+	Revision             int64      `json:"revision"`
+	PublishedAt          *time.Time `json:"published_at"`
+	Upvotes              int        `json:"upvotes"`
+	Downvotes            int        `json:"downvotes"`
+	MyVote               int        `json:"my_vote"`
+	Mine                 bool       `json:"mine"`
 }
 type Result struct {
 	ID        string     `json:"id"`
@@ -210,19 +212,49 @@ type Page struct {
 	Next  string `json:"next"`
 }
 type AdminEntry struct {
-	ChangeReason string     `json:"change_reason,omitempty"`
-	ChangeOrigin string     `json:"change_origin,omitempty"`
-	Featured     bool       `json:"featured,omitempty"`
-	ID           string     `json:"id"`
-	RootID       string     `json:"root_id"`
-	SchoolID     string     `json:"school_id"`
-	Input        Input      `json:"input"`
-	AuthorHandle string     `json:"author_handle"`
-	Anonymous    bool       `json:"anonymous"`
-	State        string     `json:"state"`
-	Revision     int64      `json:"revision"`
-	CreatedAt    time.Time  `json:"created_at"`
-	PublishedAt  *time.Time `json:"published_at"`
+	ChangeReason         string     `json:"change_reason,omitempty"`
+	ChangeOrigin         string     `json:"change_origin,omitempty"`
+	ModerationReasonCode string     `json:"moderation_reason_code,omitempty"`
+	ReviewRequested      bool       `json:"review_requested,omitempty"`
+	Featured             bool       `json:"featured,omitempty"`
+	ID                   string     `json:"id"`
+	RootID               string     `json:"root_id"`
+	ParentID             string     `json:"parent_id,omitempty"`
+	SchoolID             string     `json:"school_id"`
+	Input                Input      `json:"input"`
+	AuthorHandle         string     `json:"author_handle"`
+	Anonymous            bool       `json:"anonymous"`
+	State                string     `json:"state"`
+	Revision             int64      `json:"revision"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            *time.Time `json:"updated_at,omitempty"`
+	PublishedAt          *time.Time `json:"published_at"`
+}
+type AdminFilter struct {
+	SchoolID, Kind, State, TargetID, RootID, Sort, After, CursorID string
+	EquivalentTargets                                              []string
+	ReviewRequested, Featured                                      *bool
+	CursorTime                                                     *time.Time
+	Now                                                            time.Time
+	Limit                                                          int
+}
+type AdminBatchItem struct {
+	ObjectID string `json:"object_id"`
+	Revision int64  `json:"revision"`
+}
+type AdminBatchApproveRequest struct {
+	SchoolID string           `json:"school_id"`
+	Reason   string           `json:"reason"`
+	Items    []AdminBatchItem `json:"items"`
+}
+type AdminBatchItemResult struct {
+	ObjectID string `json:"object_id"`
+	Status   string `json:"status"`
+	State    string `json:"state,omitempty"`
+	Revision int64  `json:"revision,omitempty"`
+}
+type AdminBatchApproveResponse struct {
+	Items []AdminBatchItemResult `json:"items"`
 }
 type AdminPage struct {
 	Items []AdminEntry `json:"items"`
@@ -252,6 +284,7 @@ type Aggregate struct {
 type Replay struct {
 	Digest   string
 	Result   Result
+	Batch    *AdminBatchApproveResponse `json:"batch,omitempty"`
 	Until    time.Time
 	ObjectID string
 }
@@ -270,6 +303,7 @@ type Inspection struct {
 type Decision struct {
 	TeacherID        string  `json:"teacher_id,omitempty"`
 	EvidenceRevision string  `json:"evidence_revision,omitempty"`
+	ReasonCode       string  `json:"reason_code,omitempty"`
 	ID               string  `json:"id"`
 	ObjectID         string  `json:"object_id"`
 	Revision         int64   `json:"revision"`

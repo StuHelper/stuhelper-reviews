@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS reviews.entries (
 CREATE INDEX IF NOT EXISTS reviews_chronological ON reviews.entries(kind,target_id,created_at,id);
 CREATE INDEX IF NOT EXISTS reviews_owner_chronological ON reviews.entries(owner,created_at,id);
 CREATE INDEX IF NOT EXISTS reviews_admin_scope ON reviews.entries(school_id,state,kind,id);
+CREATE INDEX IF NOT EXISTS reviews_admin_chronological ON reviews.entries(school_id,created_at DESC,id DESC) WHERE state<>'withdrawn';
+CREATE INDEX IF NOT EXISTS reviews_admin_review_requested ON reviews.entries(school_id,created_at DESC,id DESC) WHERE state IN ('pending','published') AND COALESCE((data->>'review_requested')::boolean,false);
 CREATE INDEX IF NOT EXISTS reviews_listing ON reviews.entries(kind,target_id,term_id,id) WHERE state='published';
 CREATE INDEX IF NOT EXISTS reviews_roots ON reviews.entries(root_id,id);
 CREATE INDEX IF NOT EXISTS reviews_owner ON reviews.entries(owner,id);

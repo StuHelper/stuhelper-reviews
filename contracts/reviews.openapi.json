@@ -1850,8 +1850,151 @@
               "maximum": 100,
               "default": 20
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "id",
+                "newest",
+                "oldest"
+              ],
+              "default": "id"
+            },
+            "description": "默认按稳定 ID 升序分页；newest/oldest 按创建时间及绑定筛选条件的游标分页。"
+          },
+          {
+            "name": "review_requested",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选待人工审核或先发后审复核队列条目（true/false）。"
+          },
+          {
+            "name": "target_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "root_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ]
+      }
+    },
+    "/api/v1/reviews/admin/entries/batch-approve": {
+      "post": {
+        "operationId": "batchApproveAdminEntries",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminBatchApproveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminBatchApproveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。"
       }
     },
     "/api/v1/reviews/admin/entries/{id}": {
@@ -3019,6 +3162,11 @@
               "$ref": "#/components/schemas/View"
             },
             "description": "与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 仅 include_reply_preview=true 时返回。"
+          },
+          "moderation_reason_code": {
+            "$ref": "#/components/schemas/ModerationReasonCode",
+            "readOnly": true,
+            "description": "仅在本人专属视图（GetOwn 与 /reviews/me/entries）返回的脱敏结构化审核原因码，与管理员内部备注严格隔离。"
           }
         },
         "required": [
@@ -3223,6 +3371,21 @@
         ],
         "description": "A private draft owned by the requester. Withdrawn drafts retain their original expiry. Saving a draft does not publish it."
       },
+      "ModerationReasonCode": {
+        "type": "string",
+        "enum": [
+          "pending_review",
+          "spam",
+          "personal_attack",
+          "privacy_leak",
+          "wrong_teacher",
+          "academic_integrity",
+          "low_quality",
+          "policy_violation",
+          "other"
+        ],
+        "description": "面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。"
+      },
       "Decision": {
         "type": "object",
         "additionalProperties": false,
@@ -3258,6 +3421,9 @@
           },
           "reason": {
             "type": "string"
+          },
+          "reason_code": {
+            "$ref": "#/components/schemas/ModerationReasonCode"
           }
         },
         "required": [
@@ -3388,6 +3554,9 @@
           "root_id": {
             "type": "string"
           },
+          "parent_id": {
+            "type": "string"
+          },
           "school_id": {
             "type": "string"
           },
@@ -3410,6 +3579,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "published_at": {
             "type": "string",
             "format": "date-time",
@@ -3417,6 +3590,12 @@
           },
           "featured": {
             "type": "boolean"
+          },
+          "review_requested": {
+            "type": "boolean"
+          },
+          "moderation_reason_code": {
+            "$ref": "#/components/schemas/ModerationReasonCode"
           },
           "change_reason": {
             "type": "string"
@@ -3455,6 +3634,93 @@
         "required": [
           "items",
           "next"
+        ]
+      },
+      "AdminBatchItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "object_id",
+          "revision"
+        ]
+      },
+      "AdminBatchApproveRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "school_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/AdminBatchItem"
+            }
+          }
+        },
+        "required": [
+          "school_id",
+          "reason",
+          "items"
+        ]
+      },
+      "AdminBatchItemResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "conflict",
+              "not_found",
+              "forbidden"
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "object_id",
+          "status"
+        ]
+      },
+      "AdminBatchApproveResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminBatchItemResult"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "DisclosureKey": {

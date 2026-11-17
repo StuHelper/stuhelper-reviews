@@ -34,6 +34,7 @@ func (h Handler) Routes() http.Handler {
 	m.HandleFunc("GET /api/v1/reviews/statistics", h.statistics)
 	m.HandleFunc("GET /api/v1/reviews/compose", h.compose)
 	m.HandleFunc("GET /api/v1/reviews/admin/entries", h.adminList)
+	m.HandleFunc("POST /api/v1/reviews/admin/entries/batch-approve", h.adminBatchApprove)
 	m.HandleFunc("GET /api/v1/reviews/admin/entries/{id}", h.adminGet)
 	m.HandleFunc("GET /api/v1/reviews/me/references", h.references)
 	m.HandleFunc("GET /api/v1/reviews/me/entries", h.mine)

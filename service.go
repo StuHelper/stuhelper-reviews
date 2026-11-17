@@ -280,6 +280,9 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 		return out, err
 	}
 	entry.ReviewRequested = state == "review" || state == "pending"
+	if state == "pending" {
+		entry.ModerationReasonCode = "pending_review"
+	}
 	if state == "review" {
 		state = "published"
 	}
@@ -454,6 +457,9 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 			return e
 		}
 		entry.ReviewRequested = state == "review" || state == "pending"
+		if state == "pending" {
+			entry.ModerationReasonCode = "pending_review"
+		}
 		if state == "review" {
 			state = "published"
 		}
@@ -671,6 +677,11 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 		return err
 	}
 	e.ReviewRequested = state == "review" || state == "pending"
+	if state == "pending" {
+		e.ModerationReasonCode = "pending_review"
+	} else {
+		e.ModerationReasonCode = ""
+	}
 	if state == "review" {
 		state = "published"
 	}

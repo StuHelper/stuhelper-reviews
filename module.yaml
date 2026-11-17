@@ -89,6 +89,7 @@ scenario_tests:
     - community_test.go#TestPrivateReplyListRespectsWithdrawnRoot
   ACAD-23:
     - administration_test.go#TestModerationReadIsScopedAuditedAndUsesDiscussionHandles
+    - moderation_queue_test.go#TestAuthorModerationReasonCodesAdminFiltersAndBatchApprove
   ACAD-31:
     - community_test.go#TestWithdrawnDraftSaveKeepsExpiryAndAttribution
   ACAD-35:
