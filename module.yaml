@@ -45,6 +45,7 @@ scenario_tests:
     - course_identity_test.go#TestCourseIdentityPreservesHistoryNewWritesAndCanonicalIdempotency
   REV-SPORTS-01:
     - sports_project_test.go#TestSportsProjectRequiresOwnTeacherAndKeepsAttribution
+    - structured_errors_test.go#TestStructuredErrorSubcodesFieldsAndConflictRevisions
   IQ-02:
     - accountquery/query_test.go#TestAccountQueryAuthorizationAndFailures
     - postgres/account_query_test.go#TestAccountQueryScopePaginationAndRuntime

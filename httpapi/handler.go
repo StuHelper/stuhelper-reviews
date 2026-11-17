@@ -50,7 +50,7 @@ func (h Handler) Routes() http.Handler {
 		if r.Method != "GET" && r.Header.Get("Origin") != "" {
 			u, e := url.Parse(r.Header.Get("Origin"))
 			if e != nil || u.Host != r.Host {
-				respond(w, nil, reviews.ErrForbidden)
+				respond(w, nil, reviews.NewErrorDetail(reviews.ErrForbidden, "origin_mismatch", "origin", nil))
 				return
 			}
 		}
@@ -59,6 +59,14 @@ func (h Handler) Routes() http.Handler {
 		m.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+type errorResponse struct {
+	Code            string `json:"code"`
+	Subcode         string `json:"subcode,omitempty"`
+	Field           string `json:"field,omitempty"`
+	CurrentRevision *int64 `json:"current_revision,omitempty"`
+}
+
 func respond(w http.ResponseWriter, v any, e error) {
 	w.Header().Set("Content-Type", "application/json")
 	if e != nil {
@@ -73,8 +81,15 @@ func respond(w http.ResponseWriter, v any, e error) {
 				code = x.e.Error()
 			}
 		}
+		payload := errorResponse{Code: code}
+		var detail reviews.ErrorDetail
+		if errors.As(e, &detail) {
+			payload.Subcode = detail.Subcode
+			payload.Field = detail.Field
+			payload.CurrentRevision = detail.CurrentRevision
+		}
 		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(map[string]string{"code": code})
+		_ = json.NewEncoder(w).Encode(payload)
 		return
 	}
 	_ = json.NewEncoder(w).Encode(v)
@@ -84,11 +99,11 @@ func decode(w http.ResponseWriter, r *http.Request, v any) error {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if d.Decode(v) != nil {
-		return reviews.ErrInput
+		return reviews.NewErrorDetail(reviews.ErrInput, "malformed_json", "", nil)
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return reviews.ErrInput
+		return reviews.NewErrorDetail(reviews.ErrInput, "malformed_json", "", nil)
 	}
 	return nil
 }
@@ -120,7 +135,7 @@ func limit(r *http.Request) (int, error) {
 	}
 	n, e := strconv.Atoi(v)
 	if e != nil || n < 1 || n > 100 {
-		return 0, reviews.ErrInput
+		return 0, reviews.NewErrorDetail(reviews.ErrInput, "invalid_pagination", "limit", nil)
 	}
 	return n, nil
 }
