@@ -1013,10 +1013,14 @@ type ClientInterface interface {
 
 	// CreateReviewWithBody performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
 	// with any type of body and a specified content type.
+	//
+	//  课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 	CreateReviewWithBody(ctx context.Context, params *CreateReviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateReview performs a POST /api/v1/reviews (the `CreateReview` operationId) request.
 	// Takes a body of the `application/json` content type.
+	//
+	//  课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 	CreateReview(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAdminEntries performs a GET /api/v1/reviews/admin/entries (the `ListAdminEntries` operationId) request.
@@ -1080,10 +1084,14 @@ type ClientInterface interface {
 
 	// PublishDraftWithBody performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request,
 	// with any type of body and a specified content type.
+	//
+	//  课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 	PublishDraftWithBody(ctx context.Context, id string, params *PublishDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PublishDraft performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request.
 	// Takes a body of the `application/json` content type.
+	//
+	//  课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 	PublishDraft(ctx context.Context, id string, params *PublishDraftParams, body PublishDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyReviews performs a GET /api/v1/reviews/me/entries (the `MyReviews` operationId) request.
@@ -1165,6 +1173,8 @@ func (c *Client) ListReviews(ctx context.Context, params *ListReviewsParams, req
 
 // CreateReviewWithBody performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
 // with any type of body and a specified content type.
+//
+//	课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 func (c *Client) CreateReviewWithBody(ctx context.Context, params *CreateReviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateReviewRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -1179,6 +1189,8 @@ func (c *Client) CreateReviewWithBody(ctx context.Context, params *CreateReviewP
 
 // CreateReview performs a POST /api/v1/reviews (the `CreateReview` operationId) request.
 // Takes a body of the `application/json` content type.
+//
+//	课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 func (c *Client) CreateReview(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateReviewRequest(c.Server, params, body)
 	if err != nil {
@@ -1402,6 +1414,8 @@ func (c *Client) GetDraft(ctx context.Context, id string, reqEditors ...RequestE
 
 // PublishDraftWithBody performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request,
 // with any type of body and a specified content type.
+//
+//	课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 func (c *Client) PublishDraftWithBody(ctx context.Context, id string, params *PublishDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPublishDraftRequestWithBody(c.Server, id, params, contentType, body)
 	if err != nil {
@@ -1416,6 +1430,8 @@ func (c *Client) PublishDraftWithBody(ctx context.Context, id string, params *Pu
 
 // PublishDraft performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request.
 // Takes a body of the `application/json` content type.
+//
+//	课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 func (c *Client) PublishDraft(ctx context.Context, id string, params *PublishDraftParams, body PublishDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPublishDraftRequest(c.Server, id, params, body)
 	if err != nil {
@@ -3329,11 +3345,15 @@ type ClientWithResponsesInterface interface {
 	// CreateReviewWithBodyWithResponse performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
 	// with any type of body and a specified content type.
 	//
+	//  课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	CreateReviewWithBodyWithResponse(ctx context.Context, params *CreateReviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateReviewResponse, error)
 
 	// CreateReviewWithResponse performs a POST /api/v1/reviews (the `CreateReview` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	//  课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 	CreateReviewWithResponse(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateReviewResponse, error)
 
 	// ListAdminEntriesWithResponse performs a GET /api/v1/reviews/admin/entries (the `ListAdminEntries` operationId) request.
@@ -3420,11 +3440,15 @@ type ClientWithResponsesInterface interface {
 	// PublishDraftWithBodyWithResponse performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request,
 	// with any type of body and a specified content type.
 	//
+	//  课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	PublishDraftWithBodyWithResponse(ctx context.Context, id string, params *PublishDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PublishDraftResponse, error)
 
 	// PublishDraftWithResponse performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	//  课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 	PublishDraftWithResponse(ctx context.Context, id string, params *PublishDraftParams, body PublishDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*PublishDraftResponse, error)
 
 	// MyReviewsWithResponse performs a GET /api/v1/reviews/me/entries (the `MyReviews` operationId) request.
@@ -5602,6 +5626,8 @@ func (c *ClientWithResponses) ListReviewsWithResponse(ctx context.Context, param
 // CreateReviewWithBodyWithResponse performs a POST /api/v1/reviews (the `CreateReview` operationId) request,
 // with any type of body and a specified content type.
 //
+//	课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) CreateReviewWithBodyWithResponse(ctx context.Context, params *CreateReviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateReviewResponse, error) {
 	rsp, err := c.CreateReviewWithBody(ctx, params, contentType, body, reqEditors...)
@@ -5613,6 +5639,8 @@ func (c *ClientWithResponses) CreateReviewWithBodyWithResponse(ctx context.Conte
 
 // CreateReviewWithResponse performs a POST /api/v1/reviews (the `CreateReview` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+//	课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 func (c *ClientWithResponses) CreateReviewWithResponse(ctx context.Context, params *CreateReviewParams, body CreateReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateReviewResponse, error) {
 	rsp, err := c.CreateReview(ctx, params, body, reqEditors...)
 	if err != nil {
@@ -5795,6 +5823,8 @@ func (c *ClientWithResponses) GetDraftWithResponse(ctx context.Context, id strin
 // PublishDraftWithBodyWithResponse performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request,
 // with any type of body and a specified content type.
 //
+//	课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) PublishDraftWithBodyWithResponse(ctx context.Context, id string, params *PublishDraftParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PublishDraftResponse, error) {
 	rsp, err := c.PublishDraftWithBody(ctx, id, params, contentType, body, reqEditors...)
@@ -5806,6 +5836,8 @@ func (c *ClientWithResponses) PublishDraftWithBodyWithResponse(ctx context.Conte
 
 // PublishDraftWithResponse performs a POST /api/v1/reviews/me/drafts/{id}/publish (the `PublishDraft` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+//	课程创建按 catalog 解析后的规范课程 ID 计算幂等请求，新旧课程 ID 携带相同键及相同内容只产生一次评价。历史输入与选课归属证据保留，列表及统计按公开课程映射聚合。.
 func (c *ClientWithResponses) PublishDraftWithResponse(ctx context.Context, id string, params *PublishDraftParams, body PublishDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*PublishDraftResponse, error) {
 	rsp, err := c.PublishDraft(ctx, id, params, body, reqEditors...)
 	if err != nil {

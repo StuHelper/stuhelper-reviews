@@ -255,11 +255,23 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 	}(), in.TermID, in); err != nil {
 		return out, err
 	}
-	rk := hash([]string{p.Subject, "create", in.TargetID, key})
-	h := hash(in)
+	// An old link and its canonical course are the same submission target.
+	// Keep Input as the original publication evidence while normalizing only
+	// the idempotency identity and digest.
+	canonicalInput := in
+	canonicalInput.TargetID = target.ID
+	rk := hash([]string{p.Subject, "create", target.ID, key})
+	h := hash(canonicalInput)
 	if draftID != "" {
 		rk = hash([]string{p.Subject, "publish_draft", draftID, key})
-		h = hash(PublishDraft{Revision: draftRevision, Input: in})
+		h = hash(PublishDraft{Revision: draftRevision, Input: canonicalInput})
+	}
+	var previous []creationReplay
+	if draftID == "" {
+		previous, err = s.previousCreationKeys(ctx, p, key, in, target.ID)
+		if err != nil {
+			return out, err
+		}
 	}
 	now := s.now()
 	entry := Entry{ActivityTargetID: target.ID, ChangeOrigin: "author", ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
@@ -290,6 +302,12 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 		}
 		if ok {
 			out = cached
+			return nil
+		}
+		if legacy, found, err := replayPreviousCreation(t, previous, now); err != nil {
+			return err
+		} else if found {
+			out = legacy
 			return nil
 		}
 		if draftID != "" {
