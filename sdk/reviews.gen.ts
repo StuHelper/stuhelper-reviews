@@ -361,8 +361,10 @@ export interface components {
         Input: {
             /** @enum {string} */
             kind: "course" | "mentor" | "reply";
+            /** @description 体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。 */
             target_id: string;
             term_id?: string;
+            /** @description 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。 */
             teacher_id?: string;
             title: string;
             body: string;
@@ -401,8 +403,10 @@ export interface components {
             parent_id?: string;
             kind: string;
             school_id: string;
+            /** @description 体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。 */
             target_id: string;
             term_id?: string;
+            /** @description 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。 */
             teacher_id?: string;
             title: string;
             body: string;
@@ -500,6 +504,8 @@ export interface components {
             rule_version: string;
             disclosures?: components["schemas"]["DisclosureOption"][];
             teacher_reply?: boolean;
+            /** @description true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。 */
+            teacher_required?: boolean;
         };
         AdminEntry: {
             id: string;

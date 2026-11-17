@@ -87,6 +87,7 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 			return out, err
 		}
 		school = object.SchoolID
+		out.TeacherRequired = object.TeacherRequired
 		if school != scope {
 			return Composer{}, ErrForbidden
 		}
