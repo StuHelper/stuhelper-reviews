@@ -93,11 +93,31 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 	out := make([]View, 0, len(entries))
 	profiles := map[string]Profile{}
 	owners := make([]string, 0, len(entries))
+	parentIDs := make([]string, 0)
 	for _, entry := range entries {
 		owners = append(owners, entry.Owner)
+		if entry.Input.Kind == "reply" && entry.ParentID != "" {
+			parentIDs = append(parentIDs, entry.ParentID)
+		}
 	}
+	slices.Sort(parentIDs)
+	parentIDs = slices.Compact(parentIDs)
 	var closed map[string]bool
-	if e := s.Repo.Transaction(ctx, func(t Transaction) error { var err error; closed, err = t.ClosedOwners(owners); return err }); e != nil {
+	var parents map[string]ParentSummary
+	if e := s.Repo.Transaction(ctx, func(t Transaction) error {
+		var err error
+		closed, err = t.ClosedOwners(owners)
+		if err != nil {
+			return err
+		}
+		if len(parentIDs) > 0 {
+			if port, ok := t.(PersonalContextTransaction); ok {
+				parents, err = port.ParentSummaries(parentIDs)
+				return err
+			}
+		}
+		return nil
+	}); e != nil {
 		return nil, e
 	}
 	for _, entry := range entries {
@@ -120,6 +140,29 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 			return nil, ErrUnavailable
 		}
 		v := View{Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
+		if entry.Input.Kind == "reply" && entry.ParentID != "" {
+			parent, found := parents[entry.ParentID]
+			if !found {
+				parentVisible := false
+				v.ParentVisible = &parentVisible
+				if entry.ParentAuthorHandle != "" {
+					v.ParentAuthorHandle = entry.ParentAuthorHandle
+				}
+			} else {
+				parentVisible := visible(parent.Entry, s.now())
+				if parentVisible && !parent.Closed && parent.Entry.TeacherReply {
+					_, parentVisible = s.disclosed(ctx, parent.Entry)
+				}
+				v.ParentVisible = &parentVisible
+				if parent.Entry.State != "withdrawn" {
+					handle := parent.Handle
+					if handle == "" {
+						handle = entry.ParentAuthorHandle
+					}
+					v.ParentAuthorHandle = handle
+				}
+			}
+		}
 		v.CanEdit = v.Mine && entry.State == "published" && entry.FirstPublishedAt != nil && s.now().Before(entry.FirstPublishedAt.Add(s.Config.EditWindow))
 		identity := entry.Projection.Identity
 		if closed[entry.Owner] {

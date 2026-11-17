@@ -52,6 +52,8 @@ type Requirement struct {
 	State string `json:"state"`
 }
 type Composer struct {
+	OwnDraftID      string             `json:"own_draft_id,omitempty"`
+	OwnEntryIDs     []string           `json:"own_entry_ids,omitempty"`
 	TeacherRequired bool               `json:"teacher_required,omitempty"`
 	Disclosures     []DisclosureOption `json:"disclosures,omitempty"`
 	TeacherReply    bool               `json:"teacher_reply,omitempty"`
@@ -88,6 +90,7 @@ type Input struct {
 	Disclosures []string `json:"disclosures,omitempty"`
 	Kind        string   `json:"kind"`
 	TargetID    string   `json:"target_id"`
+	ParentID    string   `json:"parent_id,omitempty"`
 	TermID      string   `json:"term_id,omitempty"`
 	TeacherID   string   `json:"teacher_id,omitempty"`
 	Title       string   `json:"title"`
@@ -98,30 +101,31 @@ type Input struct {
 
 // Entry is a private persistence model. Public responses always use View.
 type Entry struct {
-	ActivityTargetID string      `json:"activity_target_id"`
-	ChangeReason     string      `json:"change_reason,omitempty"`
-	ChangeOrigin     string      `json:"change_origin,omitempty"`
-	Featured         bool        `json:"featured,omitempty"`
-	TeacherReply     bool        `json:"teacher_reply,omitempty"`
-	DisclosureCourse string      `json:"disclosure_course,omitempty"`
-	DisclosureTerm   string      `json:"disclosure_term,omitempty"`
-	ID               string      `json:"id"`
-	RootID           string      `json:"root_id"`
-	ParentID         string      `json:"parent_id,omitempty"`
-	Owner            string      `json:"owner"`
-	SchoolID         string      `json:"school_id"`
-	Input            Input       `json:"input"`
-	TeacherIDs       []string    `json:"teacher_ids"`
-	Evidence         []Evidence  `json:"evidence"`
-	State            string      `json:"state"`
-	Revision         int64       `json:"revision"`
-	FirstPublishedAt *time.Time  `json:"first_published_at"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
-	ExpiresAt        *time.Time  `json:"expires_at"`
-	RuleVersion      string      `json:"rule_version"`
-	Projection       *Projection `json:"-"`
-	ReviewRequested  bool        `json:"review_requested"`
+	ActivityTargetID   string      `json:"activity_target_id"`
+	ParentAuthorHandle string      `json:"parent_author_handle,omitempty"`
+	ChangeReason       string      `json:"change_reason,omitempty"`
+	ChangeOrigin       string      `json:"change_origin,omitempty"`
+	Featured           bool        `json:"featured,omitempty"`
+	TeacherReply       bool        `json:"teacher_reply,omitempty"`
+	DisclosureCourse   string      `json:"disclosure_course,omitempty"`
+	DisclosureTerm     string      `json:"disclosure_term,omitempty"`
+	ID                 string      `json:"id"`
+	RootID             string      `json:"root_id"`
+	ParentID           string      `json:"parent_id,omitempty"`
+	Owner              string      `json:"owner"`
+	SchoolID           string      `json:"school_id"`
+	Input              Input       `json:"input"`
+	TeacherIDs         []string    `json:"teacher_ids"`
+	Evidence           []Evidence  `json:"evidence"`
+	State              string      `json:"state"`
+	Revision           int64       `json:"revision"`
+	FirstPublishedAt   *time.Time  `json:"first_published_at"`
+	CreatedAt          time.Time   `json:"created_at"`
+	UpdatedAt          time.Time   `json:"updated_at"`
+	ExpiresAt          *time.Time  `json:"expires_at"`
+	RuleVersion        string      `json:"rule_version"`
+	Projection         *Projection `json:"-"`
+	ReviewRequested    bool        `json:"review_requested"`
 }
 type Projection struct {
 	Identity                   Identity
@@ -138,29 +142,31 @@ type Author struct {
 	Profile     *Profile           `json:"profile,omitempty"`
 }
 type View struct {
-	ReplyCount   *int       `json:"reply_count,omitempty"`
-	ReplyPreview *[]View    `json:"reply_preview,omitempty"`
-	Featured     bool       `json:"featured,omitempty"`
-	CanEdit      bool       `json:"can_edit"`
-	State        string     `json:"state"`
-	ID           string     `json:"id"`
-	RootID       string     `json:"root_id"`
-	ParentID     string     `json:"parent_id,omitempty"`
-	Kind         string     `json:"kind"`
-	SchoolID     string     `json:"school_id"`
-	TargetID     string     `json:"target_id"`
-	TermID       string     `json:"term_id,omitempty"`
-	TeacherID    string     `json:"teacher_id,omitempty"`
-	Title        string     `json:"title"`
-	Body         string     `json:"body"`
-	Ratings      [5]int     `json:"ratings"`
-	Author       Author     `json:"author"`
-	Revision     int64      `json:"revision"`
-	PublishedAt  *time.Time `json:"published_at"`
-	Upvotes      int        `json:"upvotes"`
-	Downvotes    int        `json:"downvotes"`
-	MyVote       int        `json:"my_vote"`
-	Mine         bool       `json:"mine"`
+	ReplyCount         *int       `json:"reply_count,omitempty"`
+	ReplyPreview       *[]View    `json:"reply_preview,omitempty"`
+	Featured           bool       `json:"featured,omitempty"`
+	CanEdit            bool       `json:"can_edit"`
+	State              string     `json:"state"`
+	ID                 string     `json:"id"`
+	RootID             string     `json:"root_id"`
+	ParentID           string     `json:"parent_id,omitempty"`
+	ParentAuthorHandle string     `json:"parent_author_handle,omitempty"`
+	ParentVisible      *bool      `json:"parent_visible,omitempty"`
+	Kind               string     `json:"kind"`
+	SchoolID           string     `json:"school_id"`
+	TargetID           string     `json:"target_id"`
+	TermID             string     `json:"term_id,omitempty"`
+	TeacherID          string     `json:"teacher_id,omitempty"`
+	Title              string     `json:"title"`
+	Body               string     `json:"body"`
+	Ratings            [5]int     `json:"ratings"`
+	Author             Author     `json:"author"`
+	Revision           int64      `json:"revision"`
+	PublishedAt        *time.Time `json:"published_at"`
+	Upvotes            int        `json:"upvotes"`
+	Downvotes          int        `json:"downvotes"`
+	MyVote             int        `json:"my_vote"`
+	Mine               bool       `json:"mine"`
 }
 type Result struct {
 	ID        string     `json:"id"`
@@ -177,6 +183,7 @@ type Action struct {
 type Draft struct {
 	ReferenceIDs   []string  `json:"trusted_reference_ids,omitempty"`
 	ReferenceState string    `json:"reference_state,omitempty"`
+	RootID         string    `json:"root_id,omitempty"`
 	ID             string    `json:"id"`
 	Revision       int64     `json:"revision"`
 	Owner          string    `json:"owner"`

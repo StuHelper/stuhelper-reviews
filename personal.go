@@ -13,10 +13,62 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validKey(key) || in.Kind == "reply" || validate(in, true) != nil || revision < 0 {
+	if !validKey(key) || validate(in, true) != nil || revision < 0 || (in.Kind == "reply" && !validID(in.InputParentID())) {
 		return out, ErrInput
 	}
-	if len(in.Disclosures) > 0 {
+	var draftRootID string
+	if in.Kind == "reply" {
+		if len(in.Disclosures) > 0 {
+			if err := s.requirePublicDisclosure(ctx, in.ParentID); err != nil {
+				return out, err
+			}
+		}
+		var base, root Entry
+		var foundParent bool
+		err := s.Repo.Transaction(ctx, func(t Transaction) error {
+			b, err := s.accessible(t, in.ParentID)
+			if errors.Is(err, ErrNotFound) {
+				if len(in.Disclosures) > 0 {
+					return err
+				}
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			r, err := s.accessible(t, b.RootID)
+			if errors.Is(err, ErrNotFound) {
+				if len(in.Disclosures) > 0 {
+					return err
+				}
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			draftRootID = b.RootID
+			base = b
+			root = r
+			foundParent = true
+			return nil
+		})
+		if err != nil {
+			return out, err
+		}
+		if foundParent && !s.sameTarget(ctx, root.Input.Kind, base.Input.TargetID, in.TargetID) {
+			return out, ErrInput
+		}
+		if len(in.Disclosures) > 0 && foundParent {
+			course, term := "", ""
+			if root.Input.Kind == "course" {
+				course = root.Input.TargetID
+				term = root.Input.TermID
+			}
+			if _, err := s.validateDisclosures(ctx, p, root.SchoolID, course, term, in); err != nil {
+				return out, err
+			}
+		}
+	} else if len(in.Disclosures) > 0 {
 		kind := "course"
 		course := in.TargetID
 		if in.Kind == "mentor" {
@@ -46,6 +98,9 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 		Revision int64
 	}{in, revision})
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		if e := t.Lock("draft-owner:" + p.Subject); e != nil {
+			return e
+		}
 		if e := t.Lock("draft:" + id); e != nil {
 			return e
 		}
@@ -61,13 +116,28 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 		if e != nil && !errors.Is(e, ErrNotFound) {
 			return e
 		}
-		if e == nil && old.Owner != p.Subject {
+		isNew := errors.Is(e, ErrNotFound)
+		if !isNew && old.Owner != p.Subject {
 			return ErrNotFound
 		}
 		if old.Revision != revision {
 			return ErrConflict
 		}
-		v := Draft{ID: id, Revision: old.Revision + 1, Owner: p.Subject, Input: in, UpdatedAt: s.now()}
+		if isNew {
+			if port, ok := t.(PersonalContextTransaction); ok {
+				count, err := port.DraftCount(p.Subject)
+				if err != nil {
+					return err
+				}
+				if count >= s.maxDrafts() {
+					return ErrConflict
+				}
+			}
+		}
+		if draftRootID == "" && !isNew && old.Input.ParentID == in.ParentID {
+			draftRootID = old.RootID
+		}
+		v := Draft{RootID: draftRootID, ID: id, Revision: old.Revision + 1, Owner: p.Subject, Input: in, UpdatedAt: s.now()}
 		v.ReferenceIDs, v.ReferenceState = mergeDraftReferences(old.ReferenceIDs, verified, in, referenceState)
 		if e = t.SaveDraft(v); e != nil {
 			return e
@@ -76,6 +146,10 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
 	})
 	return out, err
+}
+
+func (in Input) InputParentID() string {
+	return in.ParentID
 }
 func (s *Service) GetDraft(ctx context.Context, p Principal, id string) (DraftView, error) {
 	var out DraftView
@@ -176,7 +250,7 @@ func (s *Service) Drafts(ctx context.Context, p Principal, after string, limit i
 		}
 		for _, v := range withdrawn {
 			if v.ExpiresAt != nil && s.now().Before(*v.ExpiresAt) {
-				out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input, ReferenceIDs: draftReferenceIDs(v.Input), ReferenceState: "verified", ExpiresAt: v.ExpiresAt, Withdrawn: true})
+				out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input, ReferenceIDs: draftReferenceIDs(v.Input), ReferenceState: "verified", ExpiresAt: v.ExpiresAt, Withdrawn: true, RootID: v.RootID, ParentID: v.ParentID})
 			}
 		}
 		return nil

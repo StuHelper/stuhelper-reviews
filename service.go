@@ -15,12 +15,12 @@ import (
 
 type Config struct {
 	EditWindow, DraftLifetime time.Duration
-	MinSamples                int
+	MinSamples, MaxDrafts     int
 	Recommendations           RecommendationPolicy
 }
 
 func DefaultConfig() Config {
-	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1, Recommendations: DefaultRecommendationPolicy()}
+	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1, MaxDrafts: DefaultMaxDrafts, Recommendations: DefaultRecommendationPolicy()}
 }
 
 type Service struct {
@@ -44,6 +44,9 @@ func New(repo Repository, catalog Catalog, access Access, moderation Moderation,
 	}
 	if repo == nil || catalog == nil || access == nil || moderation == nil || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 {
 		return nil, ErrInput
+	}
+	if c.MaxDrafts <= 0 {
+		c.MaxDrafts = DefaultMaxDrafts
 	}
 	return &Service{Repo: repo, Catalog: catalog, Access: access, Moderation: moderation, Profiles: profiles, Config: c}, nil
 }
@@ -94,7 +97,7 @@ func validate(in Input, draft bool) error {
 		return ErrInput
 	}
 	if in.Kind == "course" {
-		if (!draft || in.TermID != "") && !validID(in.TermID) || in.TeacherID != "" && !validID(in.TeacherID) {
+		if in.ParentID != "" || (!draft || in.TermID != "") && !validID(in.TermID) || in.TeacherID != "" && !validID(in.TeacherID) {
 			return ErrInput
 		}
 		for _, v := range in.Ratings {
@@ -103,6 +106,10 @@ func validate(in Input, draft bool) error {
 			}
 		}
 	} else if in.TermID != "" || in.TeacherID != "" || in.Ratings != [5]int{} {
+		return ErrInput
+	} else if in.Kind == "mentor" && in.ParentID != "" {
+		return ErrInput
+	} else if in.Kind == "reply" && in.ParentID != "" && !validID(in.ParentID) {
 		return ErrInput
 	}
 	return nil
@@ -229,6 +236,9 @@ func (s *Service) Create(ctx context.Context, p Principal, key string, in Input)
 func (s *Service) PublishDraft(ctx context.Context, p Principal, id, key string, in PublishDraft) (Result, error) {
 	if !validID(id) || in.Revision < 1 {
 		return Result{}, ErrInput
+	}
+	if in.Input.Kind == "reply" {
+		return s.publishReplyDraft(ctx, p, id, key, in)
 	}
 	return s.create(ctx, p, key, in.Input, id, in.Revision)
 }
@@ -374,23 +384,27 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(parent) || !validKey(key) || in.Kind != "reply" || validate(in, false) != nil {
+	if !validID(parent) || !validKey(key) || in.Kind != "reply" || (in.ParentID != "" && in.ParentID != parent) || validate(in, false) != nil {
 		return out, ErrInput
 	}
 	if err := s.requirePublicDisclosure(ctx, parent); err != nil {
 		return out, err
 	}
-	var root Entry
+	var baseEntry, root Entry
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		base, e := s.accessible(t, parent)
+		var e error
+		baseEntry, e = s.accessible(t, parent)
 		if e != nil {
 			return e
 		}
-		root, e = s.accessible(t, base.RootID)
+		root, e = s.accessible(t, baseEntry.RootID)
 		return e
 	})
 	if err != nil {
 		return out, err
+	}
+	if !s.sameTarget(ctx, root.Input.Kind, baseEntry.Input.TargetID, in.TargetID) {
+		return out, ErrInput
 	}
 	course, term := "", ""
 	if root.Input.Kind == "course" {
@@ -434,8 +448,9 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 			out = cached
 			return nil
 		}
-		if in.TargetID != base.Input.TargetID {
-			return ErrInput
+		parentIdentity, e := t.Identity(base.RootID, base.Owner)
+		if e != nil && !errors.Is(e, ErrNotFound) {
+			return e
 		}
 		identity, e := t.Identity(base.RootID, p.Subject)
 		if errors.Is(e, ErrNotFound) {
@@ -448,7 +463,7 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		}
 		in.Signed = identity.Signed
 		now := s.now()
-		entry := Entry{ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
+		entry := Entry{ParentAuthorHandle: parentIdentity.Handle, ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
 		state, e := s.check(ctx, entry)
 		if e != nil {
 			return e

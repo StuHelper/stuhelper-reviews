@@ -20,7 +20,7 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 	var checkErr error
 	var school, course string
 	if kind == "reply" {
-		var root Entry
+		var base, root Entry
 		var identity Identity
 		if parent == "" {
 			return out, ErrInput
@@ -29,16 +29,14 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 			return out, err
 		}
 		err := s.Repo.Transaction(ctx, func(t Transaction) error {
-			base, e := s.accessible(t, parent)
+			var e error
+			base, e = s.accessible(t, parent)
 			if e != nil {
 				return e
 			}
 			root, e = s.accessible(t, base.RootID)
 			if e != nil {
 				return e
-			}
-			if base.Input.TargetID != target {
-				return ErrInput
 			}
 			identity, e = t.Identity(base.RootID, p.Subject)
 			if errors.Is(e, ErrNotFound) {
@@ -48,6 +46,9 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 		})
 		if err != nil {
 			return out, err
+		}
+		if !s.sameTarget(ctx, root.Input.Kind, base.Input.TargetID, target) {
+			return out, ErrInput
 		}
 		school = root.SchoolID
 		if school != scope {
@@ -72,6 +73,7 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 		out.TeacherReply = disclosure.ownCourse
 		if !disclosure.canDiscloseRequired() {
 			out.State = "disclosure_required"
+			_ = s.attachOwnComposerContext(ctx, p, kind, target, term, parent, &out)
 			return out, nil
 		}
 		grant, checkErr = s.replyGrant(ctx, p, root, disclosure)
@@ -122,6 +124,9 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 		out.State = "unavailable"
 	default:
 		return out, checkErr
+	}
+	if err := s.attachOwnComposerContext(ctx, p, kind, target, term, parent, &out); err != nil {
+		return Composer{}, err
 	}
 	return out, nil
 }

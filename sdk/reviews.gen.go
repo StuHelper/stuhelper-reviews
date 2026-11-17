@@ -444,14 +444,20 @@ type Band struct {
 
 // Composer defines model for Composer.
 type Composer struct {
-	Allowed      bool                `json:"allowed"`
-	Disclosures  *[]DisclosureOption `json:"disclosures,omitempty"`
-	Identity     ComposerIdentity    `json:"identity"`
-	Requirements []Requirement       `json:"requirements"`
-	RuleVersion  string              `json:"rule_version"`
-	State        ComposerState       `json:"state"`
-	TeacherIds   []string            `json:"teacher_ids"`
-	TeacherReply *bool               `json:"teacher_reply,omitempty"`
+	Allowed     bool                `json:"allowed"`
+	Disclosures *[]DisclosureOption `json:"disclosures,omitempty"`
+	Identity    ComposerIdentity    `json:"identity"`
+
+	// OwnDraftId 请求人在当前目标（及所选学期或父回复）下最近保存的既有草稿或未过期撤回草稿 ID，供移动端断点续写。
+	OwnDraftId *string `json:"own_draft_id,omitempty"`
+
+	// OwnEntryIds 请求人在当前目标（及所选学期或父回复）下已保存的非删除、未过期评价或回复 ID 列表。
+	OwnEntryIds  *[]string     `json:"own_entry_ids,omitempty"`
+	Requirements []Requirement `json:"requirements"`
+	RuleVersion  string        `json:"rule_version"`
+	State        ComposerState `json:"state"`
+	TeacherIds   []string      `json:"teacher_ids"`
+	TeacherReply *bool         `json:"teacher_reply,omitempty"`
 
 	// TeacherRequired true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。
 	TeacherRequired *bool `json:"teacher_required,omitempty"`
@@ -518,8 +524,11 @@ type Input struct {
 	// Disclosures Only field names. Values are obtained from current authoritative, authorized facts. Defaults to no disclosure.
 	Disclosures *[]DisclosureKey `json:"disclosures,omitempty"`
 	Kind        InputKind        `json:"kind"`
-	Ratings     []int            `json:"ratings"`
-	Signed      bool             `json:"signed"`
+
+	// ParentId 当 kind=reply 保存或发布草稿时绑定的父评价或父回复 ID；课程与导师评价禁止传入。
+	ParentId *string `json:"parent_id,omitempty"`
+	Ratings  []int   `json:"ratings"`
+	Signed   bool    `json:"signed"`
 
 	// TargetId  体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。
 	TargetId string `json:"target_id"`
@@ -564,8 +573,11 @@ type Page struct {
 type PendingCourse struct {
 	CourseId   string `json:"course_id"`
 	CourseName string `json:"course_name"`
-	TermId     string `json:"term_id"`
-	TermName   string `json:"term_name"`
+
+	// DraftId 本人在该待评价课程及学期下已保存的普通草稿 ID，无匹配草稿时省略。
+	DraftId  *string `json:"draft_id,omitempty"`
+	TermId   string  `json:"term_id"`
+	TermName string  `json:"term_name"`
 }
 
 // PendingCourses defines model for PendingCourses.
@@ -715,18 +727,24 @@ type TermSummary struct {
 
 // View defines model for View.
 type View struct {
-	Author      Author     `json:"author"`
-	Body        string     `json:"body"`
-	CanEdit     bool       `json:"can_edit"`
-	Downvotes   int        `json:"downvotes"`
-	Featured    *bool      `json:"featured,omitempty"`
-	Id          string     `json:"id"`
-	Kind        string     `json:"kind"`
-	Mine        bool       `json:"mine"`
-	MyVote      int        `json:"my_vote"`
-	ParentId    *string    `json:"parent_id,omitempty"`
-	PublishedAt *time.Time `json:"published_at"`
-	Ratings     []int      `json:"ratings"`
+	Author    Author `json:"author"`
+	Body      string `json:"body"`
+	CanEdit   bool   `json:"can_edit"`
+	Downvotes int    `json:"downvotes"`
+	Featured  *bool  `json:"featured,omitempty"`
+	Id        string `json:"id"`
+	Kind      string `json:"kind"`
+	Mine      bool   `json:"mine"`
+	MyVote    int    `json:"my_vote"`
+
+	// ParentAuthorHandle 回复所指向父楼层作者的讨论内脱敏标识（如 author 或匿名讨论句柄），根评价或撤回父帖省略。
+	ParentAuthorHandle *string `json:"parent_author_handle,omitempty"`
+	ParentId           *string `json:"parent_id,omitempty"`
+
+	// ParentVisible 回复所指向父楼层当前是否对外公开可见（含认证教师回复实名授权核验），不返回不可见父楼层正文；根评价省略。
+	ParentVisible *bool      `json:"parent_visible,omitempty"`
+	PublishedAt   *time.Time `json:"published_at"`
+	Ratings       []int      `json:"ratings"`
 
 	// ReplyCount 评价列表中的根评价附带当前请求人可见的已发布回复总数，包括嵌套回复。删除、隐藏、撤回、到期及必需实名授权撤销的回复不计入。本人列表仅在仍有当前内容阅读权限时提供；详情和回复行可省略。 仅 include_reply_preview=true 时返回。
 	ReplyCount *int `json:"reply_count,omitempty"`

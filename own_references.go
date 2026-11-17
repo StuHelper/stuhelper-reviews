@@ -138,6 +138,23 @@ func (s *Service) verifyDraftReferences(ctx context.Context, p Principal, in Inp
 	kind := "course"
 	if in.Kind == "mentor" {
 		kind = "teacher"
+	} else if in.Kind == "reply" && in.ParentID != "" {
+		var rootKind string
+		_ = s.Repo.Transaction(call, func(t Transaction) error {
+			base, err := t.Entry(in.ParentID)
+			if err != nil {
+				return err
+			}
+			root, err := t.Entry(base.RootID)
+			if err != nil {
+				return err
+			}
+			rootKind = root.Input.Kind
+			return nil
+		})
+		if rootKind == "mentor" {
+			kind = "teacher"
+		}
 	}
 	pairs := []struct{ kind, id string }{{kind, in.TargetID}, {"term", in.TermID}, {"teacher", in.TeacherID}}
 	ids := []string{}
@@ -183,5 +200,5 @@ func draftView(d Draft) DraftView {
 	if state == "" {
 		state = "unverified"
 	}
-	return DraftView{ID: d.ID, Revision: d.Revision, Input: d.Input, ReferenceIDs: ids, ReferenceState: state}
+	return DraftView{ID: d.ID, Revision: d.Revision, Input: d.Input, ReferenceIDs: ids, ReferenceState: state, RootID: d.RootID, ParentID: d.Input.ParentID}
 }
