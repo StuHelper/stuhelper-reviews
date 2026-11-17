@@ -152,11 +152,11 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	if len(evidence) > 1000 {
 		return target, nil, nil, g, ErrUnavailable
 	}
-	if g.EnrollmentRequired && len(evidence) == 0 {
+	if (g.EnrollmentRequired || target.TeacherRequired) && len(evidence) == 0 {
 		g.Requirements = append(g.Requirements, Requirement{"course_enrollment", "missing"})
 		return target, nil, nil, g, ErrEnrollment
 	}
-	if g.EnrollmentRequired {
+	if g.EnrollmentRequired || target.TeacherRequired {
 		g.Requirements = append(g.Requirements, Requirement{"course_enrollment", "satisfied"})
 	}
 	ids := []string{}
@@ -243,6 +243,9 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 	target, evidence, ids, g, err := s.prepare(ctx, p, in)
 	if err != nil {
 		return out, err
+	}
+	if target.TeacherRequired && in.TeacherID == "" {
+		return out, ErrInput
 	}
 	if _, err = s.validateDisclosures(ctx, p, target.SchoolID, func() string {
 		if in.Kind == "course" {
@@ -625,7 +628,10 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 			return err
 		}
 	} else {
-		_, _, _, grant, err := s.prepare(ctx, p, in)
+		target, _, _, grant, err := s.prepare(ctx, p, in)
+		if err == nil && target.TeacherRequired && in.TeacherID == "" {
+			return ErrInput
+		}
 		if err != nil {
 			return err
 		}

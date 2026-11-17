@@ -452,6 +452,9 @@ type Composer struct {
 	State        ComposerState       `json:"state"`
 	TeacherIds   []string            `json:"teacher_ids"`
 	TeacherReply *bool               `json:"teacher_reply,omitempty"`
+
+	// TeacherRequired true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。
+	TeacherRequired *bool `json:"teacher_required,omitempty"`
 }
 
 // ComposerIdentity defines model for Composer.Identity.
@@ -517,10 +520,14 @@ type Input struct {
 	Kind        InputKind        `json:"kind"`
 	Ratings     []int            `json:"ratings"`
 	Signed      bool             `json:"signed"`
-	TargetId    string           `json:"target_id"`
-	TeacherId   *string          `json:"teacher_id,omitempty"`
-	TermId      *string          `json:"term_id,omitempty"`
-	Title       string           `json:"title"`
+
+	// TargetId  体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。
+	TargetId string `json:"target_id"`
+
+	// TeacherId  体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。
+	TeacherId *string `json:"teacher_id,omitempty"`
+	TermId    *string `json:"term_id,omitempty"`
+	Title     string  `json:"title"`
 }
 
 // InputKind defines model for Input.Kind.
@@ -730,11 +737,15 @@ type View struct {
 	RootId       string  `json:"root_id"`
 	SchoolId     string  `json:"school_id"`
 	State        string  `json:"state"`
-	TargetId     string  `json:"target_id"`
-	TeacherId    *string `json:"teacher_id,omitempty"`
-	TermId       *string `json:"term_id,omitempty"`
-	Title        string  `json:"title"`
-	Upvotes      int     `json:"upvotes"`
+
+	// TargetId  体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。
+	TargetId string `json:"target_id"`
+
+	// TeacherId  体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。
+	TeacherId *string `json:"teacher_id,omitempty"`
+	TermId    *string `json:"term_id,omitempty"`
+	Title     string  `json:"title"`
+	Upvotes   int     `json:"upvotes"`
 }
 
 // ListReviewsParams defines parameters for ListReviews.
