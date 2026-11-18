@@ -18,6 +18,13 @@ type PresentationView struct {
 	Source     string        `json:"source"`
 }
 
+func withDefaultRatingTexts(v Presentation) Presentation {
+	if len(v.RatingTexts) == 0 {
+		v.RatingTexts = DefaultRatingTexts()
+	}
+	return v
+}
+
 func (s *Service) Presentation(ctx context.Context, school string) (PresentationView, error) {
 	out := PresentationView{}
 	if school != "*" && !validID(school) {
@@ -26,21 +33,21 @@ func (s *Service) Presentation(ctx context.Context, school string) (Presentation
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		local, e := t.Presentation(school)
 		if e == nil {
-			out = configuredPresentation(local)
-			return nil
+			out, e = effectivePresentation(t, local)
+			return e
 		}
 		if !errors.Is(e, ErrNotFound) {
 			return e
 		}
 		global, e := t.Presentation("*")
 		if e == nil {
-			out = PresentationView{global, nil, "global"}
+			out = PresentationView{withDefaultRatingTexts(global), nil, "global"}
 			return nil
 		}
 		if !errors.Is(e, ErrNotFound) {
 			return e
 		}
-		out = PresentationView{Presentation{SchoolID: school, RatingTexts: map[string][][]string{}}, nil, "default"}
+		out = PresentationView{Presentation{SchoolID: school, RatingTexts: DefaultRatingTexts()}, nil, "default"}
 		return nil
 	})
 	return out, err
@@ -51,6 +58,20 @@ func configuredPresentation(v Presentation) PresentationView {
 		source = "global"
 	}
 	return PresentationView{Effective: v, Configured: &v, Source: source}
+}
+
+// Effective values may inherit the global texts while Configured keeps the school's stored revision.
+func effectivePresentation(t Transaction, v Presentation) (PresentationView, error) {
+	view := configuredPresentation(v)
+	if len(v.RatingTexts) == 0 && v.SchoolID != "*" {
+		global, err := t.Presentation("*")
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return PresentationView{}, err
+		}
+		view.Effective.RatingTexts = global.RatingTexts
+	}
+	view.Effective = withDefaultRatingTexts(view.Effective)
+	return view, nil
 }
 func (s *Service) AdminPresentation(ctx context.Context, p Principal, school string) (PresentationView, error) {
 	if school != "*" && !validID(school) {
@@ -65,12 +86,11 @@ func validPresentation(v Presentation) bool {
 	if v.SchoolID != "*" && !validID(v.SchoolID) || v.Revision < 0 {
 		return false
 	}
-	locales := []string{"zh-CN", "en-US", "ja-JP", "ko-KR", "fr-FR", "es-ES", "ru-RU", "ar-EG"}
-	if len(v.RatingTexts) != 0 && len(v.RatingTexts) != 8 {
+	if len(v.RatingTexts) != 0 && len(v.RatingTexts) != len(SupportedLocales) {
 		return false
 	}
 	for locale, dimensions := range v.RatingTexts {
-		if !slices.Contains(locales, locale) || len(dimensions) != 5 {
+		if !slices.Contains(SupportedLocales[:], locale) || len(dimensions) != len(RatingDimensionKeys) {
 			return false
 		}
 		for _, texts := range dimensions {
@@ -101,6 +121,7 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 		saved.RatingTexts = map[string][][]string{}
 	}
 
+	out := configuredPresentation(saved)
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		if e := t.Lock("presentation:" + in.SchoolID); e != nil {
 			return e
@@ -109,6 +130,9 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 		if e == nil && s.now().Before(oldReplay.Until) {
 			if oldReplay.Digest != h {
 				return ErrConflict
+			}
+			if oldReplay.InheritedRatingTexts != nil {
+				out.Effective.RatingTexts = oldReplay.InheritedRatingTexts
 			}
 			return nil
 		}
@@ -128,12 +152,20 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 		if e = t.Event(Event{ID: rk, Type: "reviews.presentation.v1", Subject: in.SchoolID, SchoolID: in.SchoolID, Actor: p.Subject, Revision: saved.Revision, At: s.now()}); e != nil {
 			return e
 		}
-		return t.SaveReplay(rk, Replay{Owner: p.Subject, Digest: h, ObjectID: in.SchoolID, Until: s.now().Add(24 * time.Hour)})
+		out, e = effectivePresentation(t, saved)
+		if e != nil {
+			return e
+		}
+		receipt := Replay{Owner: p.Subject, Digest: h, ObjectID: in.SchoolID, Until: s.now().Add(24 * time.Hour)}
+		if len(saved.RatingTexts) == 0 {
+			receipt.InheritedRatingTexts = out.Effective.RatingTexts
+		}
+		return t.SaveReplay(rk, receipt)
 	})
 	if err != nil {
 		return PresentationView{}, err
 	}
-	return configuredPresentation(saved), nil
+	return out, nil
 }
 
 type AttributionPreview struct {

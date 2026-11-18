@@ -2817,7 +2817,8 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 5
-            }
+            },
+            "description": "固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。"
           },
           "signed": {
             "type": "boolean"
@@ -2912,7 +2913,8 @@
           "level": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 5
+            "maximum": 5,
+            "description": "五级展示等级：0=样本不足（对应 rating_texts[locale][dim][0]），1..5=第一级至第五级（对应 rating_texts[locale][dim][1..5]）。"
           },
           "samples": {
             "type": "integer"
@@ -2977,7 +2979,8 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 5
-            }
+            },
+            "description": "固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。"
           },
           "author": {
             "$ref": "#/components/schemas/Author"
@@ -3073,7 +3076,8 @@
             "maxItems": 5,
             "items": {
               "$ref": "#/components/schemas/Band"
-            }
+            },
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           }
         },
         "required": [
@@ -3100,7 +3104,8 @@
             "maxItems": 5,
             "items": {
               "$ref": "#/components/schemas/Band"
-            }
+            },
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           },
           "from": {
             "type": "string",
@@ -3503,6 +3508,7 @@
       },
       "RatingTexts": {
         "type": "object",
+        "description": "按八种支持语言（zh-CN、en-US、ja-JP、ko-KR、fr-FR、es-ES、ru-RU、ar-EG，其中 ar-EG 为 RTL 文案）组织的五维评分提示文案字典。rating_texts[locale][dim][score] 中 dim 固定为 0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；score 固定为 0=暂无足够数据/未选择，1..5=第一级至第五级展示与无障碍 aria-valuetext 文案（难度与工作量使用程度描述而非质量好坏）。",
         "additionalProperties": {
           "type": "array",
           "minItems": 5,
@@ -3795,7 +3801,8 @@
               "$ref": "#/components/schemas/Band"
             },
             "minItems": 5,
-            "maxItems": 5
+            "maxItems": 5,
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           },
           "recommendation": {
             "$ref": "#/components/schemas/Recommendation"
@@ -3841,7 +3848,8 @@
               "$ref": "#/components/schemas/Band"
             },
             "minItems": 5,
-            "maxItems": 5
+            "maxItems": 5,
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           },
           "recommendation": {
             "$ref": "#/components/schemas/Recommendation"
@@ -3852,7 +3860,8 @@
               "$ref": "#/components/schemas/RatingDistribution"
             },
             "minItems": 5,
-            "maxItems": 5
+            "maxItems": 5,
+            "description": "五维评分分布柱状比例，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；weights 下标 0..4 依次对应 1..5 分档。"
           },
           "terms": {
             "type": "array",

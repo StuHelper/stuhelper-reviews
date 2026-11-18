@@ -250,11 +250,12 @@ type Aggregate struct {
 	Counts   [5]int
 }
 type Replay struct {
-	Owner    string
-	Digest   string
-	Result   Result
-	Until    time.Time
-	ObjectID string
+	InheritedRatingTexts map[string][][]string `json:",omitempty"`
+	Owner                string
+	Digest               string
+	Result               Result
+	Until                time.Time
+	ObjectID             string
 }
 type Event struct {
 	Reason                             string `json:"-"`

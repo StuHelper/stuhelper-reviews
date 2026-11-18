@@ -119,6 +119,7 @@ scenario_tests:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
     - presentation_test.go#TestPresentationHTTPPreservesRatingTexts
     - presentation_test.go#TestDecisionContractAndPresentationReplay
+    - rating_texts_test.go#TestDefaultRatingTextsCoverEightLocalesAndPresentationFallback
   CM-09:
     - administration_test.go#TestAdministrativeReadsAuditEverySuccessfulCall
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
