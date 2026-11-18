@@ -13,7 +13,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validKey(key) || in.Kind == "reply" || validate(in, true) != nil || revision < 0 {
+	if !ValidIdempotencyKey(key) || in.Kind == "reply" || validate(in, true) != nil || revision < 0 {
 		return out, ErrInput
 	}
 	if len(in.Disclosures) > 0 {
@@ -119,7 +119,7 @@ func (s *Service) DeleteDraft(ctx context.Context, p Principal, id, key string, 
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(id) || !validKey(key) {
+	if !validID(id) || !ValidIdempotencyKey(key) {
 		return out, ErrInput
 	}
 	rk := hash([]string{p.Subject, "delete_draft", id, key})

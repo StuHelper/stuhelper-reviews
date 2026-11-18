@@ -9,14 +9,20 @@ func (s *Service) contentScope(ctx context.Context, p Principal, school string) 
 	if p.Subject == "" {
 		return "", ErrUnauthenticated
 	}
+	if school != "" && !validID(school) {
+		return "", ErrInput
+	}
 	callCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	grant, e := s.authorize(callCtx, p, "read_full", school)
 	if e != nil {
 		return "", e
 	}
-	if !validID(grant.SchoolID) || school != "" && school != grant.SchoolID {
+	if !validID(grant.SchoolID) {
 		return "", ErrUnavailable
+	}
+	if school != "" && school != grant.SchoolID {
+		return "", ErrForbidden
 	}
 	return grant.SchoolID, nil
 }
@@ -35,6 +41,9 @@ func (s *Service) ReadStatsPage(ctx context.Context, p Principal, kind, target s
 	return s.statsPage(ctx, kind, target, from, until, after, limit, school)
 }
 func (s *Service) ReadPresentation(ctx context.Context, p Principal, school string) (PresentationView, error) {
+	if !validID(school) {
+		return PresentationView{}, ErrInput
+	}
 	scope, e := s.contentScope(ctx, p, school)
 	if e != nil {
 		return PresentationView{}, e

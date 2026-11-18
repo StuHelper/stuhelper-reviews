@@ -26,7 +26,7 @@ func (s *Service) Presentation(ctx context.Context, school string) (Presentation
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		local, e := t.Presentation(school)
 		if e == nil {
-			out = PresentationView{local, &local, "school"}
+			out = configuredPresentation(local)
 			return nil
 		}
 		if !errors.Is(e, ErrNotFound) {
@@ -44,6 +44,22 @@ func (s *Service) Presentation(ctx context.Context, school string) (Presentation
 		return nil
 	})
 	return out, err
+}
+func configuredPresentation(v Presentation) PresentationView {
+	source := "school"
+	if v.SchoolID == "*" {
+		source = "global"
+	}
+	return PresentationView{Effective: v, Configured: &v, Source: source}
+}
+func (s *Service) AdminPresentation(ctx context.Context, p Principal, school string) (PresentationView, error) {
+	if school != "*" && !validID(school) {
+		return PresentationView{}, ErrInput
+	}
+	if _, err := s.authorize(ctx, p, "configure", school); err != nil {
+		return PresentationView{}, err
+	}
+	return s.Presentation(ctx, school)
 }
 func validPresentation(v Presentation) bool {
 	if v.SchoolID != "*" && !validID(v.SchoolID) || v.Revision < 0 {
@@ -71,7 +87,7 @@ func validPresentation(v Presentation) bool {
 	return true
 }
 func (s *Service) SavePresentation(ctx context.Context, p Principal, key string, in Presentation) (PresentationView, error) {
-	if !validKey(key) || !validPresentation(in) {
+	if !ValidIdempotencyKey(key) || !validPresentation(in) {
 		return PresentationView{}, ErrInput
 	}
 	if _, e := s.authorize(ctx, p, "configure", in.SchoolID); e != nil {
@@ -79,6 +95,12 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 	}
 	rk := hash([]string{p.Subject, "presentation", in.SchoolID, key})
 	h := hash(in)
+	saved := in
+	saved.Revision++
+	if saved.RatingTexts == nil {
+		saved.RatingTexts = map[string][][]string{}
+	}
+
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		if e := t.Lock("presentation:" + in.SchoolID); e != nil {
 			return e
@@ -100,14 +122,10 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 		if old.Revision != in.Revision {
 			return ErrConflict
 		}
-		in.Revision++
-		if in.RatingTexts == nil {
-			in.RatingTexts = map[string][][]string{}
-		}
-		if e = t.SavePresentation(in); e != nil {
+		if e = t.SavePresentation(saved); e != nil {
 			return e
 		}
-		if e = t.Event(Event{ID: rk, Type: "reviews.presentation.v1", Subject: in.SchoolID, SchoolID: in.SchoolID, Actor: p.Subject, Revision: in.Revision, At: s.now()}); e != nil {
+		if e = t.Event(Event{ID: rk, Type: "reviews.presentation.v1", Subject: in.SchoolID, SchoolID: in.SchoolID, Actor: p.Subject, Revision: saved.Revision, At: s.now()}); e != nil {
 			return e
 		}
 		return t.SaveReplay(rk, Replay{Digest: h, ObjectID: in.SchoolID, Until: s.now().Add(24 * time.Hour)})
@@ -115,7 +133,7 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 	if err != nil {
 		return PresentationView{}, err
 	}
-	return s.Presentation(ctx, in.SchoolID)
+	return configuredPresentation(saved), nil
 }
 
 type AttributionPreview struct {
