@@ -210,43 +210,35 @@ func (s *Service) summaryMetrics(ctx context.Context, kind, school string, targe
 	if !ok || !s.Config.Recommendations.valid() {
 		return nil, ErrUnavailable
 	}
-	courseAliases, err := port.SummaryAliases(ctx, school, "course")
-	if err != nil {
-		return nil, err
-	}
-	targetAliases := courseAliases
-	if kind == "teacher" {
-		targetAliases, err = port.SummaryAliases(ctx, school, "teacher")
+	query := SummaryQuery{Kind: kind, SchoolID: school, Targets: targets, Charts: charts, From: from, Until: until, Now: s.now()}
+	targeted := len(targets) > 0
+	var err error
+	if targeted {
+		query.TargetAliases, err = s.requestedAliases(ctx, port, school, kind, targets)
 		if err != nil {
 			return nil, err
 		}
-	}
-	termAliases := map[string]string{}
-	if charts {
-		termAliases, err = port.SummaryAliases(ctx, school, "term")
+		query.ExpandedTargets = append(slices.Clone(targets), slices.Collect(maps.Keys(query.TargetAliases))...)
+		if kind == "course" {
+			query.CourseAliases = query.TargetAliases
+		}
+	} else {
+		query.CourseAliases, err = port.SummaryAliases(ctx, school, "course")
 		if err != nil {
 			return nil, err
 		}
-	}
-	var expandedTargets []string
-	if len(targets) > 0 {
-		wanted := make(map[string]bool, len(targets))
-		for _, id := range targets {
-			wanted[id] = true
-		}
-		expandedTargets = slices.Clone(targets)
-		filteredTargetAliases := map[string]string{}
-		for alias, canonical := range targetAliases {
-			if wanted[canonical] && validID(alias) {
-				expandedTargets = append(expandedTargets, alias)
-				filteredTargetAliases[alias] = canonical
+		query.TargetAliases = query.CourseAliases
+		if kind == "teacher" {
+			query.TargetAliases, err = port.SummaryAliases(ctx, school, "teacher")
+			if err != nil {
+				return nil, err
 			}
 		}
-		slices.Sort(expandedTargets)
-		expandedTargets = slices.Compact(expandedTargets)
-		targetAliases = filteredTargetAliases
-		if kind == "course" {
-			courseAliases = filteredTargetAliases
+		if charts {
+			query.TermAliases, err = port.SummaryAliases(ctx, school, "term")
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	var rows []SummaryAggregate
@@ -256,13 +248,93 @@ func (s *Service) summaryMetrics(ctx context.Context, kind, school string, targe
 			return ErrUnavailable
 		}
 		var err error
-		rows, err = reader.SummaryAggregates(SummaryQuery{Kind: kind, SchoolID: school, Targets: targets, ExpandedTargets: expandedTargets, Charts: charts, From: from, Until: until, Now: s.now(), CourseAliases: courseAliases, TargetAliases: targetAliases, TermAliases: termAliases})
+		rows, err = reader.SummaryAggregates(query)
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	return s.foldSummaries(ctx, port, kind, school, rows, charts)
+	if targeted && kind == "teacher" {
+		if err = canonicalizeSummaryRows(ctx, port, school, "course", rows); err != nil {
+			return nil, err
+		}
+	}
+	if targeted && charts {
+		if err = canonicalizeSummaryRows(ctx, port, school, "term", rows); err != nil {
+			return nil, err
+		}
+	}
+	return s.foldSummaries(ctx, port, kind, school, rows, charts, targeted && kind == "teacher")
+}
+
+func (s *Service) requestedAliases(ctx context.Context, port SummaryCatalog, school, kind string, targets []string) (map[string]string, error) {
+	out := map[string]string{}
+	if _, ok := s.Catalog.(ReferenceCatalog); ok {
+		for _, canonical := range targets {
+			ids, err := s.equivalentIDs(ctx, kind, canonical)
+			if err != nil {
+				return nil, err
+			}
+			for _, id := range ids {
+				if id != canonical {
+					out[id] = canonical
+				}
+			}
+		}
+		return out, nil
+	}
+	// Older adapters expose only the school alias map. Keep just this request's targets.
+	aliases, err := port.SummaryAliases(ctx, school, kind)
+	if err != nil {
+		return nil, err
+	}
+	for alias, canonical := range aliases {
+		if _, found := slices.BinarySearch(targets, canonical); found && validID(alias) {
+			out[alias] = canonical
+		}
+	}
+	return out, nil
+}
+
+// Resolve course and term IDs only after the repository has filtered and
+// aggregated the requested targets. Historical IDs absent from catalog stay distinct.
+func canonicalizeSummaryRows(ctx context.Context, port SummaryCatalog, school, kind string, rows []SummaryAggregate) error {
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		id := row.CourseID
+		if kind == "term" {
+			id = row.TermID
+		}
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	aliases := map[string]string{}
+	for batch := range slices.Chunk(slices.Compact(ids), 100) {
+		refs, err := port.SummaryTargets(ctx, kind, batch)
+		if err != nil {
+			return err
+		}
+		for _, id := range batch {
+			ref, ok := refs[id]
+			if !ok {
+				continue
+			}
+			if ref.ID != id || ref.Kind != kind || ref.SchoolID != school || ref.CanonicalID != "" && !validID(ref.CanonicalID) {
+				return ErrUnavailable
+			}
+			aliases[id] = ref.CanonicalID
+		}
+	}
+	for i := range rows {
+		if kind == "term" {
+			rows[i].TermID = canonicalSummaryID(aliases, rows[i].TermID)
+		} else {
+			rows[i].CourseID = canonicalSummaryID(aliases, rows[i].CourseID)
+		}
+	}
+	return nil
 }
 
 type summaryAccumulator struct {
@@ -331,8 +403,8 @@ func (s *Service) summarizeCourses(courses iter.Seq[SummaryAggregate], charts bo
 	return out, recent
 }
 
-func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kind, school string, rows []SummaryAggregate, charts bool) ([]DirectoryReviewMetric, error) {
-	if !charts {
+func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kind, school string, rows []SummaryAggregate, charts, mergeCourses bool) ([]DirectoryReviewMetric, error) {
+	if !charts && !mergeCourses {
 		// Repository groups by canonical target/course with an empty term, so
 		// each row is one course's complete aggregate. Group contiguous targets
 		// without allocating per-target maps or unused chart distributions.
@@ -382,7 +454,7 @@ func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kin
 	}
 	out := make([]DirectoryReviewMetric, 0, len(grouped))
 	for id, group := range grouped {
-		summary, recent := s.summarizeCourses(maps.Values(group.courses), true)
+		summary, recent := s.summarizeCourses(maps.Values(group.courses), charts)
 		summary.TargetID, summary.Kind = id, kind
 		if !charts {
 			summary.Distribution = nil

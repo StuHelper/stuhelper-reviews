@@ -126,6 +126,8 @@ scenario_tests:
     - closure_test.go#TestClosedOwnerKeepsContentWithoutProfileOrDisclosures
     - closure_test.go#TestClosureRejectsPublicationAlreadyWaitingForExternalModeration
   REV-UI-01:
+    - ui_backend_test.go#TestTargetedSummaryUsesScopedCatalogLookups
+    - ui_backend_test.go#TestTeacherSummaryBindsOnlyRequestedAliases
     - ui_backend_test.go#TestSummaryTermsUseCatalogOrderInsteadOfDisplayNames
     - ui_backend_test.go#TestUISummariesVisibleSamplesTermsTeacherWeightsAndAliases
     - ui_backend_test.go#TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan
@@ -134,6 +136,7 @@ scenario_tests:
   REV-UI-03:
     - ui_backend_test.go#TestUIOwnOverviewPendingOwnershipExpiryAndUnavailable
   REV-UI-04:
+    - ui_backend_test.go#TestExistingVotesAndReplayDeadlinesSurviveUpgrade
     - http_compatibility_test.go#TestLegacyReviewHTTPShapeAndExplicitPreviews
     - reply_previews_test.go#TestReplyPreviewsAreBoundedOrderedAndMatchVisibleReplies
     - reply_previews_test.go#TestReplyPreviewsRecheckMandatoryTeacherDisclosure

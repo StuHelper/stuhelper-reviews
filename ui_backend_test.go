@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/StuHelper/stuhelper-reviews/postgres"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -434,5 +435,110 @@ func TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan(t *testing.T) {
 	stillPending, err := repo.PendingOutbox(ctx, 100, nil)
 	if err != nil || len(stillPending) == 0 {
 		t.Fatalf("unconfirmed outbox events were lost: %d err=%v", len(stillPending), err)
+	}
+}
+
+func TestExistingVotesAndReplayDeadlinesSurviveUpgrade(t *testing.T) {
+	f := fixture(t)
+	repo, db := database(t)
+	f.service.Repo = repo
+	ctx := context.Background()
+	entry := create(t, f, "old", input("course", "autumn", 4))
+	if _, err := f.service.Action(ctx, r.Principal{Subject: "voter"}, entry.ID, "old", r.Action{Action: "vote", Vote: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DROP TRIGGER sync_entry_upvotes ON reviews.votes; ALTER TABLE reviews.entries DROP COLUMN upvotes; ALTER TABLE reviews.replays DROP COLUMN expires_at`); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := db.Exec(postgres.Schema); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := f.service.List(ctx, student, r.Filter{Sort: "upvotes", Limit: 1})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Upvotes != 1 {
+		t.Errorf("legacy counted vote: %+v %v", page, err)
+	}
+	n, err := repo.PruneReplays(ctx, f.now.Add(25*time.Hour), 10)
+	if err != nil || n != 2 {
+		t.Fatal(n, err)
+	}
+}
+
+type summaryQueryRecorder struct {
+	r.Repository
+	seen r.SummaryQuery
+}
+type summaryRecorderTx struct {
+	r.Transaction
+	r.SummaryTransaction
+	rec *summaryQueryRecorder
+}
+
+func (t summaryRecorderTx) SummaryAggregates(q r.SummaryQuery) ([]r.SummaryAggregate, error) {
+	t.rec.seen = q
+	return t.SummaryTransaction.SummaryAggregates(q)
+}
+func (rec *summaryQueryRecorder) Transaction(ctx context.Context, fn func(r.Transaction) error) error {
+	return rec.Repository.Transaction(ctx, func(t r.Transaction) error { return fn(summaryRecorderTx{t, t.(r.SummaryTransaction), rec}) })
+}
+
+func TestTeacherSummaryBindsOnlyRequestedAliases(t *testing.T) {
+	f, port := uiReviewFixture(t)
+	ctx := context.Background()
+	create(t, f, "old", input("old-course", "old-term", 1))
+	create(t, f, "new", input("new-course", "autumn", 5))
+	port.aliases = map[string]map[string]string{"course": {"old-course": "new-course", "other-course": "other"}, "term": {"old-term": "autumn"}, "teacher": {"old-a": "teacher-a", "other-old": "teacher-b"}}
+	rec := &summaryQueryRecorder{Repository: f.service.Repo}
+	f.service.Repo = rec
+	for _, charts := range []bool{false, true} {
+		result, err := f.service.ReadSummaries(ctx, student, "teacher", []string{"teacher-a"}, charts)
+		if err != nil || len(result.Items) != 1 || result.Items[0].Dimensions[0].Courses != 1 || result.Items[0].ReviewCount != 2 {
+			t.Fatal(result, err)
+		}
+		if charts && (len(result.Items[0].Terms) != 1 || result.Items[0].Terms[0].TermID != "autumn") {
+			t.Fatal(result)
+		}
+		if len(rec.seen.TargetAliases) != 1 || len(rec.seen.CourseAliases) != 0 || len(rec.seen.TermAliases) != 0 {
+			t.Error("bound unrelated alias dictionaries to targeted SQL")
+		}
+	}
+}
+
+type boundedSummaryCatalog struct{ *summaryCatalog }
+
+func (c boundedSummaryCatalog) EquivalentIDs(_ context.Context, kind, id string) ([]string, error) {
+	out := []string{id}
+	for alias, canonical := range c.aliases[kind] {
+		if canonical == id {
+			out = append(out, alias)
+		}
+	}
+	return out, nil
+}
+func (c boundedSummaryCatalog) CanonicalCourses(_ context.Context, ids []string) (map[string]string, error) {
+	result := map[string]string{}
+	for _, id := range ids {
+		result[id] = id
+		if mapped := c.aliases["course"][id]; mapped != "" {
+			result[id] = mapped
+		}
+	}
+	return result, nil
+}
+func (c boundedSummaryCatalog) SummaryAliases(context.Context, string, string) (map[string]string, error) {
+	return nil, r.ErrUnavailable
+}
+func TestTargetedSummaryUsesScopedCatalogLookups(t *testing.T) {
+	f, port := uiReviewFixture(t)
+	ctx := context.Background()
+	create(t, f, "old-c", input("old-course", "old-term", 4))
+	port.aliases = map[string]map[string]string{"teacher": {"teacher-a": "new-a"}, "course": {"old-course": "new-course"}, "term": {"old-term": "new-term"}}
+	f.service.Catalog = boundedSummaryCatalog{port}
+	for _, tc := range []struct{ kind, id string }{{"teacher", "new-a"}, {"course", "new-course"}} {
+		result, err := f.service.ReadSummaries(ctx, student, tc.kind, []string{tc.id}, true)
+		if err != nil || len(result.Items) != 1 || result.Items[0].ReviewCount != 1 || len(result.Items[0].Terms) != 1 || result.Items[0].Terms[0].TermID != "new-term" {
+			t.Fatal(result, err)
+		}
 	}
 }

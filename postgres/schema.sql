@@ -6,7 +6,13 @@ CREATE TABLE IF NOT EXISTS reviews.entries (
  upvotes integer NOT NULL DEFAULT 0 CHECK(upvotes>=0),
  created_at timestamptz NOT NULL, expires_at timestamptz, first_published_at timestamptz, data jsonb NOT NULL
 );
-ALTER TABLE reviews.entries ADD COLUMN IF NOT EXISTS upvotes integer NOT NULL DEFAULT 0;
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT FROM pg_attribute WHERE attrelid='reviews.entries'::regclass AND attname='upvotes' AND NOT attisdropped) THEN
+  ALTER TABLE reviews.entries ADD COLUMN upvotes integer NOT NULL DEFAULT 0 CHECK(upvotes>=0);
+  UPDATE reviews.entries e SET upvotes=v.total FROM
+   (SELECT id,count(*) AS total FROM reviews.votes WHERE value=1 GROUP BY id) v WHERE e.id=v.id;
+ END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS reviews_chronological ON reviews.entries(kind,target_id,created_at,id);
 CREATE INDEX IF NOT EXISTS reviews_owner_chronological ON reviews.entries(owner,created_at,id);
 CREATE INDEX IF NOT EXISTS reviews_admin_scope ON reviews.entries(school_id,state,kind,id);
@@ -45,7 +51,13 @@ CREATE OR REPLACE TRIGGER sync_entry_upvotes AFTER INSERT OR UPDATE OR DELETE ON
 CREATE TABLE IF NOT EXISTS reviews.drafts(id text PRIMARY KEY, owner text NOT NULL, data jsonb NOT NULL);
 CREATE INDEX IF NOT EXISTS reviews_drafts_owner ON reviews.drafts(owner,id);
 CREATE TABLE IF NOT EXISTS reviews.replays(key text PRIMARY KEY, object_id text NOT NULL, expires_at timestamptz, data jsonb NOT NULL);
-ALTER TABLE reviews.replays ADD COLUMN IF NOT EXISTS expires_at timestamptz;
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT FROM pg_attribute WHERE attrelid='reviews.replays'::regclass AND attname='expires_at' AND NOT attisdropped) THEN
+  ALTER TABLE reviews.replays ADD COLUMN expires_at timestamptz;
+  UPDATE reviews.replays SET expires_at=(data->>'Until')::timestamptz
+   WHERE data->>'Until' IS NOT NULL AND data->>'Until'<>'0001-01-01T00:00:00Z';
+ END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS reviews_replays_expiry ON reviews.replays(expires_at,key) WHERE expires_at IS NOT NULL;
 CREATE TABLE IF NOT EXISTS reviews.audit(id text PRIMARY KEY, data jsonb NOT NULL, reason text NOT NULL DEFAULT '', result text NOT NULL DEFAULT 'unknown' CHECK(result IN ('success','denied','failed','unknown')), recorded_xid xid8 NOT NULL DEFAULT pg_current_xact_id(), audit_actor text NOT NULL DEFAULT 'unknown', audit_target text NOT NULL DEFAULT 'unknown', audit_action text NOT NULL DEFAULT 'unknown', audit_school text NOT NULL DEFAULT '*', audit_group text NOT NULL DEFAULT '*', audit_time timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS reviews.outbox(id text PRIMARY KEY, data jsonb NOT NULL, seq bigint GENERATED ALWAYS AS IDENTITY UNIQUE, sent_at timestamptz);
