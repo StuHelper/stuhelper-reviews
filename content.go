@@ -9,9 +9,7 @@ func (s *Service) contentScope(ctx context.Context, p Principal, school string) 
 	if p.Subject == "" {
 		return "", ErrUnauthenticated
 	}
-	callCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	grant, e := s.authorize(callCtx, p, "read_full", school)
+	grant, e := s.authorize(ctx, p, "read_full", school)
 	if e != nil {
 		return "", e
 	}
@@ -25,7 +23,7 @@ func (s *Service) ReadStatsPage(ctx context.Context, p Principal, kind, target s
 	if e != nil {
 		return Statistics{}, e
 	}
-	object, e := s.Catalog.Target(ctx, kind, target)
+	object, e := s.catalogTarget(ctx, kind, target)
 	if e != nil {
 		return Statistics{}, e
 	}

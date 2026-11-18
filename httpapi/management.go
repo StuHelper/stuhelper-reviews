@@ -42,12 +42,7 @@ func (h Handler) managementRoutes(m *http.ServeMux) {
 		if !ok {
 			return
 		}
-		school := req.URL.Query().Get("school_id")
-		if _, e := h.Service.Access.Authorize(req.Context(), p, "configure", school); e != nil {
-			respond(w, nil, e)
-			return
-		}
-		v, e := h.Service.Presentation(req.Context(), school)
+		v, e := h.Service.AdminPresentation(req.Context(), p, req.URL.Query().Get("school_id"))
 		respond(w, v, e)
 	})
 	m.HandleFunc("PUT /api/v1/reviews/admin/presentation", func(w http.ResponseWriter, req *http.Request) {

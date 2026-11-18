@@ -76,6 +76,7 @@ scenario_tests:
   ACAD-19:
     - integration_test.go#TestDiscussionIdentityVotingDraftConflictsAndModeration
     - community_test.go#TestComposerUsesCurrentFactsAndDiscussionIdentity
+    - tx_timeout_test.go#TestExternalDependencyTimeoutsAndLockFreeTransactions
   ACAD-30:
     - community_test.go#TestLegacySoftDeletionRemainsRestorable
     - integration_test.go#TestWithdrawalWindowExpiryVotesAndPermanentDeletion
@@ -108,6 +109,7 @@ scenario_tests:
   ACAD-39:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   ACAD-40:
+    - tx_timeout_test.go#TestAdminPresentationBoundsAuthorization
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
     - presentation_test.go#TestPresentationHTTPPreservesRatingTexts
   CM-09:

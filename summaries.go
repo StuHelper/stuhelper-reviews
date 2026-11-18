@@ -146,7 +146,7 @@ func (s *Service) ReadSummaries(ctx context.Context, p Principal, kind string, i
 	if !ok {
 		return out, ErrUnavailable
 	}
-	targets, err := catalog.SummaryTargets(ctx, kind, ids)
+	targets, err := s.catalogSummaryTargets(ctx, catalog, kind, ids)
 	if err != nil {
 		return out, err
 	}
@@ -223,19 +223,19 @@ func (s *Service) summaryMetrics(ctx context.Context, kind, school string, targe
 			query.CourseAliases = query.TargetAliases
 		}
 	} else {
-		query.CourseAliases, err = port.SummaryAliases(ctx, school, "course")
+		query.CourseAliases, err = s.catalogSummaryAliases(ctx, port, school, "course")
 		if err != nil {
 			return nil, err
 		}
 		query.TargetAliases = query.CourseAliases
 		if kind == "teacher" {
-			query.TargetAliases, err = port.SummaryAliases(ctx, school, "teacher")
+			query.TargetAliases, err = s.catalogSummaryAliases(ctx, port, school, "teacher")
 			if err != nil {
 				return nil, err
 			}
 		}
 		if charts {
-			query.TermAliases, err = port.SummaryAliases(ctx, school, "term")
+			query.TermAliases, err = s.catalogSummaryAliases(ctx, port, school, "term")
 			if err != nil {
 				return nil, err
 			}
@@ -255,12 +255,12 @@ func (s *Service) summaryMetrics(ctx context.Context, kind, school string, targe
 		return nil, err
 	}
 	if targeted && kind == "teacher" {
-		if err = canonicalizeSummaryRows(ctx, port, school, "course", rows); err != nil {
+		if err = s.canonicalizeSummaryRows(ctx, port, school, "course", rows); err != nil {
 			return nil, err
 		}
 	}
 	if targeted && charts {
-		if err = canonicalizeSummaryRows(ctx, port, school, "term", rows); err != nil {
+		if err = s.canonicalizeSummaryRows(ctx, port, school, "term", rows); err != nil {
 			return nil, err
 		}
 	}
@@ -284,7 +284,7 @@ func (s *Service) requestedAliases(ctx context.Context, port SummaryCatalog, sch
 		return out, nil
 	}
 	// Older adapters expose only the school alias map. Keep just this request's targets.
-	aliases, err := port.SummaryAliases(ctx, school, kind)
+	aliases, err := s.catalogSummaryAliases(ctx, port, school, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (s *Service) requestedAliases(ctx context.Context, port SummaryCatalog, sch
 
 // Resolve course and term IDs only after the repository has filtered and
 // aggregated the requested targets. Historical IDs absent from catalog stay distinct.
-func canonicalizeSummaryRows(ctx context.Context, port SummaryCatalog, school, kind string, rows []SummaryAggregate) error {
+func (s *Service) canonicalizeSummaryRows(ctx context.Context, port SummaryCatalog, school, kind string, rows []SummaryAggregate) error {
 	ids := make([]string, 0, len(rows))
 	for _, row := range rows {
 		id := row.CourseID
@@ -312,7 +312,7 @@ func canonicalizeSummaryRows(ctx context.Context, port SummaryCatalog, school, k
 	slices.Sort(ids)
 	aliases := map[string]string{}
 	for batch := range slices.Chunk(slices.Compact(ids), 100) {
-		refs, err := port.SummaryTargets(ctx, kind, batch)
+		refs, err := s.catalogSummaryTargets(ctx, port, kind, batch)
 		if err != nil {
 			return err
 		}
@@ -447,7 +447,7 @@ func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kin
 			return nil, ErrUnavailable
 		}
 		var err error
-		termNames, err = catalog.SummaryTargets(ctx, "term", termIDs)
+		termNames, err = s.catalogSummaryTargets(ctx, catalog, "term", termIDs)
 		if err != nil {
 			return nil, err
 		}

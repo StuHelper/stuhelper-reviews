@@ -45,6 +45,15 @@ func (s *Service) Presentation(ctx context.Context, school string) (Presentation
 	})
 	return out, err
 }
+func (s *Service) AdminPresentation(ctx context.Context, p Principal, school string) (PresentationView, error) {
+	if school != "*" && !validID(school) {
+		return PresentationView{}, ErrInput
+	}
+	if _, err := s.authorize(ctx, p, "configure", school); err != nil {
+		return PresentationView{}, err
+	}
+	return s.Presentation(ctx, school)
+}
 func validPresentation(v Presentation) bool {
 	if v.SchoolID != "*" && !validID(v.SchoolID) || v.Revision < 0 {
 		return false
@@ -141,7 +150,7 @@ func (s *Service) attribution(ctx context.Context, p Principal, id, teacher stri
 	if entry.Input.Kind != "course" || entry.State == "withdrawn" {
 		return out, nil, ErrConflict
 	}
-	evidence, err := s.Catalog.Evidence(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
+	evidence, err := s.catalogEvidence(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
 	if err != nil {
 		return out, nil, err
 	}

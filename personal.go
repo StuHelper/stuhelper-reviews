@@ -23,7 +23,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 			kind = "teacher"
 			course = ""
 		}
-		target, err := s.Catalog.Target(ctx, kind, in.TargetID)
+		target, err := s.catalogTarget(ctx, kind, in.TargetID)
 		if err != nil {
 			return out, err
 		}
