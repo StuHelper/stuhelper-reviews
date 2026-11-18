@@ -3,8 +3,15 @@ package reviews
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"slices"
+	"time"
 )
+
+type AdminFilterTransaction interface {
+	AdminEntriesFiltered(AdminFilter) ([]Entry, error)
+}
 
 func adminView(e Entry, closed bool) AdminEntry {
 	in := e.Input
@@ -12,7 +19,31 @@ func adminView(e Entry, closed bool) AdminEntry {
 	if closed {
 		in.Disclosures = nil
 	}
-	return AdminEntry{ChangeOrigin: e.ChangeOrigin, ChangeReason: e.ChangeReason, Featured: e.Featured, ID: e.ID, RootID: e.RootID, SchoolID: e.SchoolID, Input: in, AuthorHandle: e.Projection.Identity.Handle, Anonymous: !in.Signed, State: e.State, Revision: e.Revision, CreatedAt: e.CreatedAt, PublishedAt: e.FirstPublishedAt}
+	var updatedAt *time.Time
+	if !e.UpdatedAt.IsZero() {
+		u := e.UpdatedAt
+		updatedAt = &u
+	}
+	reviewRequested := e.ReviewRequested && (e.State == "pending" || e.State == "published")
+	return AdminEntry{
+		ChangeOrigin:         e.ChangeOrigin,
+		ChangeReason:         e.ChangeReason,
+		ModerationReasonCode: e.ModerationReasonCode,
+		ReviewRequested:      reviewRequested,
+		Featured:             e.Featured,
+		ID:                   e.ID,
+		RootID:               e.RootID,
+		ParentID:             e.ParentID,
+		SchoolID:             e.SchoolID,
+		Input:                in,
+		AuthorHandle:         e.Projection.Identity.Handle,
+		Anonymous:            !in.Signed,
+		State:                e.State,
+		Revision:             e.Revision,
+		CreatedAt:            e.CreatedAt,
+		UpdatedAt:            updatedAt,
+		PublishedAt:          e.FirstPublishedAt,
+	}
 }
 func (s *Service) auditRead(t Transaction, p Principal, school, subject string, revision int64) error {
 	now := s.now()
@@ -81,22 +112,116 @@ func (s *Service) readAdminEntry(ctx context.Context, p Principal, id string, re
 		return read(t, entry, closed[entry.Owner])
 	})
 }
+func adminBoolKey(v *bool) string {
+	if v == nil {
+		return ""
+	}
+	if *v {
+		return "true"
+	}
+	return "false"
+}
+
+func adminCursorScope(f AdminFilter) string {
+	return hash([]string{f.SchoolID, f.Kind, f.State, f.TargetID, f.RootID, f.Sort, adminBoolKey(f.ReviewRequested), adminBoolKey(f.Featured)})
+}
+
+func decodeAdminCursor(f *AdminFilter) error {
+	f.CursorTime = nil
+	f.CursorID = ""
+	if f.Sort == "" {
+		f.Sort = "id"
+	}
+	if !slices.Contains([]string{"id", "newest", "oldest"}, f.Sort) || len(f.After) > 512 {
+		return ErrInput
+	}
+	if f.After == "" {
+		return nil
+	}
+	if f.Sort == "id" {
+		if !validID(f.After) {
+			return ErrInput
+		}
+		return nil
+	}
+	b, err := base64.RawURLEncoding.DecodeString(f.After)
+	if err != nil {
+		return ErrInput
+	}
+	var cursor pageCursor
+	if json.Unmarshal(b, &cursor) != nil || cursor.Time.IsZero() || !validID(cursor.ID) || cursor.Scope != adminCursorScope(*f) {
+		return ErrInput
+	}
+	f.CursorTime = &cursor.Time
+	f.CursorID = cursor.ID
+	return nil
+}
+
+func encodeAdminCursor(f AdminFilter, entry Entry) string {
+	if f.Sort == "id" {
+		return entry.ID
+	}
+	cursor := pageCursor{Scope: adminCursorScope(f), Time: entry.CreatedAt.Round(time.Microsecond), ID: entry.ID}
+	b, _ := json.Marshal(cursor)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
 func (s *Service) AdminList(ctx context.Context, p Principal, school, kind, state, after string, limit int) (AdminPage, error) {
+	return s.AdminListFiltered(ctx, p, AdminFilter{
+		SchoolID: school,
+		Kind:     kind,
+		State:    state,
+		Sort:     "id",
+		After:    after,
+		Limit:    limit,
+	})
+}
+
+func (s *Service) AdminListFiltered(ctx context.Context, p Principal, f AdminFilter) (AdminPage, error) {
 	out := AdminPage{Items: []AdminEntry{}}
-	if !validID(school) || limit < 1 || limit > 100 || after != "" && !validID(after) || kind != "" && !slices.Contains([]string{"course", "mentor", "reply"}, kind) || state != "" && !slices.Contains([]string{"pending", "published", "hidden", "deleted"}, state) {
+	if !validID(f.SchoolID) || f.Limit < 1 || f.Limit > 100 || (f.Kind != "" && !slices.Contains([]string{"course", "mentor", "reply"}, f.Kind)) || (f.State != "" && !slices.Contains([]string{"pending", "published", "hidden", "deleted"}, f.State)) {
 		return out, ErrInput
 	}
-	if _, err := s.authorize(ctx, p, "moderate", school); err != nil {
+	for _, id := range []string{f.TargetID, f.RootID} {
+		if id != "" && !validID(id) {
+			return out, ErrInput
+		}
+	}
+	if err := decodeAdminCursor(&f); err != nil {
 		return out, err
 	}
+	if _, err := s.authorize(ctx, p, "moderate", f.SchoolID); err != nil {
+		return out, err
+	}
+	if f.TargetID != "" {
+		targetKind := "course"
+		if f.Kind == "mentor" {
+			targetKind = "teacher"
+		}
+		if ids, err := s.equivalentIDs(ctx, targetKind, f.TargetID); err == nil {
+			f.EquivalentTargets = ids
+		} else {
+			f.EquivalentTargets = []string{f.TargetID}
+		}
+	}
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		entries, err := t.AdminEntries(school, kind, state, after, limit+1, s.now())
+		now := s.now()
+		query := f
+		query.Limit = f.Limit + 1
+		query.Now = now
+		var entries []Entry
+		var err error
+		if port, ok := t.(AdminFilterTransaction); ok {
+			entries, err = port.AdminEntriesFiltered(query)
+		} else {
+			entries, err = t.AdminEntries(f.SchoolID, f.Kind, f.State, f.After, f.Limit+1, now)
+		}
 		if err != nil {
 			return err
 		}
-		if len(entries) > limit {
-			out.Next = entries[limit-1].ID
-			entries = entries[:limit]
+		if len(entries) > f.Limit {
+			out.Next = encodeAdminCursor(f, entries[f.Limit-1])
+			entries = entries[:f.Limit]
 		}
 		owners := make([]string, 0, len(entries))
 		for _, entry := range entries {
@@ -109,7 +234,8 @@ func (s *Service) AdminList(ctx context.Context, p Principal, school, kind, stat
 		for _, entry := range entries {
 			out.Items = append(out.Items, adminView(entry, closed[entry.Owner]))
 		}
-		return s.auditRead(t, p, school, "school/"+school+"/entries/"+hash([]string{kind, state, after}), 0)
+		auditSubject := "school/" + f.SchoolID + "/entries/" + hash([]string{f.Kind, f.State, f.TargetID, f.RootID, f.Sort, adminBoolKey(f.ReviewRequested), adminBoolKey(f.Featured), f.After})
+		return s.auditRead(t, p, f.SchoolID, auditSubject, 0)
 	})
 	return out, err
 }

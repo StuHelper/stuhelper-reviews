@@ -159,6 +159,9 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 			return nil, ErrUnavailable
 		}
 		v := View{Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
+		if own && entry.ModerationReasonCode != "" {
+			v.ModerationReasonCode = entry.ModerationReasonCode
+		}
 		if includeTeacherIDs && entry.Input.Kind == "course" && len(entry.TeacherIDs) > 0 {
 			v.TeacherIDs = slices.Clone(entry.TeacherIDs)
 		}

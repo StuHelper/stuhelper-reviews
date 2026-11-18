@@ -102,6 +102,10 @@ scenario_tests:
     - community_test.go#TestPrivateReplyListRespectsWithdrawnRoot
   ACAD-23:
     - administration_test.go#TestModerationReadIsScopedAuditedAndUsesDiscussionHandles
+    - moderation_queue_test.go#TestAuthorModerationReasonCodesAdminFiltersAndBatchApprove
+    - moderation_queue_test.go#TestBatchApproveChecksExpiryAfterDiscussionLock
+    - moderation_queue_test.go#TestHTTPModerationDetailsRequireExplicitSelection
+    - moderation_queue_test.go#TestConcurrentBatchApprovalsShareOwnersAndActivity
   ACAD-31:
     - community_test.go#TestSweepFailureRollsBackOnlyItsDiscussion
     - community_test.go#TestWithdrawnDraftSaveKeepsExpiryAndAttribution

@@ -62,6 +62,7 @@ func (h Handler) Routes() http.Handler {
 	m.HandleFunc("GET /api/v1/reviews/statistics", h.statistics)
 	m.HandleFunc("GET /api/v1/reviews/compose", h.compose)
 	m.HandleFunc("GET /api/v1/reviews/admin/entries", h.adminList)
+	m.HandleFunc("POST /api/v1/reviews/admin/entries/batch-approve", h.adminBatchApprove)
 	m.HandleFunc("GET /api/v1/reviews/admin/entries/{id}", h.adminGet)
 	m.HandleFunc("GET /api/v1/reviews/me/references", h.references)
 	m.HandleFunc("GET /api/v1/reviews/me/entries", h.mine)
@@ -367,7 +368,17 @@ func (h Handler) mine(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
+	includeDetails, e := flagRequested(r, "include_moderation_details")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeTeacherIDs: teachers, IncludeReplyPreview: preview, Featured: featured, HasTeacherReply: hasTeacherReply, RatingGroup: q.Get("rating_group"), Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
+	if !includeDetails {
+		for i := range v.Items {
+			v.Items[i].ModerationReasonCode = ""
+		}
+	}
 	respond(w, v, e)
 }
 func (h Handler) drafts(w http.ResponseWriter, r *http.Request) {

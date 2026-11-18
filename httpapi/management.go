@@ -25,7 +25,17 @@ func (h Handler) managementRoutes(m *http.ServeMux) {
 				return
 			}
 		}
+		includeDetails, e := flagRequested(req, "include_moderation_details")
+		if e != nil {
+			respond(w, nil, e)
+			return
+		}
 		v, e := h.Service.History(req.Context(), p, req.PathValue("id"), before, n)
+		if !includeDetails {
+			for i := range v {
+				omitModerationDetails(&v[i])
+			}
+		}
 		respond(w, v, e)
 	})
 

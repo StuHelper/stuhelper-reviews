@@ -203,7 +203,7 @@ func TestOpenAPISchemasHTTPContractAndDecisionParity(t *testing.T) {
 		t.Fatalf("expected Apply(publish) to publish and clear ExpiresAt, got %+v %v", publishedRes, err)
 	}
 
-	// 3. Validate all 25 HTTP operations (request bodies + 200 responses + error responses) against OpenAPI.
+	// 3. Validate all HTTP operations (request bodies + 200 responses + error responses) against OpenAPI.
 	currentActor := student
 	var authErr error
 	handler := httpapi.Handler{
@@ -309,6 +309,9 @@ func TestOpenAPISchemasHTTPContractAndDecisionParity(t *testing.T) {
 	)
 
 	// Admin & presentation routes
+	_ = callAndValidate(admin, "POST", "/api/v1/reviews/admin/entries/batch-approve", "/api/v1/reviews/admin/entries/batch-approve", "contract-batch", r.AdminBatchApproveRequest{
+		SchoolID: "school", Reason: "approved", Items: []r.AdminBatchItem{{ObjectID: created.ID, Revision: created.Revision}},
+	}, http.StatusOK)
 	_ = callAndValidate(admin, "GET", "/api/v1/reviews/admin/entries", "/api/v1/reviews/admin/entries?school_id=school", "", nil, http.StatusOK)
 	_ = callAndValidate(admin, "GET", "/api/v1/reviews/admin/entries/{id}", "/api/v1/reviews/admin/entries/"+created.ID, "", nil, http.StatusOK)
 	_ = callAndValidate(admin, "GET", "/api/v1/reviews/admin/entries/{id}/history", "/api/v1/reviews/admin/entries/"+created.ID+"/history", "", nil, http.StatusOK)

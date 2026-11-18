@@ -124,13 +124,53 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
 	return t.projected(q, args...)
 }
 func (t *transaction) AdminEntries(school, kind, state, after string, limit int, now time.Time) ([]reviews.Entry, error) {
+	return t.AdminEntriesFiltered(reviews.AdminFilter{
+		SchoolID: school,
+		Kind:     kind,
+		State:    state,
+		Sort:     "id",
+		After:    after,
+		Limit:    limit,
+		Now:      now,
+	})
+}
+func (t *transaction) AdminEntriesFiltered(f reviews.AdminFilter) ([]reviews.Entry, error) {
+	cursor, order := "e.id>$6", "e.id"
+	args := []any{f.SchoolID, f.Kind, f.State, f.Limit, f.Now}
+	switch f.Sort {
+	case "newest":
+		cursor = "($6::timestamptz IS NULL OR (e.created_at,e.id)<($6,$7))"
+		order = "e.created_at DESC,e.id DESC"
+		args = append(args, f.CursorTime, f.CursorID)
+	case "oldest":
+		cursor = "($6::timestamptz IS NULL OR (e.created_at,e.id)>($6,$7))"
+		order = "e.created_at,e.id"
+		args = append(args, f.CursorTime, f.CursorID)
+	default:
+		args = append(args, f.After)
+	}
+	targetIdx := strconv.Itoa(len(args) + 1)
+	args = append(args, f.TargetID)
+	equivIdx := strconv.Itoa(len(args) + 1)
+	args = append(args, f.EquivalentTargets)
+	rootIdx := strconv.Itoa(len(args) + 1)
+	args = append(args, f.RootID)
+	revReqIdx := strconv.Itoa(len(args) + 1)
+	args = append(args, f.ReviewRequested)
+	featIdx := strconv.Itoa(len(args) + 1)
+	args = append(args, f.Featured)
+	revReqExpr := "(COALESCE((e.data->>'review_requested')::boolean,false) AND e.state IN ('pending','published'))"
 	return t.projected(`SELECT e.data,i.data,0,0,0 FROM reviews.entries e
  JOIN reviews.entries root ON root.id=e.root_id
  JOIN reviews.identities i ON i.root_id=e.root_id AND i.subject=e.owner
- WHERE e.school_id=$1 AND ($2='' OR e.kind=$2) AND ($3='' OR e.state=$3) AND e.id>$4
+ WHERE e.school_id=$1 AND ($2='' OR e.kind=$2) AND ($3='' OR e.state=$3)
+ AND ($`+targetIdx+`='' OR e.target_id=$`+targetIdx+` OR e.target_id=ANY($`+equivIdx+`::text[]))
+ AND ($`+rootIdx+`='' OR e.root_id=$`+rootIdx+`)
+ AND ($`+revReqIdx+`::boolean IS NULL OR `+revReqExpr+`=$`+revReqIdx+`)
+ AND ($`+featIdx+`::boolean IS NULL OR COALESCE((e.data->>'featured')::boolean,false)=$`+featIdx+`)
  AND e.state<>'withdrawn' AND root.state<>'withdrawn'
- AND (e.expires_at IS NULL OR e.expires_at>$6) AND (root.expires_at IS NULL OR root.expires_at>$6)
- ORDER BY e.id LIMIT $5`, school, kind, state, after, limit, now)
+ AND (e.expires_at IS NULL OR e.expires_at>$5) AND (root.expires_at IS NULL OR root.expires_at>$5)
+ AND `+cursor+` ORDER BY `+order+` LIMIT $4`, args...)
 }
 func (t *transaction) IdentityByHandle(root, handle string) (reviews.Identity, error) {
 	rows, err := list[reviews.Identity](t, `SELECT data FROM reviews.identities WHERE root_id=$1 AND data->>'Handle'=$2 LIMIT 2`, root, handle)

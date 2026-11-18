@@ -197,12 +197,11 @@ func TestDecisionContractAndPresentationReplay(t *testing.T) {
 	if err = json.Unmarshal(rawSpec, &specDoc); err != nil {
 		t.Fatal(err)
 	}
-	decisionSchema := specDoc["components"].(map[string]any)["schemas"].(map[string]any)["Decision"]
 	compiler := jsonschema.NewCompiler()
-	if err = compiler.AddResource("urn:decision", decisionSchema); err != nil {
+	if err = compiler.AddResource("urn:decision", specDoc); err != nil {
 		t.Fatal(err)
 	}
-	compiled, err := compiler.Compile("urn:decision")
+	compiled, err := compiler.Compile("urn:decision#/components/schemas/Decision")
 	if err != nil {
 		t.Fatal(err)
 	}

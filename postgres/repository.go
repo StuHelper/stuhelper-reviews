@@ -7,6 +7,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"maps"
+	"slices"
 	"time"
 
 	reviews "github.com/StuHelper/stuhelper-reviews"
@@ -140,6 +142,44 @@ func (t *transaction) Entry(id string) (reviews.Entry, error) {
 	return read[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE id=$1`, id)
 }
 func (t *transaction) SaveEntry(e reviews.Entry) error {
+	if err := t.saveEntryRows(e); err != nil {
+		return err
+	}
+	return t.refreshActivity(e.RootID, e.UpdatedAt)
+}
+
+// Batch callers hold the discussion locks. Take all owner locks before touching
+// entries, then apply activity changes in bucket order across all discussions.
+func (t *transaction) SaveEntryBatch(entries []reviews.Entry) error {
+	owners := make(map[string]bool)
+	roots := make(map[string]time.Time)
+	for _, e := range entries {
+		owners[e.Owner] = true
+		if e.UpdatedAt.After(roots[e.RootID]) {
+			roots[e.RootID] = e.UpdatedAt
+		}
+	}
+	for _, owner := range slices.Sorted(maps.Keys(owners)) {
+		if err := t.Lock("closure-owner:" + owner); err != nil {
+			return err
+		}
+	}
+	for _, e := range entries {
+		if err := t.saveEntryRows(e); err != nil {
+			return err
+		}
+	}
+	var changes []activityChange
+	for _, root := range slices.Sorted(maps.Keys(roots)) {
+		batch, err := t.rootActivityChanges(root, roots[root])
+		if err != nil {
+			return err
+		}
+		changes = append(changes, batch...)
+	}
+	return t.applyActivityChanges(changes)
+}
+func (t *transaction) saveEntryRows(e reviews.Entry) error {
 	if err := t.closedEntry(&e); err != nil {
 		return err
 	}
@@ -149,10 +189,7 @@ func (t *transaction) SaveEntry(e reviews.Entry) error {
 	if err := t.save(`INSERT INTO reviews.history(id,revision,data) VALUES($1,$2,$3)`, e, e.ID, e.Revision); err != nil {
 		return err
 	}
-	if err := t.saveDiscovery(e); err != nil {
-		return err
-	}
-	return t.refreshActivity(e.RootID, e.UpdatedAt)
+	return t.saveDiscovery(e)
 }
 func (t *transaction) DeleteEntry(e reviews.Entry) error {
 	current, err := t.Entry(e.ID)

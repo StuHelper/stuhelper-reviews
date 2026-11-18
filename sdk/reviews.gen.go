@@ -44,6 +44,30 @@ func (e ActionAction) Valid() bool {
 	}
 }
 
+// Defines values for AdminBatchItemResultStatus.
+const (
+	AdminBatchItemResultStatusApproved  AdminBatchItemResultStatus = "approved"
+	AdminBatchItemResultStatusConflict  AdminBatchItemResultStatus = "conflict"
+	AdminBatchItemResultStatusForbidden AdminBatchItemResultStatus = "forbidden"
+	AdminBatchItemResultStatusNotFound  AdminBatchItemResultStatus = "not_found"
+)
+
+// Valid indicates whether the value is a known member of the AdminBatchItemResultStatus enum.
+func (e AdminBatchItemResultStatus) Valid() bool {
+	switch e {
+	case AdminBatchItemResultStatusApproved:
+		return true
+	case AdminBatchItemResultStatusConflict:
+		return true
+	case AdminBatchItemResultStatusForbidden:
+		return true
+	case AdminBatchItemResultStatusNotFound:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ComposerIdentity.
 const (
 	Anonymous ComposerIdentity = "anonymous"
@@ -161,6 +185,45 @@ func (e InputKind) Valid() bool {
 	case InputKindMentor:
 		return true
 	case InputKindReply:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModerationReasonCode.
+const (
+	AcademicIntegrity ModerationReasonCode = "academic_integrity"
+	LowQuality        ModerationReasonCode = "low_quality"
+	Other             ModerationReasonCode = "other"
+	PendingReview     ModerationReasonCode = "pending_review"
+	PersonalAttack    ModerationReasonCode = "personal_attack"
+	PolicyViolation   ModerationReasonCode = "policy_violation"
+	PrivacyLeak       ModerationReasonCode = "privacy_leak"
+	Spam              ModerationReasonCode = "spam"
+	WrongTeacher      ModerationReasonCode = "wrong_teacher"
+)
+
+// Valid indicates whether the value is a known member of the ModerationReasonCode enum.
+func (e ModerationReasonCode) Valid() bool {
+	switch e {
+	case AcademicIntegrity:
+		return true
+	case LowQuality:
+		return true
+	case Other:
+		return true
+	case PendingReview:
+		return true
+	case PersonalAttack:
+		return true
+	case PolicyViolation:
+		return true
+	case PrivacyLeak:
+		return true
+	case Spam:
+		return true
+	case WrongTeacher:
 		return true
 	default:
 		return false
@@ -359,6 +422,27 @@ func (e ListReviewsParamsRatingGroup) Valid() bool {
 	}
 }
 
+// Defines values for ListAdminEntriesParamsSort.
+const (
+	ListAdminEntriesParamsSortId     ListAdminEntriesParamsSort = "id"
+	ListAdminEntriesParamsSortNewest ListAdminEntriesParamsSort = "newest"
+	ListAdminEntriesParamsSortOldest ListAdminEntriesParamsSort = "oldest"
+)
+
+// Valid indicates whether the value is a known member of the ListAdminEntriesParamsSort enum.
+func (e ListAdminEntriesParamsSort) Valid() bool {
+	switch e {
+	case ListAdminEntriesParamsSortId:
+		return true
+	case ListAdminEntriesParamsSortNewest:
+		return true
+	case ListAdminEntriesParamsSortOldest:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MyReviewsParamsSort.
 const (
 	MyReviewsParamsSortId          MyReviewsParamsSort = "id"
@@ -436,21 +520,56 @@ type Action struct {
 // ActionAction defines model for Action.Action.
 type ActionAction string
 
+// AdminBatchApproveRequest defines model for AdminBatchApproveRequest.
+type AdminBatchApproveRequest struct {
+	Items    []AdminBatchItem `json:"items"`
+	Reason   string           `json:"reason"`
+	SchoolId string           `json:"school_id"`
+}
+
+// AdminBatchApproveResponse defines model for AdminBatchApproveResponse.
+type AdminBatchApproveResponse struct {
+	Items []AdminBatchItemResult `json:"items"`
+}
+
+// AdminBatchItem defines model for AdminBatchItem.
+type AdminBatchItem struct {
+	ObjectId string `json:"object_id"`
+	Revision int    `json:"revision"`
+}
+
+// AdminBatchItemResult defines model for AdminBatchItemResult.
+type AdminBatchItemResult struct {
+	ObjectId string                     `json:"object_id"`
+	Revision *int                       `json:"revision,omitempty"`
+	State    *string                    `json:"state,omitempty"`
+	Status   AdminBatchItemResultStatus `json:"status"`
+}
+
+// AdminBatchItemResultStatus defines model for AdminBatchItemResult.Status.
+type AdminBatchItemResultStatus string
+
 // AdminEntry defines model for AdminEntry.
 type AdminEntry struct {
-	Anonymous    bool       `json:"anonymous"`
-	AuthorHandle string     `json:"author_handle"`
-	ChangeOrigin *string    `json:"change_origin,omitempty"`
-	ChangeReason *string    `json:"change_reason,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	Featured     *bool      `json:"featured,omitempty"`
-	Id           string     `json:"id"`
-	Input        Input      `json:"input"`
-	PublishedAt  *time.Time `json:"published_at"`
-	Revision     int        `json:"revision"`
-	RootId       string     `json:"root_id"`
-	SchoolId     string     `json:"school_id"`
-	State        string     `json:"state"`
+	Anonymous    bool      `json:"anonymous"`
+	AuthorHandle string    `json:"author_handle"`
+	ChangeOrigin *string   `json:"change_origin,omitempty"`
+	ChangeReason *string   `json:"change_reason,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	Featured     *bool     `json:"featured,omitempty"`
+	Id           string    `json:"id"`
+	Input        Input     `json:"input"`
+
+	// ModerationReasonCode 面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。
+	ModerationReasonCode *ModerationReasonCode `json:"moderation_reason_code,omitempty"`
+	ParentId             *string               `json:"parent_id,omitempty"`
+	PublishedAt          *time.Time            `json:"published_at"`
+	ReviewRequested      *bool                 `json:"review_requested,omitempty"`
+	Revision             int                   `json:"revision"`
+	RootId               string                `json:"root_id"`
+	SchoolId             string                `json:"school_id"`
+	State                string                `json:"state"`
+	UpdatedAt            *time.Time            `json:"updated_at,omitempty"`
 }
 
 // AdminPage defines model for AdminPage.
@@ -594,6 +713,9 @@ type Input struct {
 
 // InputKind defines model for Input.Kind.
 type InputKind string
+
+// ModerationReasonCode 面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。
+type ModerationReasonCode string
 
 // OwnOverview defines model for OwnOverview.
 type OwnOverview struct {
@@ -785,17 +907,20 @@ type TermSummary struct {
 
 // View defines model for View.
 type View struct {
-	Author      Author     `json:"author"`
-	Body        string     `json:"body"`
-	CanEdit     bool       `json:"can_edit"`
-	Downvotes   int        `json:"downvotes"`
-	Featured    *bool      `json:"featured,omitempty"`
-	Id          string     `json:"id"`
-	Kind        string     `json:"kind"`
-	Mine        bool       `json:"mine"`
-	MyVote      int        `json:"my_vote"`
-	ParentId    *string    `json:"parent_id,omitempty"`
-	PublishedAt *time.Time `json:"published_at"`
+	Author    Author `json:"author"`
+	Body      string `json:"body"`
+	CanEdit   bool   `json:"can_edit"`
+	Downvotes int    `json:"downvotes"`
+	Featured  *bool  `json:"featured,omitempty"`
+	Id        string `json:"id"`
+	Kind      string `json:"kind"`
+	Mine      bool   `json:"mine"`
+
+	// ModerationReasonCode 面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。
+	ModerationReasonCode *ModerationReasonCode `json:"moderation_reason_code,omitempty"`
+	MyVote               int                   `json:"my_vote"`
+	ParentId             *string               `json:"parent_id,omitempty"`
+	PublishedAt          *time.Time            `json:"published_at"`
 
 	// Ratings 固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。
 	Ratings []int `json:"ratings"`
@@ -872,6 +997,32 @@ type ListAdminEntriesParams struct {
 	State    *string `form:"state,omitempty" json:"state,omitempty"`
 	After    *string `form:"after,omitempty" json:"after,omitempty"`
 	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Sort 默认按稳定 ID 升序分页；newest/oldest 按创建时间及绑定筛选条件的游标分页。
+	Sort *ListAdminEntriesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// ReviewRequested 筛选待人工审核或先发后审复核队列条目（true/false）。
+	ReviewRequested *bool   `form:"review_requested,omitempty" json:"review_requested,omitempty"`
+	TargetId        *string `form:"target_id,omitempty" json:"target_id,omitempty"`
+	RootId          *string `form:"root_id,omitempty" json:"root_id,omitempty"`
+	Featured        *bool   `form:"featured,omitempty" json:"featured,omitempty"`
+
+	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
+	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
+}
+
+// ListAdminEntriesParamsSort defines parameters for ListAdminEntries.
+type ListAdminEntriesParamsSort string
+
+// BatchApproveAdminEntriesParams defines parameters for BatchApproveAdminEntries.
+type BatchApproveAdminEntriesParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// GetAdminEntryParams defines parameters for GetAdminEntry.
+type GetAdminEntryParams struct {
+	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
+	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
 }
 
 // PreviewAttributionParams defines parameters for PreviewAttribution.
@@ -883,6 +1034,9 @@ type PreviewAttributionParams struct {
 type EntryHistoryParams struct {
 	Before *int `form:"before,omitempty" json:"before,omitempty"`
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
+	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
 }
 
 // AdminPresentationParams defines parameters for AdminPresentation.
@@ -958,6 +1112,9 @@ type MyReviewsParams struct {
 
 	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
 	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
+
+	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
+	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
 }
 
 // MyReviewsParamsSort defines parameters for MyReviews.
@@ -970,6 +1127,9 @@ type MyReviewsParamsRatingGroup string
 type GetOwnEntryParams struct {
 	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
 	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
+
+	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
+	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
 }
 
 // MyReviewsReferencesParams defines parameters for MyReviewsReferences.
@@ -1027,6 +1187,9 @@ type ReplyParams struct {
 
 // CreateReviewJSONRequestBody defines body for CreateReview for application/json ContentType.
 type CreateReviewJSONRequestBody = Input
+
+// BatchApproveAdminEntriesJSONRequestBody defines body for BatchApproveAdminEntries for application/json ContentType.
+type BatchApproveAdminEntriesJSONRequestBody = AdminBatchApproveRequest
 
 // PreviewAttributionJSONRequestBody defines body for PreviewAttribution for application/json ContentType.
 type PreviewAttributionJSONRequestBody = AttributionInput
@@ -1143,8 +1306,20 @@ type ClientInterface interface {
 	// ListAdminEntries performs a GET /api/v1/reviews/admin/entries (the `ListAdminEntries` operationId) request.
 	ListAdminEntries(ctx context.Context, params *ListAdminEntriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// BatchApproveAdminEntriesWithBody performs a POST /api/v1/reviews/admin/entries/batch-approve (the `BatchApproveAdminEntries` operationId) request,
+	// with any type of body and a specified content type.
+	//
+	// 按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。.
+	BatchApproveAdminEntriesWithBody(ctx context.Context, params *BatchApproveAdminEntriesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// BatchApproveAdminEntries performs a POST /api/v1/reviews/admin/entries/batch-approve (the `BatchApproveAdminEntries` operationId) request.
+	// Takes a body of the `application/json` content type.
+	//
+	// 按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。.
+	BatchApproveAdminEntries(ctx context.Context, params *BatchApproveAdminEntriesParams, body BatchApproveAdminEntriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetAdminEntry performs a GET /api/v1/reviews/admin/entries/{id} (the `GetAdminEntry` operationId) request.
-	GetAdminEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAdminEntry(ctx context.Context, id string, params *GetAdminEntryParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PreviewAttributionWithBody performs a POST /api/v1/reviews/admin/entries/{id}/attribution (the `PreviewAttribution` operationId) request,
 	// with any type of body and a specified content type.
@@ -1333,9 +1508,41 @@ func (c *Client) ListAdminEntries(ctx context.Context, params *ListAdminEntriesP
 	return c.Client.Do(req)
 }
 
+// BatchApproveAdminEntriesWithBody performs a POST /api/v1/reviews/admin/entries/batch-approve (the `BatchApproveAdminEntries` operationId) request,
+// with any type of body and a specified content type.
+//
+// 按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。.
+func (c *Client) BatchApproveAdminEntriesWithBody(ctx context.Context, params *BatchApproveAdminEntriesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBatchApproveAdminEntriesRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// BatchApproveAdminEntries performs a POST /api/v1/reviews/admin/entries/batch-approve (the `BatchApproveAdminEntries` operationId) request.
+// Takes a body of the `application/json` content type.
+//
+// 按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。.
+func (c *Client) BatchApproveAdminEntries(ctx context.Context, params *BatchApproveAdminEntriesParams, body BatchApproveAdminEntriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBatchApproveAdminEntriesRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetAdminEntry performs a GET /api/v1/reviews/admin/entries/{id} (the `GetAdminEntry` operationId) request.
-func (c *Client) GetAdminEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAdminEntryRequest(c.Server, id)
+func (c *Client) GetAdminEntry(ctx context.Context, id string, params *GetAdminEntryParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAdminEntryRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2087,6 +2294,78 @@ func NewListAdminEntriesRequest(server string, params *ListAdminEntriesParams) (
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ReviewRequested != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "review_requested", *params.ReviewRequested, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TargetId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "target_id", *params.TargetId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.RootId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "root_id", *params.RootId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Featured != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "featured", *params.Featured, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeModerationDetails != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_moderation_details", *params.IncludeModerationDetails, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -2101,8 +2380,61 @@ func NewListAdminEntriesRequest(server string, params *ListAdminEntriesParams) (
 	return req, nil
 }
 
+// NewBatchApproveAdminEntriesRequest calls the generic BatchApproveAdminEntries builder with application/json body
+func NewBatchApproveAdminEntriesRequest(server string, params *BatchApproveAdminEntriesParams, body BatchApproveAdminEntriesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewBatchApproveAdminEntriesRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewBatchApproveAdminEntriesRequestWithBody constructs an http.Request for the BatchApproveAdminEntries method, with any body, and a specified content type
+func NewBatchApproveAdminEntriesRequestWithBody(server string, params *BatchApproveAdminEntriesParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/reviews/admin/entries/batch-approve")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewGetAdminEntryRequest constructs an http.Request for the GetAdminEntry method
-func NewGetAdminEntryRequest(server string, id string) (*http.Request, error) {
+func NewGetAdminEntryRequest(server string, id string, params *GetAdminEntryParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -2125,6 +2457,33 @@ func NewGetAdminEntryRequest(server string, id string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeModerationDetails != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_moderation_details", *params.IncludeModerationDetails, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -2245,6 +2604,18 @@ func NewEntryHistoryRequest(server string, id string, params *EntryHistoryParams
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeModerationDetails != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_moderation_details", *params.IncludeModerationDetails, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2925,6 +3296,18 @@ func NewMyReviewsRequest(server string, params *MyReviewsParams) (*http.Request,
 
 		}
 
+		if params.IncludeModerationDetails != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_moderation_details", *params.IncludeModerationDetails, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -2977,6 +3360,18 @@ func NewGetOwnEntryRequest(server string, id string, params *GetOwnEntryParams) 
 		if params.IncludeTeacherIds != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_teacher_ids", *params.IncludeTeacherIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeModerationDetails != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_moderation_details", *params.IncludeModerationDetails, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3628,10 +4023,24 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	ListAdminEntriesWithResponse(ctx context.Context, params *ListAdminEntriesParams, reqEditors ...RequestEditorFn) (*ListAdminEntriesResponse, error)
 
+	// BatchApproveAdminEntriesWithBodyWithResponse performs a POST /api/v1/reviews/admin/entries/batch-approve (the `BatchApproveAdminEntries` operationId) request,
+	// with any type of body and a specified content type.
+	//
+	// 按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	BatchApproveAdminEntriesWithBodyWithResponse(ctx context.Context, params *BatchApproveAdminEntriesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BatchApproveAdminEntriesResponse, error)
+
+	// BatchApproveAdminEntriesWithResponse performs a POST /api/v1/reviews/admin/entries/batch-approve (the `BatchApproveAdminEntries` operationId) request.
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// 按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。.
+	BatchApproveAdminEntriesWithResponse(ctx context.Context, params *BatchApproveAdminEntriesParams, body BatchApproveAdminEntriesJSONRequestBody, reqEditors ...RequestEditorFn) (*BatchApproveAdminEntriesResponse, error)
+
 	// GetAdminEntryWithResponse performs a GET /api/v1/reviews/admin/entries/{id} (the `GetAdminEntry` operationId) request.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	GetAdminEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetAdminEntryResponse, error)
+	GetAdminEntryWithResponse(ctx context.Context, id string, params *GetAdminEntryParams, reqEditors ...RequestEditorFn) (*GetAdminEntryResponse, error)
 
 	// PreviewAttributionWithBodyWithResponse performs a POST /api/v1/reviews/admin/entries/{id}/attribution (the `PreviewAttribution` operationId) request,
 	// with any type of body and a specified content type.
@@ -4045,6 +4454,82 @@ func (r ListAdminEntriesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListAdminEntriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type BatchApproveAdminEntriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminBatchApproveResponse
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r BatchApproveAdminEntriesResponse) GetJSON200() *AdminBatchApproveResponse {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r BatchApproveAdminEntriesResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r BatchApproveAdminEntriesResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r BatchApproveAdminEntriesResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r BatchApproveAdminEntriesResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r BatchApproveAdminEntriesResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r BatchApproveAdminEntriesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r BatchApproveAdminEntriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BatchApproveAdminEntriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r BatchApproveAdminEntriesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5927,11 +6412,37 @@ func (c *ClientWithResponses) ListAdminEntriesWithResponse(ctx context.Context, 
 	return ParseListAdminEntriesResponse(rsp)
 }
 
+// BatchApproveAdminEntriesWithBodyWithResponse performs a POST /api/v1/reviews/admin/entries/batch-approve (the `BatchApproveAdminEntries` operationId) request,
+// with any type of body and a specified content type.
+//
+// 按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) BatchApproveAdminEntriesWithBodyWithResponse(ctx context.Context, params *BatchApproveAdminEntriesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BatchApproveAdminEntriesResponse, error) {
+	rsp, err := c.BatchApproveAdminEntriesWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBatchApproveAdminEntriesResponse(rsp)
+}
+
+// BatchApproveAdminEntriesWithResponse performs a POST /api/v1/reviews/admin/entries/batch-approve (the `BatchApproveAdminEntries` operationId) request.
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// 按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。.
+func (c *ClientWithResponses) BatchApproveAdminEntriesWithResponse(ctx context.Context, params *BatchApproveAdminEntriesParams, body BatchApproveAdminEntriesJSONRequestBody, reqEditors ...RequestEditorFn) (*BatchApproveAdminEntriesResponse, error) {
+	rsp, err := c.BatchApproveAdminEntries(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBatchApproveAdminEntriesResponse(rsp)
+}
+
 // GetAdminEntryWithResponse performs a GET /api/v1/reviews/admin/entries/{id} (the `GetAdminEntry` operationId) request.
 //
 // Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) GetAdminEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetAdminEntryResponse, error) {
-	rsp, err := c.GetAdminEntry(ctx, id, reqEditors...)
+func (c *ClientWithResponses) GetAdminEntryWithResponse(ctx context.Context, id string, params *GetAdminEntryParams, reqEditors ...RequestEditorFn) (*GetAdminEntryResponse, error) {
+	rsp, err := c.GetAdminEntry(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -6458,6 +6969,67 @@ func ParseListAdminEntriesResponse(rsp *http.Response) (*ListAdminEntriesRespons
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseBatchApproveAdminEntriesResponse parses an HTTP response from a BatchApproveAdminEntriesWithResponse call
+func ParseBatchApproveAdminEntriesResponse(rsp *http.Response) (*BatchApproveAdminEntriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BatchApproveAdminEntriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminBatchApproveResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Error

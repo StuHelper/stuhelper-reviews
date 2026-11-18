@@ -24,7 +24,15 @@ func (h Handler) ownEntry(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
+	includeDetails, e := flagRequested(r, "include_moderation_details")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{Own: true, IncludeTeacherIDs: teachers})
+	if !includeDetails {
+		v.ModerationReasonCode = ""
+	}
 	respond(w, v, e)
 }
 func (h Handler) getDraft(w http.ResponseWriter, r *http.Request) {

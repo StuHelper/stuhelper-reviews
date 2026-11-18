@@ -943,6 +943,10 @@ func (s *Service) statsPage(ctx context.Context, kind, target string, from, unti
 // Pending moderation preserves any existing withdrawal ExpiresAt so editing cannot extend it.
 func applyModerationOutcome(e *Entry, state string, now time.Time) {
 	e.ReviewRequested = state == "review" || state == "pending"
+	e.ModerationReasonCode = ""
+	if state == "pending" {
+		e.ModerationReasonCode = "pending_review"
+	}
 	if state == "review" {
 		state = "published"
 	}

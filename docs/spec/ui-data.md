@@ -40,6 +40,8 @@ upvotes 排序使用触发器维护的赞数与复合索引。recommended 排序
 
 列表剔除不可见回复后最多续读三次。列表和详情均须显式传入 include_teacher_ids=true 才返回课程评价的任课教师归属快照。默认响应保持原有字段。
 
+本人评价列表和详情、管理评价列表、详情及历史接受 include_moderation_details=true。本人可读取结构化审核原因。管理员还可读取队列标志、父回复和更新时间。
+
 新回复和最近动态复用 notifications，草稿正文复用既有 drafts 接口。本任务不增加群聊或私信接口。
 
 ## 验证
