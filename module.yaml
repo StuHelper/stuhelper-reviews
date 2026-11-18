@@ -131,6 +131,7 @@ scenario_tests:
   REV-UI-02:
     - ui_backend_test.go#TestUISummaryPolicyBoundariesAndCurrentAuthorization
   REV-UI-03:
+    - ui_backend_test.go#TestOwnOverviewKeepsCountsOnAliasFailure
     - ui_backend_test.go#TestUIOwnOverviewPendingOwnershipExpiryAndUnavailable
   REV-UI-04:
     - http_compatibility_test.go#TestLegacyReviewHTTPShapeAndExplicitPreviews

@@ -259,3 +259,32 @@ func TestSummaryTermsUseCatalogOrderInsteadOfDisplayNames(t *testing.T) {
 		t.Fatal("structured summary order", terms)
 	}
 }
+
+func TestOwnOverviewKeepsCountsOnAliasFailure(t *testing.T) {
+	f, port := uiReviewFixture(t)
+	ctx := context.Background()
+	// 3. A-15.2: OwnOverview preserves review_count and draft_count when SummaryAliases fails.
+	create(t, f, "ov-mine", input("course", "autumn", 4))
+	if _, err := f.service.SaveDraft(ctx, student, "", "ov-draft", input("other", "autumn", 3), 0); err != nil {
+		t.Fatal(err)
+	}
+	port.items = []r.PendingCourse{{CourseID: "pending-c", CourseName: "Pending", TermID: "autumn", TermName: "Autumn"}}
+	port.failed = true
+	overview, err := f.service.OwnOverview(ctx, student)
+	if err != nil || overview.ReviewCount != 1 || overview.DraftCount != 1 || overview.PendingCourses.State != "unavailable" {
+		t.Fatalf("OwnOverview discarded local counts on alias outage: %+v err=%v", overview, err)
+	}
+
+	port.failed = false
+	port.ownErr = context.DeadlineExceeded
+	overview, err = f.service.OwnOverview(ctx, student)
+	if err != nil || overview.ReviewCount != 1 || overview.DraftCount != 1 || overview.PendingCourses.Count != nil || overview.PendingCourses.State != "unavailable" {
+		t.Fatal(overview, err)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err = f.service.OwnOverview(canceled, student); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+
+}
