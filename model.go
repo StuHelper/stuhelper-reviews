@@ -52,6 +52,8 @@ type Requirement struct {
 	State string `json:"state"`
 }
 type Composer struct {
+	OwnDraftID      string             `json:"own_draft_id,omitempty"`
+	OwnEntryIDs     []string           `json:"own_entry_ids,omitempty"`
 	TeacherRequired bool               `json:"teacher_required,omitempty"`
 	Disclosures     []DisclosureOption `json:"disclosures,omitempty"`
 	TeacherReply    bool               `json:"teacher_reply,omitempty"`
@@ -88,6 +90,7 @@ type Input struct {
 	Disclosures []string `json:"disclosures,omitempty"`
 	Kind        string   `json:"kind"`
 	TargetID    string   `json:"target_id"`
+	ParentID    string   `json:"parent_id,omitempty"`
 	TermID      string   `json:"term_id,omitempty"`
 	TeacherID   string   `json:"teacher_id,omitempty"`
 	Title       string   `json:"title"`
@@ -123,6 +126,7 @@ type Entry struct {
 	RuleVersion          string      `json:"rule_version"`
 	Projection           *Projection `json:"-"`
 	ReviewRequested      bool        `json:"review_requested"`
+	ParentAuthorHandle   string      `json:"parent_author_handle,omitempty"`
 }
 type Projection struct {
 	Identity                   Identity
@@ -164,6 +168,8 @@ type View struct {
 	Downvotes            int        `json:"downvotes"`
 	MyVote               int        `json:"my_vote"`
 	Mine                 bool       `json:"mine"`
+	ParentAuthorHandle   string     `json:"parent_author_handle,omitempty"`
+	ParentVisible        *bool      `json:"parent_visible,omitempty"`
 }
 type Result struct {
 	ID        string     `json:"id"`
@@ -180,6 +186,7 @@ type Action struct {
 type Draft struct {
 	ReferenceIDs   []string  `json:"trusted_reference_ids,omitempty"`
 	ReferenceState string    `json:"reference_state,omitempty"`
+	RootID         string    `json:"root_id,omitempty"`
 	ID             string    `json:"id"`
 	Revision       int64     `json:"revision"`
 	Owner          string    `json:"owner"`
@@ -201,11 +208,13 @@ type DraftView struct {
 // ViewOptions controls detail visibility and optional fields.
 type ViewOptions struct {
 	// Own restricts the result to an entry belonging to the requester.
-	Own               bool
-	IncludeTeacherIDs bool
+	Own                  bool
+	IncludeTeacherIDs    bool
+	IncludeParentSummary bool
 }
 
 type Filter struct {
+	IncludeParentSummary                                 bool
 	IncludeTeacherIDs                                    bool
 	IncludeReplyPreview                                  bool
 	Featured, HasTeacherReply                            *bool

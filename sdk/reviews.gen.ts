@@ -388,6 +388,8 @@ export interface components {
             kind: "course" | "mentor" | "reply";
             /** @description 体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。 */
             target_id: string;
+            /** @description 当 kind=reply 保存或发布草稿时绑定的父评价或父回复 ID；课程与导师评价禁止传入。 */
+            parent_id?: string;
             term_id?: string;
             /** @description 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。 */
             teacher_id?: string;
@@ -428,6 +430,10 @@ export interface components {
             id: string;
             root_id: string;
             parent_id?: string;
+            /** @description 回复所指向父楼层作者的讨论内脱敏标识（如 author 或匿名讨论句柄），根评价或撤回父帖省略。 */
+            readonly parent_author_handle?: string;
+            /** @description 回复所指向父楼层当前是否对外公开可见（含认证教师回复实名授权核验），不返回不可见父楼层正文；根评价省略。 */
+            readonly parent_visible?: boolean;
             kind: string;
             school_id: string;
             /** @description 体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。 */
@@ -552,6 +558,10 @@ export interface components {
             teacher_reply?: boolean;
             /** @description true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。 */
             teacher_required?: boolean;
+            /** @description 请求人在当前目标（及所选学期或父回复）下最近保存的既有草稿或未过期撤回草稿 ID，供移动端断点续写。 */
+            own_draft_id?: string;
+            /** @description 请求人在当前目标（及所选学期或父回复）下已保存的非删除、未过期评价或回复 ID 列表。 */
+            own_entry_ids?: string[];
         };
         AdminEntry: {
             id: string;
@@ -704,6 +714,8 @@ export interface components {
             course_name: string;
             term_id: string;
             term_name: string;
+            /** @description 本人在该待评价课程及学期下已保存的普通草稿 ID，无匹配草稿时省略。 */
+            draft_id?: string;
         };
         PendingCourses: {
             /** @enum {string} */
@@ -749,6 +761,8 @@ export interface operations {
                 include_reply_preview?: boolean;
                 /** @description 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。 */
                 include_teacher_ids?: boolean;
+                /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
+                include_parent_summary?: boolean;
             };
             header?: never;
             path?: never;
@@ -906,6 +920,8 @@ export interface operations {
             query?: {
                 /** @description 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。 */
                 include_teacher_ids?: boolean;
+                /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
+                include_parent_summary?: boolean;
             };
             header?: never;
             path: {
@@ -1249,6 +1265,8 @@ export interface operations {
                 include_teacher_ids?: boolean;
                 /** @description 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。 */
                 include_moderation_details?: boolean;
+                /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
+                include_parent_summary?: boolean;
             };
             header?: never;
             path?: never;
@@ -1804,6 +1822,8 @@ export interface operations {
                 include_teacher_ids?: boolean;
                 /** @description 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。 */
                 include_moderation_details?: boolean;
+                /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
+                include_parent_summary?: boolean;
             };
             header?: never;
             path: {
@@ -1885,6 +1905,8 @@ export interface operations {
                 target_id: string;
                 term_id?: string;
                 parent_id?: string;
+                /** @description 传入 true 时返回本人的草稿或评价关联。 */
+                include_own_context?: boolean;
             };
             header?: never;
             path?: never;
@@ -2750,7 +2772,10 @@ export interface operations {
     };
     getOwnReviewOverview: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 传入 true 时返回本人的草稿或评价关联。 */
+                include_own_context?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -163,6 +163,9 @@ scenario_tests:
   REV-UI-03:
     - ui_backend_test.go#TestOwnOverviewKeepsCountsOnAliasFailure
     - ui_backend_test.go#TestUIOwnOverviewPendingOwnershipExpiryAndUnavailable
+    - drafts_replies_test.go#TestComposerOwnAssociationsReplyDraftsAndParentSummary
+    - drafts_replies_test.go#TestComposerDraftRecencyAndUnselectedTerm
+    - drafts_replies_test.go#TestConcurrentReplyDraftPublicationReplaysOneReply
   REV-UI-04:
     - ui_backend_test.go#TestExistingVotesAndReplayDeadlinesSurviveUpgrade
     - http_compatibility_test.go#TestLegacyReviewHTTPShapeAndExplicitPreviews

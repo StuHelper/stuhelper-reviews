@@ -37,6 +37,13 @@ func (t *transaction) PendingReviewCourses(owner string, candidates []r.PendingC
  SELECT c.* FROM candidates c WHERE NOT EXISTS(SELECT 1 FROM reviews.entries e WHERE e.owner=$1 AND e.kind='course' AND e.id=e.root_id
  AND e.state<>'deleted' AND (e.expires_at IS NULL OR e.expires_at>$5)
  AND COALESCE($3::jsonb->>e.target_id,e.target_id)=c.course_id AND COALESCE($4::jsonb->>e.term_id,e.term_id)=c.term_id)
+ ), page_items AS (
+ SELECT v.course_id,v.course_name,v.term_id,v.term_name,
+ (SELECT d.id FROM reviews.drafts d WHERE d.owner=$1 AND d.data->'input'->>'kind'='course'
+  AND COALESCE($3::jsonb->>(d.data->'input'->>'target_id'),d.data->'input'->>'target_id')=v.course_id
+  AND (COALESCE(d.data->'input'->>'term_id','')='' OR COALESCE($4::jsonb->>(d.data->'input'->>'term_id'),d.data->'input'->>'term_id')=v.term_id)
+  ORDER BY (COALESCE($4::jsonb->>(d.data->'input'->>'term_id'),d.data->'input'->>'term_id')=v.term_id) DESC,(d.data->>'updated_at')::timestamptz DESC,d.id ASC LIMIT 1) AS draft_id
+ FROM (SELECT * FROM pending ORDER BY term_id DESC,course_id LIMIT 20) v
  ) SELECT jsonb_build_object('state','available','reason','','count',(SELECT count(*) FROM pending),
- 'items',COALESCE((SELECT jsonb_agg(to_jsonb(v) ORDER BY term_id DESC,course_id) FROM (SELECT * FROM pending ORDER BY term_id DESC,course_id LIMIT 20) v),'[]'::jsonb))`, owner, string(input), string(courseAliases), string(termAliases), now)
+ 'items',COALESCE((SELECT jsonb_agg(jsonb_strip_nulls(to_jsonb(p)) ORDER BY p.term_id DESC,p.course_id) FROM page_items p),'[]'::jsonb))`, owner, string(input), string(courseAliases), string(termAliases), now)
 }

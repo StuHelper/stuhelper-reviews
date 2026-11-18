@@ -32,7 +32,7 @@ DirectoryMetrics 是公开 Go 端口，按已授权学校一次返回非零对�
 
 GET /api/v1/reviews/me/overview 只使用认证主体。review_count 是本人已发布、未过期的课程及导师根评价数量。draft_count 与草稿箱一致，包括普通草稿和未过期撤回记录。
 
-pending_courses 通过 catalog 的当前授权选课来源取得候选，排除本人已保存的非删除评价课程与学期组合，最多返回二十项及完整候选计数。重复选课按课程和学期去重，不限制再次评价的权限。
+pending_courses 通过 catalog 的当前授权选课来源取得候选，排除本人已保存的非删除评价课程与学期组合，最多返回二十项及完整候选计数，并在已有普通草稿时附带 draft_id。重复选课按课程和学期去重，不限制再次评价的权限。
 
 本人选课展示授权、选课来源、目录别名接口或资格未就绪及子调用超时时，pending_courses.state 为 unavailable，count 为 null，items 为空。本人评价与草稿数量仍可读取。接口不接受目标账号参数，也不从他人的选课推断本人的待办。
 
@@ -96,3 +96,5 @@ REV-IDENTITY-01：catalog 的公开映射将新旧课程 ID 归为同一课程�
 管理员预览与更正体育项目归属时都要选择本人选课证据覆盖的教师，教师别名按目录归并。预览返回前再次核实评价修订与期限，审计成功才返回结果。
 
 编辑器先检查课程或导师目标是否停用。停用课程返回 forbidden，披露事实不可用时返回 unavailable；这些状态均禁止发布。
+
+编辑器和本人概览接受 include_own_context=true 以返回本人的草稿与评价关联。评价列表与详情接受 include_parent_summary=true 以返回父楼层可见状态和讨论内标识。

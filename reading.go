@@ -128,15 +128,35 @@ func project(t Transaction, p Principal, entry Entry) (Entry, error) {
 	entry.Projection = v
 	return entry, nil
 }
-func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own bool, school string, includeTeacherIDs bool) ([]View, error) {
+func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own bool, school string, options ViewOptions) ([]View, error) {
 	out := make([]View, 0, len(entries))
 	profiles := map[string]Profile{}
 	owners := make([]string, 0, len(entries))
+	parentIDs := make([]string, 0)
 	for _, entry := range entries {
 		owners = append(owners, entry.Owner)
+		if options.IncludeParentSummary && entry.Input.Kind == "reply" && entry.ParentID != "" {
+			parentIDs = append(parentIDs, entry.ParentID)
+		}
 	}
+	slices.Sort(parentIDs)
+	parentIDs = slices.Compact(parentIDs)
 	var closed map[string]bool
-	if e := s.Repo.Transaction(ctx, func(t Transaction) error { var err error; closed, err = t.ClosedOwners(owners); return err }); e != nil {
+	var parents map[string]ParentSummary
+	if e := s.Repo.Transaction(ctx, func(t Transaction) error {
+		var err error
+		closed, err = t.ClosedOwners(owners)
+		if err != nil {
+			return err
+		}
+		if len(parentIDs) > 0 {
+			if port, ok := t.(PersonalContextTransaction); ok {
+				parents, err = port.ParentSummaries(parentIDs)
+				return err
+			}
+		}
+		return nil
+	}); e != nil {
 		return nil, e
 	}
 	for _, entry := range entries {
@@ -162,8 +182,31 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		if own && entry.ModerationReasonCode != "" {
 			v.ModerationReasonCode = entry.ModerationReasonCode
 		}
-		if includeTeacherIDs && entry.Input.Kind == "course" && len(entry.TeacherIDs) > 0 {
+		if options.IncludeTeacherIDs && entry.Input.Kind == "course" && len(entry.TeacherIDs) > 0 {
 			v.TeacherIDs = slices.Clone(entry.TeacherIDs)
+		}
+		if options.IncludeParentSummary && entry.Input.Kind == "reply" && entry.ParentID != "" {
+			parent, found := parents[entry.ParentID]
+			if !found {
+				parentVisible := false
+				v.ParentVisible = &parentVisible
+				if entry.ParentAuthorHandle != "" {
+					v.ParentAuthorHandle = entry.ParentAuthorHandle
+				}
+			} else {
+				parentVisible := visible(parent.Entry, s.now())
+				if parentVisible && !parent.Closed && parent.Entry.TeacherReply {
+					_, parentVisible = s.disclosed(ctx, parent.Entry)
+				}
+				v.ParentVisible = &parentVisible
+				if parent.Entry.State != "withdrawn" {
+					handle := parent.Handle
+					if handle == "" {
+						handle = entry.ParentAuthorHandle
+					}
+					v.ParentAuthorHandle = handle
+				}
+			}
 		}
 		v.CanEdit = v.Mine && entry.State == "published" && entry.FirstPublishedAt != nil && s.now().Before(entry.FirstPublishedAt.Add(s.Config.EditWindow))
 		identity := entry.Projection.Identity
@@ -252,7 +295,7 @@ func (s *Service) GetWithOptions(ctx context.Context, p Principal, id string, op
 	if err != nil {
 		return View{}, err
 	}
-	views, err := s.render(ctx, p, []Entry{entry}, own, school, options.IncludeTeacherIDs)
+	views, err := s.render(ctx, p, []Entry{entry}, own, school, options)
 	if err != nil {
 		return View{}, err
 	}
@@ -365,7 +408,7 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 				return Page{Items: []View{}}, err
 			}
 		}
-		items, err := s.render(ctx, p, entries, f.Owner != "", f.SchoolID, f.IncludeTeacherIDs)
+		items, err := s.render(ctx, p, entries, f.Owner != "", f.SchoolID, ViewOptions{IncludeTeacherIDs: f.IncludeTeacherIDs, IncludeParentSummary: f.IncludeParentSummary})
 		if err != nil {
 			return Page{Items: []View{}}, err
 		}
@@ -376,7 +419,7 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 		}
 	}
 	if f.IncludeReplyPreview {
-		if err := s.addReplyPreviews(ctx, p, &out, f.SchoolID, f.Owner != ""); err != nil {
+		if err := s.addReplyPreviews(ctx, p, &out, f.SchoolID, f.Owner != "", f.IncludeParentSummary); err != nil {
 			return out, err
 		}
 	}

@@ -11,12 +11,26 @@ func (h Handler) compose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
+	details, e := flagRequested(r, "include_own_context")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	v, e := h.Service.Composer(r.Context(), p, q.Get("kind"), q.Get("target_id"), q.Get("term_id"), q.Get("parent_id"))
+	if !details {
+		v.OwnDraftID = ""
+		v.OwnEntryIDs = nil
+	}
 	respond(w, v, e)
 }
 func (h Handler) ownEntry(w http.ResponseWriter, r *http.Request) {
 	p, ok := h.principal(w, r, true)
 	if !ok {
+		return
+	}
+	parentSummary, e := flagRequested(r, "include_parent_summary")
+	if e != nil {
+		respond(w, nil, e)
 		return
 	}
 	teachers, e := flagRequested(r, "include_teacher_ids")
@@ -29,7 +43,7 @@ func (h Handler) ownEntry(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{Own: true, IncludeTeacherIDs: teachers})
+	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{Own: true, IncludeParentSummary: parentSummary, IncludeTeacherIDs: teachers})
 	if !includeDetails {
 		v.ModerationReasonCode = ""
 	}

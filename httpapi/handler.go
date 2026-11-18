@@ -252,12 +252,17 @@ func (h Handler) list(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
+	parentSummary, e := flagRequested(r, "include_parent_summary")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	teachers, e := flagRequested(r, "include_teacher_ids")
 	if e != nil {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeTeacherIDs: teachers, IncludeReplyPreview: preview, Featured: featured, HasTeacherReply: hasTeacherReply, RatingGroup: q.Get("rating_group"), Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeParentSummary: parentSummary, IncludeTeacherIDs: teachers, IncludeReplyPreview: preview, Featured: featured, HasTeacherReply: hasTeacherReply, RatingGroup: q.Get("rating_group"), Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
 	respond(w, v, e)
 }
 func (h Handler) get(w http.ResponseWriter, r *http.Request) {
@@ -265,12 +270,17 @@ func (h Handler) get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	parentSummary, e := flagRequested(r, "include_parent_summary")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	teachers, e := flagRequested(r, "include_teacher_ids")
 	if e != nil {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{IncludeTeacherIDs: teachers})
+	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{IncludeParentSummary: parentSummary, IncludeTeacherIDs: teachers})
 	respond(w, v, e)
 }
 func (h Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -363,6 +373,11 @@ func (h Handler) mine(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
+	parentSummary, e := flagRequested(r, "include_parent_summary")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	teachers, e := flagRequested(r, "include_teacher_ids")
 	if e != nil {
 		respond(w, nil, e)
@@ -373,7 +388,7 @@ func (h Handler) mine(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeTeacherIDs: teachers, IncludeReplyPreview: preview, Featured: featured, HasTeacherReply: hasTeacherReply, RatingGroup: q.Get("rating_group"), Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeParentSummary: parentSummary, IncludeTeacherIDs: teachers, IncludeReplyPreview: preview, Featured: featured, HasTeacherReply: hasTeacherReply, RatingGroup: q.Get("rating_group"), Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
 	if !includeDetails {
 		for i := range v.Items {
 			v.Items[i].ModerationReasonCode = ""

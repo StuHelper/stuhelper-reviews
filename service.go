@@ -15,12 +15,12 @@ import (
 
 type Config struct {
 	EditWindow, DraftLifetime, ExternalTimeout time.Duration
-	MinSamples                                 int
+	MinSamples, MaxDrafts                      int
 	Recommendations                            RecommendationPolicy
 }
 
 func DefaultConfig() Config {
-	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, ExternalTimeout: defaultExternalTimeout, MinSamples: 1, Recommendations: DefaultRecommendationPolicy()}
+	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, ExternalTimeout: defaultExternalTimeout, MaxDrafts: DefaultMaxDrafts, MinSamples: 1, Recommendations: DefaultRecommendationPolicy()}
 }
 
 type Service struct {
@@ -45,6 +45,9 @@ func New(repo Repository, catalog Catalog, access Access, moderation Moderation,
 	}
 	if repo == nil || catalog == nil || access == nil || moderation == nil || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 {
 		return nil, ErrInput
+	}
+	if c.MaxDrafts <= 0 {
+		c.MaxDrafts = DefaultMaxDrafts
 	}
 	return &Service{Repo: repo, Catalog: catalog, Access: access, Moderation: moderation, Profiles: profiles, Config: c}, nil
 }
@@ -109,6 +112,9 @@ func validate(in Input, draft bool) error {
 		if strings.TrimSpace(in.Body) == "" {
 			return inputFieldErr("body_required", "body")
 		}
+	}
+	if in.ParentID != "" && (in.Kind != "reply" || !validID(in.ParentID)) {
+		return inputFieldErr("invalid_parent_id", "parent_id")
 	}
 	if in.Kind == "course" {
 		if (!draft || in.TermID != "") && !validID(in.TermID) {
@@ -274,6 +280,9 @@ func (s *Service) PublishDraft(ctx context.Context, p Principal, id, key string,
 	if in.Revision < 1 {
 		return Result{}, inputFieldErr("invalid_revision", "revision")
 	}
+	if in.Input.Kind == "reply" {
+		return s.publishReply(ctx, p, in.Input.ParentID, key, in.Input, id, in.Revision)
+	}
 	return s.create(ctx, p, key, in.Input, id, in.Revision)
 }
 func (s *Service) create(ctx context.Context, p Principal, key string, in Input, draftID string, draftRevision int64) (Result, error) {
@@ -426,11 +435,15 @@ func (s *Service) accessible(t Transaction, id string) (Entry, error) {
 	return e, nil
 }
 func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in Input) (Result, error) {
+	return s.publishReply(ctx, p, parent, key, in, "", 0)
+}
+
+func (s *Service) publishReply(ctx context.Context, p Principal, parent, key string, in Input, draftID string, draftRevision int64) (Result, error) {
 	var out Result
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(parent) {
+	if draftID == "" && (!validID(parent) || in.ParentID != "" && in.ParentID != parent) {
 		return out, inputFieldErr("invalid_parent_id", "id")
 	}
 	if !ValidIdempotencyKey(key) {
@@ -444,9 +457,18 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 	}
 	rk := hash([]string{p.Subject, "reply", parent, key})
 	h := hash(in)
+	if draftID != "" {
+		rk = hash([]string{p.Subject, "publish_draft", draftID, key})
+		h = hash(PublishDraft{Revision: draftRevision, Input: in})
+	}
 	var base, root Entry
 	replayed := false
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		if draftID != "" {
+			if e := t.Lock("draft:" + draftID); e != nil {
+				return e
+			}
+		}
 		cached, ok, e := replay(t, rk, h, s.now())
 		if e != nil {
 			return e
@@ -456,6 +478,14 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 			replayed = true
 			return nil
 		}
+		if draftID != "" {
+			draft, e := replyDraftForPublish(t, p, draftID, draftRevision, in)
+			if e != nil {
+				return e
+			}
+			parent = draft.Input.ParentID
+			in.ParentID = parent
+		}
 		base, e = s.accessible(t, parent)
 		if e != nil {
 			return e
@@ -464,14 +494,15 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		if e != nil {
 			return e
 		}
-		if in.TargetID != base.Input.TargetID {
-			return inputFieldErr("target_mismatch", "target_id")
-		}
 		return nil
 	})
 	if err != nil || replayed {
 		return out, err
 	}
+	if !s.sameTarget(ctx, root.Input.Kind, base.Input.TargetID, in.TargetID) {
+		return out, inputFieldErr("target_mismatch", "target_id")
+	}
+	parentRevision := base.Revision
 	if err := s.requirePublicDisclosure(ctx, parent); err != nil {
 		return out, err
 	}
@@ -494,6 +525,11 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		return out, err
 	}
 	err = s.Repo.Transaction(ctx, func(t Transaction) error {
+		if draftID != "" {
+			if e := t.Lock("draft:" + draftID); e != nil {
+				return e
+			}
+		}
 		if e := t.Lock(rk); e != nil {
 			return e
 		}
@@ -504,6 +540,11 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		if ok {
 			out = cached
 			return nil
+		}
+		if draftID != "" {
+			if _, e := replyDraftForPublish(t, p, draftID, draftRevision, in); e != nil {
+				return e
+			}
 		}
 		base, e := s.accessible(t, parent)
 		if e != nil {
@@ -536,8 +577,12 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		if closed[p.Subject] {
 			return forbiddenErr("account_closed", "")
 		}
-		if in.TargetID != base.Input.TargetID {
-			return inputFieldErr("target_mismatch", "target_id")
+		if base.Revision != parentRevision {
+			return revisionConflictErr(base.Revision)
+		}
+		parentIdentity, e := t.Identity(base.RootID, base.Owner)
+		if e != nil && !errors.Is(e, ErrNotFound) {
+			return e
 		}
 		identity, e := t.Identity(base.RootID, p.Subject)
 		if errors.Is(e, ErrNotFound) {
@@ -550,10 +595,15 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		}
 		in.Signed = identity.Signed
 		now := s.now()
-		entry := Entry{ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
+		entry := Entry{ParentAuthorHandle: parentIdentity.Handle, ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
 		applyModerationOutcome(&entry, state, now)
 		if e = t.SaveEntry(entry); e != nil {
 			return e
+		}
+		if draftID != "" {
+			if e = t.DeleteDraft(draftID); e != nil {
+				return e
+			}
 		}
 		if e = s.record(t, rk, h, "replied", p, entry); e != nil {
 			return e

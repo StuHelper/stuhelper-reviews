@@ -610,11 +610,17 @@ type Band struct {
 
 // Composer defines model for Composer.
 type Composer struct {
-	Allowed      bool                `json:"allowed"`
-	Disclosures  *[]DisclosureOption `json:"disclosures,omitempty"`
-	Identity     ComposerIdentity    `json:"identity"`
-	Requirements []Requirement       `json:"requirements"`
-	RuleVersion  string              `json:"rule_version"`
+	Allowed     bool                `json:"allowed"`
+	Disclosures *[]DisclosureOption `json:"disclosures,omitempty"`
+	Identity    ComposerIdentity    `json:"identity"`
+
+	// OwnDraftId 请求人在当前目标（及所选学期或父回复）下最近保存的既有草稿或未过期撤回草稿 ID，供移动端断点续写。
+	OwnDraftId *string `json:"own_draft_id,omitempty"`
+
+	// OwnEntryIds 请求人在当前目标（及所选学期或父回复）下已保存的非删除、未过期评价或回复 ID 列表。
+	OwnEntryIds  *[]string     `json:"own_entry_ids,omitempty"`
+	Requirements []Requirement `json:"requirements"`
+	RuleVersion  string        `json:"rule_version"`
 
 	// State Requests without an authenticated session return HTTP 401.
 	State        ComposerState `json:"state"`
@@ -698,6 +704,9 @@ type Input struct {
 	Disclosures *[]DisclosureKey `json:"disclosures,omitempty"`
 	Kind        InputKind        `json:"kind"`
 
+	// ParentId 当 kind=reply 保存或发布草稿时绑定的父评价或父回复 ID；课程与导师评价禁止传入。
+	ParentId *string `json:"parent_id,omitempty"`
+
 	// Ratings 固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。
 	Ratings []int `json:"ratings"`
 	Signed  bool  `json:"signed"`
@@ -748,8 +757,11 @@ type Page struct {
 type PendingCourse struct {
 	CourseId   string `json:"course_id"`
 	CourseName string `json:"course_name"`
-	TermId     string `json:"term_id"`
-	TermName   string `json:"term_name"`
+
+	// DraftId 本人在该待评价课程及学期下已保存的普通草稿 ID，无匹配草稿时省略。
+	DraftId  *string `json:"draft_id,omitempty"`
+	TermId   string  `json:"term_id"`
+	TermName string  `json:"term_name"`
 }
 
 // PendingCourses defines model for PendingCourses.
@@ -919,8 +931,14 @@ type View struct {
 	// ModerationReasonCode 面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。
 	ModerationReasonCode *ModerationReasonCode `json:"moderation_reason_code,omitempty"`
 	MyVote               int                   `json:"my_vote"`
-	ParentId             *string               `json:"parent_id,omitempty"`
-	PublishedAt          *time.Time            `json:"published_at"`
+
+	// ParentAuthorHandle 回复所指向父楼层作者的讨论内脱敏标识（如 author 或匿名讨论句柄），根评价或撤回父帖省略。
+	ParentAuthorHandle *string `json:"parent_author_handle,omitempty"`
+	ParentId           *string `json:"parent_id,omitempty"`
+
+	// ParentVisible 回复所指向父楼层当前是否对外公开可见（含认证教师回复实名授权核验），不返回不可见父楼层正文；根评价省略。
+	ParentVisible *bool      `json:"parent_visible,omitempty"`
+	PublishedAt   *time.Time `json:"published_at"`
 
 	// Ratings 固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。
 	Ratings []int `json:"ratings"`
@@ -977,6 +995,9 @@ type ListReviewsParams struct {
 
 	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
 	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
+
+	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
+	IncludeParentSummary *bool `form:"include_parent_summary,omitempty" json:"include_parent_summary,omitempty"`
 }
 
 // ListReviewsParamsSort defines parameters for ListReviews.
@@ -1056,6 +1077,9 @@ type GetComposerParams struct {
 	TargetId string  `form:"target_id" json:"target_id"`
 	TermId   *string `form:"term_id,omitempty" json:"term_id,omitempty"`
 	ParentId *string `form:"parent_id,omitempty" json:"parent_id,omitempty"`
+
+	// IncludeOwnContext 传入 true 时返回本人的草稿或评价关联。
+	IncludeOwnContext *bool `form:"include_own_context,omitempty" json:"include_own_context,omitempty"`
 }
 
 // MyDraftsParams defines parameters for MyDrafts.
@@ -1115,6 +1139,9 @@ type MyReviewsParams struct {
 
 	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
 	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
+
+	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
+	IncludeParentSummary *bool `form:"include_parent_summary,omitempty" json:"include_parent_summary,omitempty"`
 }
 
 // MyReviewsParamsSort defines parameters for MyReviews.
@@ -1130,6 +1157,15 @@ type GetOwnEntryParams struct {
 
 	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
 	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
+
+	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
+	IncludeParentSummary *bool `form:"include_parent_summary,omitempty" json:"include_parent_summary,omitempty"`
+}
+
+// GetOwnReviewOverviewParams defines parameters for GetOwnReviewOverview.
+type GetOwnReviewOverviewParams struct {
+	// IncludeOwnContext 传入 true 时返回本人的草稿或评价关联。
+	IncludeOwnContext *bool `form:"include_own_context,omitempty" json:"include_own_context,omitempty"`
 }
 
 // MyReviewsReferencesParams defines parameters for MyReviewsReferences.
@@ -1173,6 +1209,9 @@ type GetReviewSummariesParamsKind string
 type GetReviewParams struct {
 	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
 	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
+
+	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
+	IncludeParentSummary *bool `form:"include_parent_summary,omitempty" json:"include_parent_summary,omitempty"`
 }
 
 // ReviewActionParams defines parameters for ReviewAction.
@@ -1395,7 +1434,7 @@ type ClientInterface interface {
 	// GetOwnReviewOverview performs a GET /api/v1/reviews/me/overview (the `GetOwnReviewOverview` operationId) request.
 	//
 	// Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count.
-	GetOwnReviewOverview(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOwnReviewOverview(ctx context.Context, params *GetOwnReviewOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MyReviewsReferences performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
 	//
@@ -1797,8 +1836,8 @@ func (c *Client) GetOwnEntry(ctx context.Context, id string, params *GetOwnEntry
 // GetOwnReviewOverview performs a GET /api/v1/reviews/me/overview (the `GetOwnReviewOverview` operationId) request.
 //
 // Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count.
-func (c *Client) GetOwnReviewOverview(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOwnReviewOverviewRequest(c.Server)
+func (c *Client) GetOwnReviewOverview(ctx context.Context, params *GetOwnReviewOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOwnReviewOverviewRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2134,6 +2173,18 @@ func NewListReviewsRequest(server string, params *ListReviewsParams) (*http.Requ
 		if params.IncludeTeacherIds != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_teacher_ids", *params.IncludeTeacherIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeParentSummary != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_parent_summary", *params.IncludeParentSummary, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2837,6 +2888,18 @@ func NewGetComposerRequest(server string, params *GetComposerParams) (*http.Requ
 
 		}
 
+		if params.IncludeOwnContext != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_own_context", *params.IncludeOwnContext, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -3308,6 +3371,18 @@ func NewMyReviewsRequest(server string, params *MyReviewsParams) (*http.Request,
 
 		}
 
+		if params.IncludeParentSummary != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_parent_summary", *params.IncludeParentSummary, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -3381,6 +3456,18 @@ func NewGetOwnEntryRequest(server string, id string, params *GetOwnEntryParams) 
 
 		}
 
+		if params.IncludeParentSummary != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_parent_summary", *params.IncludeParentSummary, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -3396,7 +3483,7 @@ func NewGetOwnEntryRequest(server string, id string, params *GetOwnEntryParams) 
 }
 
 // NewGetOwnReviewOverviewRequest constructs an http.Request for the GetOwnReviewOverview method
-func NewGetOwnReviewOverviewRequest(server string) (*http.Request, error) {
+func NewGetOwnReviewOverviewRequest(server string, params *GetOwnReviewOverviewParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -3412,6 +3499,33 @@ func NewGetOwnReviewOverviewRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeOwnContext != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_own_context", *params.IncludeOwnContext, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3819,6 +3933,18 @@ func NewGetReviewRequest(server string, id string, params *GetReviewParams) (*ht
 
 		}
 
+		if params.IncludeParentSummary != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_parent_summary", *params.IncludeParentSummary, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -4142,7 +4268,7 @@ type ClientWithResponsesInterface interface {
 	// Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	GetOwnReviewOverviewWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOwnReviewOverviewResponse, error)
+	GetOwnReviewOverviewWithResponse(ctx context.Context, params *GetOwnReviewOverviewParams, reqEditors ...RequestEditorFn) (*GetOwnReviewOverviewResponse, error)
 
 	// MyReviewsReferencesWithResponse performs a GET /api/v1/reviews/me/references (the `MyReviewsReferences` operationId) request.
 	//
@@ -6651,8 +6777,8 @@ func (c *ClientWithResponses) GetOwnEntryWithResponse(ctx context.Context, id st
 // Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count.
 //
 // Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) GetOwnReviewOverviewWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOwnReviewOverviewResponse, error) {
-	rsp, err := c.GetOwnReviewOverview(ctx, reqEditors...)
+func (c *ClientWithResponses) GetOwnReviewOverviewWithResponse(ctx context.Context, params *GetOwnReviewOverviewParams, reqEditors ...RequestEditorFn) (*GetOwnReviewOverviewResponse, error) {
+	rsp, err := c.GetOwnReviewOverview(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

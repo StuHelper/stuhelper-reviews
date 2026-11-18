@@ -9,6 +9,7 @@ type PendingCourse struct {
 	CourseName string `json:"course_name"`
 	TermID     string `json:"term_id"`
 	TermName   string `json:"term_name"`
+	DraftID    string `json:"draft_id,omitempty"`
 }
 type PendingCourses struct {
 	State  string          `json:"state"`

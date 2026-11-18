@@ -211,6 +211,16 @@
               "default": false
             },
             "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+          },
+          {
+            "name": "include_parent_summary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
           }
         ],
         "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
@@ -417,6 +427,16 @@
               "default": false
             },
             "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+          },
+          {
+            "name": "include_parent_summary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
           }
         ],
         "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
@@ -981,6 +1001,16 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "include_parent_summary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
           }
         ]
       }
@@ -1655,6 +1685,16 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "include_parent_summary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
           }
         ],
         "responses": {
@@ -1771,6 +1811,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_own_context",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回本人的草稿或评价关联。"
           }
         ],
         "responses": {
@@ -3052,7 +3102,18 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "include_own_context",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回本人的草稿或评价关联。"
+          }
+        ],
         "description": "Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count."
       }
     }
@@ -3105,6 +3166,10 @@
           "target_id": {
             "type": "string",
             "description": " 体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。"
+          },
+          "parent_id": {
+            "type": "string",
+            "description": "当 kind=reply 保存或发布草稿时绑定的父评价或父回复 ID；课程与导师评价禁止传入。"
           },
           "term_id": {
             "type": "string"
@@ -3259,6 +3324,16 @@
           },
           "parent_id": {
             "type": "string"
+          },
+          "parent_author_handle": {
+            "type": "string",
+            "readOnly": true,
+            "description": "回复所指向父楼层作者的讨论内脱敏标识（如 author 或匿名讨论句柄），根评价或撤回父帖省略。"
+          },
+          "parent_visible": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "回复所指向父楼层当前是否对外公开可见（含认证教师回复实名授权核验），不返回不可见父楼层正文；根评价省略。"
           },
           "kind": {
             "type": "string"
@@ -3727,6 +3802,18 @@
           "teacher_required": {
             "type": "boolean",
             "description": "true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。"
+          },
+          "own_draft_id": {
+            "type": "string",
+            "description": "请求人在当前目标（及所选学期或父回复）下最近保存的既有草稿或未过期撤回草稿 ID，供移动端断点续写。"
+          },
+          "own_entry_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string"
+            },
+            "description": "请求人在当前目标（及所选学期或父回复）下已保存的非删除、未过期评价或回复 ID 列表。"
           }
         },
         "required": [
@@ -4362,6 +4449,10 @@
           },
           "term_name": {
             "type": "string"
+          },
+          "draft_id": {
+            "type": "string",
+            "description": "本人在该待评价课程及学期下已保存的普通草稿 ID，无匹配草稿时省略。"
           }
         },
         "required": [
