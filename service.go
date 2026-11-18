@@ -88,25 +88,50 @@ func textOK(v string, n int) bool {
 }
 func validate(in Input, draft bool) error {
 	if !validDisclosureKeys(in.Disclosures) {
-		return ErrInput
+		return inputFieldErr("invalid_disclosures", "disclosures")
 	}
-	if !slices.Contains([]string{"course", "mentor", "reply"}, in.Kind) || !validID(in.TargetID) || !textOK(in.Title, 200) || !textOK(in.Body, 16000) {
-		return ErrInput
+	if !slices.Contains([]string{"course", "mentor", "reply"}, in.Kind) {
+		return inputFieldErr("invalid_kind", "kind")
 	}
-	if !draft && (strings.TrimSpace(in.Body) == "" || (in.Kind != "reply" && strings.TrimSpace(in.Title) == "")) {
-		return ErrInput
+	if !validID(in.TargetID) {
+		return inputFieldErr("invalid_target_id", "target_id")
+	}
+	if !textOK(in.Title, 200) {
+		return inputFieldErr("invalid_title", "title")
+	}
+	if !textOK(in.Body, 16000) {
+		return inputFieldErr("invalid_body", "body")
+	}
+	if !draft {
+		if in.Kind != "reply" && strings.TrimSpace(in.Title) == "" {
+			return inputFieldErr("title_required", "title")
+		}
+		if strings.TrimSpace(in.Body) == "" {
+			return inputFieldErr("body_required", "body")
+		}
 	}
 	if in.Kind == "course" {
-		if (!draft || in.TermID != "") && !validID(in.TermID) || in.TeacherID != "" && !validID(in.TeacherID) {
-			return ErrInput
+		if (!draft || in.TermID != "") && !validID(in.TermID) {
+			return inputFieldErr("invalid_term_id", "term_id")
+		}
+		if in.TeacherID != "" && !validID(in.TeacherID) {
+			return inputFieldErr("invalid_teacher_id", "teacher_id")
 		}
 		for _, v := range in.Ratings {
 			if v < 0 || v > 5 || !draft && v == 0 {
-				return ErrInput
+				return inputFieldErr("invalid_ratings", "ratings")
 			}
 		}
-	} else if in.TermID != "" || in.TeacherID != "" || in.Ratings != [5]int{} {
-		return ErrInput
+	} else {
+		if in.TermID != "" {
+			return inputFieldErr("unexpected_term_id", "term_id")
+		}
+		if in.TeacherID != "" {
+			return inputFieldErr("unexpected_teacher_id", "teacher_id")
+		}
+		if in.Ratings != [5]int{} {
+			return inputFieldErr("unexpected_ratings", "ratings")
+		}
 	}
 	return nil
 }
@@ -138,10 +163,13 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 		return target, nil, nil, Grant{}, e
 	}
 	if target.Inactive {
-		return target, nil, nil, Grant{}, ErrForbidden
+		return target, nil, nil, Grant{}, forbiddenErr("target_inactive", "target_id")
 	}
 	g, e := s.authorize(ctx, p, action, target.SchoolID)
 	if e != nil {
+		if errors.Is(e, ErrForbidden) {
+			return target, nil, nil, g, forbiddenErr("eligibility_missing", "")
+		}
 		return target, nil, nil, g, e
 	}
 	if in.Kind == "mentor" {
@@ -152,7 +180,7 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 		return target, nil, nil, g, e
 	}
 	if term.SchoolID != target.SchoolID {
-		return target, nil, nil, g, ErrInput
+		return target, nil, nil, g, inputFieldErr("term_school_mismatch", "term_id")
 	}
 	evidence, e := s.catalogEvidenceFor(ctx, "prepare_evidence", p, in.TargetID, in.TermID)
 	if e != nil {
@@ -163,7 +191,7 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	}
 	if (g.EnrollmentRequired || target.TeacherRequired) && len(evidence) == 0 {
 		g.Requirements = append(g.Requirements, Requirement{"course_enrollment", "missing"})
-		return target, nil, nil, g, ErrEnrollment
+		return target, nil, nil, g, NewErrorDetail(ErrEnrollment, "enrollment_missing", "term_id", nil)
 	}
 	if g.EnrollmentRequired || target.TeacherRequired {
 		g.Requirements = append(g.Requirements, Requirement{"course_enrollment", "satisfied"})
@@ -204,7 +232,7 @@ func (s *Service) check(ctx context.Context, e Entry) (string, error) {
 		return "", ErrUnavailable
 	}
 	if out == "blocked" {
-		return "", ErrForbidden
+		return "", forbiddenErr("moderation_blocked", "body")
 	}
 	return out, nil
 }
@@ -220,7 +248,7 @@ func replay(t Transaction, key, digest string, now time.Time) (Result, bool, err
 		return Result{}, false, nil
 	}
 	if r.Digest != digest {
-		return Result{}, false, ErrConflict
+		return Result{}, false, idempotencyConflictErr()
 	}
 	return r.Result, true, nil
 }
@@ -240,8 +268,11 @@ func (s *Service) Create(ctx context.Context, p Principal, key string, in Input)
 	return s.create(ctx, p, key, in, "", 0)
 }
 func (s *Service) PublishDraft(ctx context.Context, p Principal, id, key string, in PublishDraft) (Result, error) {
-	if !validID(id) || in.Revision < 1 {
-		return Result{}, ErrInput
+	if !validID(id) {
+		return Result{}, inputFieldErr("invalid_id", "id")
+	}
+	if in.Revision < 1 {
+		return Result{}, inputFieldErr("invalid_revision", "revision")
 	}
 	return s.create(ctx, p, key, in.Input, id, in.Revision)
 }
@@ -250,15 +281,21 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !ValidIdempotencyKey(key) || in.Kind == "reply" || validate(in, false) != nil {
-		return out, ErrInput
+	if !ValidIdempotencyKey(key) {
+		return out, inputFieldErr("invalid_idempotency_key", "idempotency_key")
+	}
+	if in.Kind == "reply" {
+		return out, inputFieldErr("invalid_kind", "kind")
+	}
+	if err := validate(in, false); err != nil {
+		return out, err
 	}
 	target, evidence, ids, g, err := s.prepare(ctx, p, in)
 	if err != nil {
 		return out, err
 	}
 	if target.TeacherRequired && in.TeacherID == "" {
-		return out, ErrInput
+		return out, inputFieldErr("teacher_required", "teacher_id")
 	}
 	if _, err = s.validateDisclosures(ctx, p, target.SchoolID, func() string {
 		if in.Kind == "course" {
@@ -310,7 +347,7 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 			return e
 		}
 		if closed[p.Subject] {
-			return ErrForbidden
+			return forbiddenErr("account_closed", "")
 		}
 		cached, ok, e := replay(t, rk, h, now)
 		if e != nil {
@@ -335,10 +372,13 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 				return ErrNotFound
 			}
 			if draft.Revision != draftRevision {
-				return ErrConflict
+				return revisionConflictErr(draft.Revision)
 			}
-			if draft.Input.Kind != in.Kind || draft.Input.TargetID != in.TargetID {
-				return ErrInput
+			if draft.Input.Kind != in.Kind {
+				return inputFieldErr("attribution_immutable", "kind")
+			}
+			if draft.Input.TargetID != in.TargetID {
+				return inputFieldErr("attribution_immutable", "target_id")
 			}
 			if e = t.DeleteDraft(draftID); e != nil {
 				return e
@@ -390,8 +430,17 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(parent) || !ValidIdempotencyKey(key) || in.Kind != "reply" || validate(in, false) != nil {
-		return out, ErrInput
+	if !validID(parent) {
+		return out, inputFieldErr("invalid_parent_id", "id")
+	}
+	if !ValidIdempotencyKey(key) {
+		return out, inputFieldErr("invalid_idempotency_key", "idempotency_key")
+	}
+	if in.Kind != "reply" {
+		return out, inputFieldErr("invalid_kind", "kind")
+	}
+	if err := validate(in, false); err != nil {
+		return out, err
 	}
 	rk := hash([]string{p.Subject, "reply", parent, key})
 	h := hash(in)
@@ -416,7 +465,7 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 			return e
 		}
 		if in.TargetID != base.Input.TargetID {
-			return ErrInput
+			return inputFieldErr("target_mismatch", "target_id")
 		}
 		return nil
 	})
@@ -471,7 +520,10 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		if e != nil {
 			return e
 		}
-		if current.Revision != root.Revision || base.SchoolID != root.SchoolID {
+		if current.Revision != root.Revision {
+			return revisionConflictErr(current.Revision)
+		}
+		if base.SchoolID != root.SchoolID {
 			return ErrConflict
 		}
 		if e = t.Lock("closure-owner:" + p.Subject); e != nil {
@@ -482,10 +534,10 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 			return e
 		}
 		if closed[p.Subject] {
-			return ErrForbidden
+			return forbiddenErr("account_closed", "")
 		}
 		if in.TargetID != base.Input.TargetID {
-			return ErrInput
+			return inputFieldErr("target_mismatch", "target_id")
 		}
 		identity, e := t.Identity(base.RootID, p.Subject)
 		if errors.Is(e, ErrNotFound) {
@@ -516,17 +568,33 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(id) || !ValidIdempotencyKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
-		return out, ErrInput
+	if !validID(id) {
+		return out, inputFieldErr("invalid_id", "id")
 	}
-	if in.Action == "republish" && (in.Input == nil || validate(*in.Input, false) != nil) {
-		return out, ErrInput
+	if !ValidIdempotencyKey(key) {
+		return out, inputFieldErr("invalid_idempotency_key", "idempotency_key")
 	}
-	if in.Action == "save_withdrawn" && (in.Input == nil || validate(*in.Input, true) != nil) {
-		return out, ErrInput
+	if !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
+		return out, inputFieldErr("invalid_action", "action")
+	}
+	if in.Action == "republish" {
+		if in.Input == nil {
+			return out, inputFieldErr("input_required", "input")
+		}
+		if err := validate(*in.Input, false); err != nil {
+			return out, err
+		}
+	}
+	if in.Action == "save_withdrawn" {
+		if in.Input == nil {
+			return out, inputFieldErr("input_required", "input")
+		}
+		if err := validate(*in.Input, true); err != nil {
+			return out, err
+		}
 	}
 	if in.Action == "vote" && (in.Vote < -1 || in.Vote > 1) {
-		return out, ErrInput
+		return out, inputFieldErr("invalid_vote", "vote")
 	}
 	rk := hash([]string{p.Subject, in.Action, id, key})
 	h := hash(in)
@@ -557,15 +625,15 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			return ErrNotFound
 		}
 		if in.Revision != preEntry.Revision {
-			return ErrConflict
+			return revisionConflictErr(preEntry.Revision)
 		}
 		if in.Action == "save_withdrawn" || in.Action == "republish" {
 			if preEntry.State != "withdrawn" {
-				return ErrConflict
+				return conflictStateErr("invalid_state", "state")
 			}
 			next := *in.Input
-			if next.Kind != preEntry.Input.Kind || next.TargetID != preEntry.Input.TargetID || next.TermID != preEntry.Input.TermID || next.TeacherID != preEntry.Input.TeacherID {
-				return ErrInput
+			if field := attributionMismatchField(preEntry.Input, next); field != "" {
+				return inputFieldErr("attribution_immutable", field)
 			}
 			if in.Action == "republish" {
 				if preEntry.RootID != preEntry.ID {
@@ -609,7 +677,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			if preEntry.Input.Kind == "reply" {
 				repubGrant, err = s.replyGrant(ctx, p, preEntry, disclosure)
 				if preEntry.TeacherReply && !disclosure.ownCourse {
-					return out, ErrForbidden
+					return out, forbiddenErr("teacher_disclosure_required", "disclosures")
 				}
 				if err != nil {
 					return out, err
@@ -618,7 +686,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			} else {
 				target, _, _, grant, err := s.prepare(ctx, p, *in.Input)
 				if err == nil && target.TeacherRequired && in.Input.TeacherID == "" {
-					return out, ErrInput
+					return out, inputFieldErr("teacher_required", "teacher_id")
 				}
 				if err != nil {
 					return out, err
@@ -649,7 +717,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			return e
 		}
 		if closed[p.Subject] {
-			return ErrForbidden
+			return forbiddenErr("account_closed", "")
 		}
 		cached, ok, e := replay(t, rk, h, s.now())
 		if e != nil {
@@ -697,15 +765,15 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			return ErrNotFound
 		}
 		if in.Revision != entry.Revision {
-			return ErrConflict
+			return revisionConflictErr(entry.Revision)
 		}
 		if in.Action == "save_withdrawn" {
 			if entry.State != "withdrawn" {
-				return ErrConflict
+				return conflictStateErr("invalid_state", "state")
 			}
 			next := *in.Input
-			if next.Kind != entry.Input.Kind || next.TargetID != entry.Input.TargetID || next.TermID != entry.Input.TermID || next.TeacherID != entry.Input.TeacherID {
-				return ErrInput
+			if field := attributionMismatchField(entry.Input, next); field != "" {
+				return inputFieldErr("attribution_immutable", field)
 			}
 			next.Signed = entry.Input.Signed
 			entry.ChangeOrigin = "author"
@@ -724,7 +792,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 		}
 		if in.Action == "republish" {
 			if entry.State != "withdrawn" {
-				return ErrConflict
+				return conflictStateErr("invalid_state", "state")
 			}
 			return s.commitRepublish(t, p, entry, rk, h, *in.Input, repubGrant, repubState, repubTeacherReply, &out)
 		}
@@ -732,7 +800,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			return e
 		}
 		if entry.FirstPublishedAt == nil || !s.now().Before(entry.FirstPublishedAt.Add(s.Config.EditWindow)) {
-			return ErrWindow
+			return NewErrorDetail(ErrWindow, "edit_window_expired", "action", nil)
 		}
 		entry.ChangeOrigin = "author"
 		entry.ChangeReason = ""
@@ -759,10 +827,25 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	})
 	return out, err
 }
+func attributionMismatchField(old, next Input) string {
+	switch {
+	case next.Kind != old.Kind:
+		return "kind"
+	case next.TargetID != old.TargetID:
+		return "target_id"
+	case next.TermID != old.TermID:
+		return "term_id"
+	case next.TeacherID != old.TeacherID:
+		return "teacher_id"
+	default:
+		return ""
+	}
+}
+
 func (s *Service) commitRepublish(t Transaction, p Principal, e Entry, key, digest string, in Input, g Grant, state string, teacherReply bool, out *Result) error {
 	// Editing text cannot change attribution, the term, or the discussion identity.
-	if in.Kind != e.Input.Kind || in.TargetID != e.Input.TargetID || in.TermID != e.Input.TermID || in.TeacherID != e.Input.TeacherID {
-		return ErrInput
+	if field := attributionMismatchField(e.Input, in); field != "" {
+		return inputFieldErr("attribution_immutable", field)
 	}
 	if e.RootID != e.ID {
 		if _, err := s.accessible(t, e.RootID); err != nil {

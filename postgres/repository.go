@@ -235,7 +235,7 @@ func (t *transaction) SetVote(id, subject string, v int, at time.Time) error {
 		return e
 	}
 	if closed[subject] {
-		return reviews.ErrForbidden
+		return reviews.NewErrorDetail(reviews.ErrForbidden, "account_closed", "", nil)
 	}
 	if v == 0 {
 		_, e := t.tx.ExecContext(t.ctx, `DELETE FROM reviews.votes WHERE id=$1 AND subject=$2`, id, subject)

@@ -2,6 +2,7 @@ package reviews
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -143,16 +144,28 @@ func (s *Service) validateDisclosures(ctx context.Context, p Principal, school, 
 	if err != nil {
 		return c, err
 	}
+	if c.ownCourse {
+		for _, key := range []string{"real_name", "teacher"} {
+			if !slices.Contains(in.Disclosures, key) {
+				return c, forbiddenErr("teacher_disclosure_required", "disclosures")
+			}
+		}
+	}
 	if !c.permits(in.Disclosures) {
-		return c, ErrForbidden
+		return c, forbiddenErr("disclosure_unauthorized", "disclosures")
 	}
 	return c, nil
 }
 func (s *Service) replyGrant(ctx context.Context, p Principal, root Entry, c disclosureContext) (Grant, error) {
+	action := "reply"
 	if c.teacher {
-		return s.authorize(ctx, p, "reply_teacher", root.SchoolID)
+		action = "reply_teacher"
 	}
-	return s.authorize(ctx, p, "reply", root.SchoolID)
+	g, err := s.authorize(ctx, p, action, root.SchoolID)
+	if err != nil && errors.Is(err, ErrForbidden) {
+		return g, forbiddenErr("eligibility_missing", "")
+	}
+	return g, err
 }
 
 // A dependency failure never reuses cached private values. Required teacher

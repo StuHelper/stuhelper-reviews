@@ -359,6 +359,12 @@ export interface components {
     schemas: {
         Error: {
             code: string;
+            /** @description 稳定的机器可读细分子错误码，直接映射前端八种语言（含阿拉伯语 RTL）翻译键。 */
+            subcode?: string;
+            /** @description 出错的请求字段或参数名称，用于表单焦点定位与 aria-invalid/aria-describedby 无障碍播报。 */
+            field?: string;
+            /** @description 409 修订号冲突且调用方已通过归属或管理授权校验时返回的服务端当前修订号。 */
+            current_revision?: number;
         };
         Input: {
             /** @enum {string} */

@@ -13,8 +13,17 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !ValidIdempotencyKey(key) || in.Kind == "reply" || validate(in, true) != nil || revision < 0 {
-		return out, ErrInput
+	if !ValidIdempotencyKey(key) {
+		return out, inputFieldErr("invalid_idempotency_key", "idempotency_key")
+	}
+	if in.Kind == "reply" {
+		return out, inputFieldErr("invalid_kind", "kind")
+	}
+	if err := validate(in, true); err != nil {
+		return out, err
+	}
+	if revision < 0 {
+		return out, inputFieldErr("invalid_revision", "revision")
 	}
 	if len(in.Disclosures) > 0 {
 		kind := "course"
@@ -38,7 +47,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if id == "" {
 		id = hash([]string{p.Subject, "draft", key})
 	} else if !validID(id) {
-		return out, ErrInput
+		return out, inputFieldErr("invalid_id", "id")
 	}
 	rk := hash([]string{p.Subject, "save_draft", id, key})
 	h := hash(struct {
@@ -65,7 +74,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 			return ErrNotFound
 		}
 		if old.Revision != revision {
-			return ErrConflict
+			return revisionConflictErr(old.Revision)
 		}
 		v := Draft{ID: id, Revision: old.Revision + 1, Owner: p.Subject, Input: in, UpdatedAt: s.now()}
 		v.ReferenceIDs, v.ReferenceState = mergeDraftReferences(old.ReferenceIDs, verified, in, referenceState)
@@ -119,8 +128,11 @@ func (s *Service) DeleteDraft(ctx context.Context, p Principal, id, key string, 
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(id) || !ValidIdempotencyKey(key) {
-		return out, ErrInput
+	if !validID(id) {
+		return out, inputFieldErr("invalid_id", "id")
+	}
+	if !ValidIdempotencyKey(key) {
+		return out, inputFieldErr("invalid_idempotency_key", "idempotency_key")
 	}
 	rk := hash([]string{p.Subject, "delete_draft", id, key})
 	h := hash(revision)
@@ -154,7 +166,7 @@ func (s *Service) DeleteDraft(ctx context.Context, p Principal, id, key string, 
 			return ErrNotFound
 		}
 		if draft.Revision != revision {
-			return ErrConflict
+			return revisionConflictErr(draft.Revision)
 		}
 		if e = t.DeleteDraft(id); e != nil {
 			return e

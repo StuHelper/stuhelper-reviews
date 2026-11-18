@@ -80,5 +80,5 @@ func (s *Service) selectedTeachers(ctx context.Context, teacher string, teachers
 			return []string{teacher}, nil
 		}
 	}
-	return nil, ErrForbidden
+	return nil, forbiddenErr("teacher_not_enrolled", "teacher_id")
 }

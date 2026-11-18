@@ -512,6 +512,15 @@ type DraftWrite struct {
 // Error defines model for Error.
 type Error struct {
 	Code string `json:"code"`
+
+	// CurrentRevision 409 修订号冲突且调用方已通过归属或管理授权校验时返回的服务端当前修订号。
+	CurrentRevision *int `json:"current_revision,omitempty"`
+
+	// Field 出错的请求字段或参数名称，用于表单焦点定位与 aria-invalid/aria-describedby 无障碍播报。
+	Field *string `json:"field,omitempty"`
+
+	// Subcode 稳定的机器可读细分子错误码，直接映射前端八种语言（含阿拉伯语 RTL）翻译键。
+	Subcode *string `json:"subcode,omitempty"`
 }
 
 // Input defines model for Input.

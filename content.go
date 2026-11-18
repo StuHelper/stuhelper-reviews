@@ -2,6 +2,7 @@ package reviews
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -14,6 +15,9 @@ func (s *Service) contentScope(ctx context.Context, p Principal, school string) 
 	}
 	grant, e := s.authorize(ctx, p, "read_full", school)
 	if e != nil {
+		if errors.Is(e, ErrForbidden) {
+			return "", forbiddenErr("admission_required", "")
+		}
 		return "", e
 	}
 	if !validID(grant.SchoolID) {

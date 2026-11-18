@@ -107,8 +107,11 @@ func validPresentation(v Presentation) bool {
 	return true
 }
 func (s *Service) SavePresentation(ctx context.Context, p Principal, key string, in Presentation) (PresentationView, error) {
-	if !ValidIdempotencyKey(key) || !validPresentation(in) {
-		return PresentationView{}, ErrInput
+	if !ValidIdempotencyKey(key) {
+		return PresentationView{}, inputFieldErr("invalid_idempotency_key", "idempotency_key")
+	}
+	if !validPresentation(in) {
+		return PresentationView{}, inputFieldErr("invalid_presentation", "school_id")
 	}
 	if _, e := s.authorize(ctx, p, "configure", in.SchoolID); e != nil {
 		return PresentationView{}, e
@@ -129,7 +132,7 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 		oldReplay, e := t.Replay(rk)
 		if e == nil && s.now().Before(oldReplay.Until) {
 			if oldReplay.Digest != h {
-				return ErrConflict
+				return idempotencyConflictErr()
 			}
 			if oldReplay.InheritedRatingTexts != nil {
 				out.Effective.RatingTexts = oldReplay.InheritedRatingTexts
@@ -144,7 +147,7 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 			return e
 		}
 		if old.Revision != in.Revision {
-			return ErrConflict
+			return revisionConflictErr(old.Revision)
 		}
 		if e = t.SavePresentation(saved); e != nil {
 			return e

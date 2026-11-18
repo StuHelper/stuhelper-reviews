@@ -69,7 +69,7 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			return nil
 		}
 		if entry.Revision != d.Revision {
-			return ErrConflict
+			return revisionConflictErr(entry.Revision)
 		}
 		if entry.ExpiresAt != nil && !s.now().Before(*entry.ExpiresAt) {
 			return ErrNotFound

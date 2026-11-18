@@ -87,7 +87,7 @@ func (h Handler) Routes() http.Handler {
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && !h.sameOriginWrite(r) {
-			respond(tracker, nil, reviews.ErrForbidden)
+			respond(tracker, nil, reviews.NewErrorDetail(reviews.ErrForbidden, "origin_mismatch", "origin", nil))
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -119,6 +119,14 @@ func (h Handler) sameOriginWrite(r *http.Request) bool {
 	}
 	return strings.EqualFold(origins[0], expected)
 }
+
+type errorResponse struct {
+	Code            string `json:"code"`
+	Subcode         string `json:"subcode,omitempty"`
+	Field           string `json:"field,omitempty"`
+	CurrentRevision *int64 `json:"current_revision,omitempty"`
+}
+
 func respond(w http.ResponseWriter, v any, e error) {
 	w.Header().Set("Content-Type", "application/json")
 	if e != nil {
@@ -155,8 +163,15 @@ func respond(w http.ResponseWriter, v any, e error) {
 				Duration:   time.Since(tracker.start),
 			})
 		}
+		payload := errorResponse{Code: code}
+		var detail reviews.ErrorDetail
+		if errors.As(e, &detail) {
+			payload.Subcode = detail.Subcode
+			payload.Field = detail.Field
+			payload.CurrentRevision = detail.CurrentRevision
+		}
 		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(map[string]string{"code": code})
+		_ = json.NewEncoder(w).Encode(payload)
 		return
 	}
 	_ = json.NewEncoder(w).Encode(v)
@@ -170,11 +185,11 @@ func decode(w http.ResponseWriter, r *http.Request, v any) error {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if d.Decode(v) != nil {
-		return reviews.ErrInput
+		return reviews.NewErrorDetail(reviews.ErrInput, "malformed_json", "", nil)
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return reviews.ErrInput
+		return reviews.NewErrorDetail(reviews.ErrInput, "malformed_json", "", nil)
 	}
 	return nil
 }
@@ -206,7 +221,7 @@ func limit(r *http.Request) (int, error) {
 	}
 	n, e := strconv.Atoi(v)
 	if e != nil || n < 1 || n > 100 {
-		return 0, reviews.ErrInput
+		return 0, reviews.NewErrorDetail(reviews.ErrInput, "invalid_pagination", "limit", nil)
 	}
 	return n, nil
 }

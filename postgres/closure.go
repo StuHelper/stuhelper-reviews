@@ -77,7 +77,7 @@ func (t *transaction) closedEntry(e *r.Entry) error {
 		return safe(err)
 	}
 	if !exists || e.ChangeOrigin == "author" {
-		return r.ErrForbidden
+		return r.NewErrorDetail(r.ErrForbidden, "account_closed", "", nil)
 	}
 	e.Input.Signed = false
 	e.Input.Disclosures = nil
