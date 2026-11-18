@@ -138,8 +138,21 @@ func (s *Service) attribution(ctx context.Context, p Principal, id, teacher stri
 	if _, err = s.authorize(ctx, p, "moderate", entry.SchoolID); err != nil {
 		return out, nil, err
 	}
+	if entry.ExpiresAt != nil && !s.now().Before(*entry.ExpiresAt) {
+		return out, nil, ErrNotFound
+	}
 	if entry.Input.Kind != "course" || entry.State == "withdrawn" {
 		return out, nil, ErrConflict
+	}
+	target, err := s.Catalog.Target(ctx, "course", entry.Input.TargetID)
+	if err != nil {
+		return out, nil, err
+	}
+	if target.SchoolID != entry.SchoolID || target.Inactive {
+		return out, nil, ErrForbidden
+	}
+	if target.TeacherRequired && teacher == "" {
+		return out, nil, ErrInput
 	}
 	evidence, err := s.Catalog.Evidence(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
 	if err != nil {
@@ -157,11 +170,9 @@ func (s *Service) attribution(ctx context.Context, p Principal, id, teacher stri
 	}
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
-	if teacher != "" {
-		if !slices.Contains(ids, teacher) {
-			return out, nil, ErrForbidden
-		}
-		ids = []string{teacher}
+	ids, err = s.selectedTeachers(ctx, teacher, ids)
+	if err != nil {
+		return out, nil, err
 	}
 	ids, err = s.activityTeacherIDs(ctx, entry.SchoolID, ids)
 	if err != nil {
@@ -172,5 +183,27 @@ func (s *Service) attribution(ctx context.Context, p Principal, id, teacher stri
 }
 func (s *Service) PreviewAttribution(ctx context.Context, p Principal, id, teacher string) (AttributionPreview, error) {
 	v, _, err := s.attribution(ctx, p, id, teacher)
-	return v, err
+	if err != nil {
+		return AttributionPreview{}, err
+	}
+	err = s.Repo.Transaction(ctx, func(t Transaction) error {
+		if err := t.Lock(id); err != nil {
+			return err
+		}
+		live, err := t.Entry(id)
+		if err != nil {
+			return err
+		}
+		if live.ExpiresAt != nil && !s.now().Before(*live.ExpiresAt) {
+			return ErrNotFound
+		}
+		if live.Revision != v.Revision || live.State == "withdrawn" {
+			return ErrConflict
+		}
+		return s.auditRead(t, p, live.SchoolID, "attribution/"+id, live.Revision)
+	})
+	if err != nil {
+		return AttributionPreview{}, err
+	}
+	return v, nil
 }
