@@ -144,3 +144,8 @@ UPDATE reviews.entries e SET data=jsonb_set(e.data,'{input,signed}','false') #- 
 -- Repair retained moderator decisions made before deletion cleared the withdrawal deadline.
 UPDATE reviews.entries SET expires_at=NULL, data=jsonb_set(data,'{expires_at}','null')
  WHERE state IN ('deleted','hidden') AND expires_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS reviews_published_teacher_replies ON reviews.entries(root_id,id)
+ WHERE state='published' AND COALESCE((data->>'teacher_reply')::boolean,false);
+CREATE INDEX IF NOT EXISTS reviews_activity_roots ON reviews.entries(kind,(data->>'activity_target_id'),id)
+ WHERE state='published';
