@@ -479,9 +479,12 @@ export interface components {
             object_id: string;
             revision: number;
             /** @enum {string} */
-            action: "publish" | "hide" | "restore" | "delete" | "edit" | "identity";
+            action: "publish" | "hide" | "restore" | "delete" | "edit" | "identity" | "feature" | "unfeature" | "reassign";
             body?: string;
             subject?: string;
+            author_handle?: string;
+            teacher_id?: string;
+            evidence_revision?: string;
             signed?: boolean;
             reason: string;
         };

@@ -41,11 +41,25 @@ func activityDatabase(t *testing.T) (*Repository, *sql.DB) {
 	if _, e = admin.Exec(`CREATE ROLE ` + role + ` LOGIN`); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = db.Exec(`REVOKE ALL ON SCHEMA public FROM PUBLIC;GRANT USAGE ON SCHEMA reviews TO ` + role + `;GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA reviews TO ` + role + `;GRANT USAGE ON ALL SEQUENCES IN SCHEMA reviews TO ` + role); e != nil {
+	grants := `
+		REVOKE ALL ON SCHEMA public FROM PUBLIC;
+		GRANT USAGE ON SCHEMA reviews TO ` + role + `;
+		GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA reviews TO ` + role + `;
+		GRANT SELECT,INSERT,UPDATE,DELETE ON reviews.entries,reviews.votes,reviews.drafts,reviews.replays,reviews.activity_contributions TO ` + role + `;
+		GRANT SELECT,INSERT,DELETE ON reviews.activity_history TO ` + role + `;
+		GRANT SELECT,INSERT,UPDATE ON reviews.identities,reviews.presentations,reviews.activity_buckets,reviews.outbox,reviews.audit TO ` + role + `;
+		GRANT SELECT,INSERT ON reviews.history,reviews.presentation_history,reviews.discovery_history,reviews.closed_owners TO ` + role + `;
+		GRANT SELECT ON reviews.audit_retention,reviews.discovery_retention,reviews.activity_retention TO ` + role + `;
+	`
+	if _, e = db.Exec(grants); e != nil {
 		t.Fatal(e)
 	}
 	cfg.User = role
 	runtime := stdlib.OpenDB(*cfg)
+	repo := &Repository{DB: runtime}
+	if e = repo.CheckRuntime(context.Background()); e != nil {
+		t.Fatal(e)
+	}
 	t.Cleanup(func() {
 		runtime.Close()
 		db.Close()
@@ -57,7 +71,7 @@ func activityDatabase(t *testing.T) (*Repository, *sql.DB) {
 		}
 		admin.Close()
 	})
-	return &Repository{DB: runtime}, db
+	return repo, db
 }
 func TestActivitySnapshotSchemaRollbackAndBoundedCleanup(t *testing.T) {
 	repo, db := activityDatabase(t)

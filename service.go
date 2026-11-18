@@ -279,14 +279,7 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 	if err != nil {
 		return out, err
 	}
-	entry.ReviewRequested = state == "review" || state == "pending"
-	if state == "review" {
-		state = "published"
-	}
-	entry.State = state
-	if state == "published" {
-		entry.FirstPublishedAt = &now
-	}
+	applyModerationOutcome(&entry, state, now)
 	err = s.Repo.Transaction(ctx, func(t Transaction) error {
 		if draftID != "" {
 			if e := t.Lock("draft:" + draftID); e != nil {
@@ -453,14 +446,7 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		if e != nil {
 			return e
 		}
-		entry.ReviewRequested = state == "review" || state == "pending"
-		if state == "review" {
-			state = "published"
-		}
-		entry.State = state
-		if state == "published" {
-			entry.FirstPublishedAt = &now
-		}
+		applyModerationOutcome(&entry, state, now)
 		if e = t.SaveEntry(entry); e != nil {
 			return e
 		}
@@ -670,19 +656,8 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 	if err != nil {
 		return err
 	}
-	e.ReviewRequested = state == "review" || state == "pending"
-	if state == "review" {
-		state = "published"
-	}
-	e.State = state
 	// Pending moderation keeps the withdrawal expiry; editing cannot extend it.
-	if state == "published" {
-		e.ExpiresAt = nil
-		if e.FirstPublishedAt == nil {
-			now := s.now()
-			e.FirstPublishedAt = &now
-		}
-	}
+	applyModerationOutcome(&e, state, s.now())
 	if err = t.SaveEntry(e); err != nil {
 		return err
 	}
@@ -691,6 +666,23 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 	}
 	*out = result(e)
 	return nil
+}
+
+// applyModerationOutcome folds pre/post-publication moderation outcomes onto an entry.
+// Pending moderation preserves any existing withdrawal ExpiresAt so editing cannot extend it.
+func applyModerationOutcome(e *Entry, state string, now time.Time) {
+	e.ReviewRequested = state == "review" || state == "pending"
+	if state == "review" {
+		state = "published"
+	}
+	e.State = state
+	if state == "published" {
+		e.ExpiresAt = nil
+		if e.FirstPublishedAt == nil {
+			publishedAt := now
+			e.FirstPublishedAt = &publishedAt
+		}
+	}
 }
 func (s *Service) Stats(ctx context.Context, kind, target string, from, until *time.Time) (Statistics, error) {
 	return s.StatsPage(ctx, kind, target, from, until, "", 20)
