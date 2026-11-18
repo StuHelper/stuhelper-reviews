@@ -72,16 +72,16 @@ func TestRecommendedSortFiltersBoundedRefillAndCoTeachers(t *testing.T) {
 	}
 
 	// B-09.2: Co-taught review without single TeacherID returns full snapshot TeacherIDs in View.
-	coView, err := f.service.Get(ctx, r.Principal{Subject: "reader"}, rHighPlain.ID)
+	coView, err := f.service.GetWithOptions(ctx, r.Principal{Subject: "reader"}, rHighPlain.ID, r.ViewOptions{IncludeTeacherIDs: true})
 	if err != nil || coView.TeacherID != "" || !slices.Equal(coView.TeacherIDs, []string{"teacher-a", "teacher-b"}) {
 		t.Fatalf("expected co-teaching teacher_ids [teacher-a teacher-b], got %+v %v", coView, err)
 	}
-	singleView, err := f.service.Get(ctx, r.Principal{Subject: "reader"}, rHigh.ID)
+	singleView, err := f.service.GetWithOptions(ctx, r.Principal{Subject: "reader"}, rHigh.ID, r.ViewOptions{IncludeTeacherIDs: true})
 	if err != nil || singleView.TeacherID != "teacher-a" || !slices.Equal(singleView.TeacherIDs, []string{"teacher-a"}) {
 		t.Fatalf("expected single teacher_ids [teacher-a], got %+v %v", singleView, err)
 	}
 	mentor := create(t, f, "mentor-no-teachers", r.Input{Kind: "mentor", TargetID: "teacher-a", Title: "Guide", Body: "Mentor comment"})
-	mentorView, err := f.service.Get(ctx, r.Principal{Subject: "reader"}, mentor.ID)
+	mentorView, err := f.service.GetWithOptions(ctx, r.Principal{Subject: "reader"}, mentor.ID, r.ViewOptions{IncludeTeacherIDs: true})
 	if err != nil || len(mentorView.TeacherIDs) != 0 {
 		t.Fatalf("mentor view must omit teacher_ids, got %+v %v", mentorView, err)
 	}
@@ -199,5 +199,51 @@ func TestRecommendedSortFiltersBoundedRefillAndCoTeachers(t *testing.T) {
 	replyPreviewPage := getPage("kind=reply&root_id=" + rLow.ID + "&sort=oldest&limit=1")
 	if len(replyPreviewPage.Items) != 1 || replyPreviewPage.Items[0].ID != visibleStudentReply.ID {
 		t.Fatalf("expected bounded refill to return visible reply instead of false empty page, got %+v", replyPreviewPage)
+	}
+}
+
+func TestTeacherIDsRequireExplicitHTTPOption(t *testing.T) {
+	f, _ := uiReviewFixture(t)
+	root := create(t, f, "teacher-id-options", input("course", "autumn", 4))
+	handler := httpapi.Handler{Service: f.service, Authenticate: func(*http.Request) (r.Principal, error) { return student, nil }}.Routes()
+	for _, route := range []struct {
+		path string
+		list bool
+	}{
+		{"/api/v1/reviews", true}, {"/api/v1/reviews/" + root.ID, false},
+		{"/api/v1/reviews/me/entries", true}, {"/api/v1/reviews/me/entries/" + root.ID, false},
+	} {
+		for _, param := range []string{"", "include_teacher_ids=false", "include_teacher_ids=true", "include_teacher_ids=1", "include_teacher_ids=true&include_teacher_ids=false"} {
+			req := httptest.NewRequest(http.MethodGet, route.path+"?"+param, nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if param == "include_teacher_ids=1" || param == "include_teacher_ids=true&include_teacher_ids=false" {
+				if rec.Code != 400 {
+					t.Errorf("%s %s: expected 400, got %d", route.path, param, rec.Code)
+				}
+				continue
+			}
+			var view map[string]json.RawMessage
+			if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &view) != nil {
+				t.Fatal(route.path, param, rec.Code)
+			}
+			if route.list {
+				var items []map[string]json.RawMessage
+				if err := json.Unmarshal(view["items"], &items); err != nil || len(items) != 1 {
+					t.Fatal(route.path, len(items), err)
+				}
+				view = items[0]
+			}
+			raw, ok := view["teacher_ids"]
+			if ok != (param == "include_teacher_ids=true") {
+				t.Errorf("%s %s: unexpected teacher_ids presence %v", route.path, param, ok)
+			}
+			if ok {
+				var ids []string
+				if json.Unmarshal(raw, &ids) != nil || !slices.Equal(ids, []string{"teacher-a", "teacher-b"}) {
+					t.Fatal(route.path, ids)
+				}
+			}
+		}
 	}
 }

@@ -2,6 +2,7 @@ package reviews
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -9,14 +10,21 @@ func (s *Service) contentScope(ctx context.Context, p Principal, school string) 
 	if p.Subject == "" {
 		return "", ErrUnauthenticated
 	}
-	callCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	grant, e := s.authorize(callCtx, p, "read_full", school)
+	if school != "" && !validID(school) {
+		return "", ErrInput
+	}
+	grant, e := s.authorize(ctx, p, "read_full", school)
 	if e != nil {
+		if errors.Is(e, ErrForbidden) {
+			return "", forbiddenErr("admission_required", "")
+		}
 		return "", e
 	}
-	if !validID(grant.SchoolID) || school != "" && school != grant.SchoolID {
+	if !validID(grant.SchoolID) {
 		return "", ErrUnavailable
+	}
+	if school != "" && school != grant.SchoolID {
+		return "", ErrForbidden
 	}
 	return grant.SchoolID, nil
 }
@@ -25,7 +33,7 @@ func (s *Service) ReadStatsPage(ctx context.Context, p Principal, kind, target s
 	if e != nil {
 		return Statistics{}, e
 	}
-	object, e := s.Catalog.Target(ctx, kind, target)
+	object, e := s.catalogTarget(ctx, kind, target)
 	if e != nil {
 		return Statistics{}, e
 	}
@@ -35,6 +43,9 @@ func (s *Service) ReadStatsPage(ctx context.Context, p Principal, kind, target s
 	return s.statsPage(ctx, kind, target, from, until, after, limit, school)
 }
 func (s *Service) ReadPresentation(ctx context.Context, p Principal, school string) (PresentationView, error) {
+	if !validID(school) {
+		return PresentationView{}, ErrInput
+	}
 	scope, e := s.contentScope(ctx, p, school)
 	if e != nil {
 		return PresentationView{}, e

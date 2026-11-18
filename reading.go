@@ -128,7 +128,7 @@ func project(t Transaction, p Principal, entry Entry) (Entry, error) {
 	entry.Projection = v
 	return entry, nil
 }
-func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own bool, school string) ([]View, error) {
+func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own bool, school string, includeTeacherIDs bool) ([]View, error) {
 	out := make([]View, 0, len(entries))
 	profiles := map[string]Profile{}
 	owners := make([]string, 0, len(entries))
@@ -159,7 +159,7 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 			return nil, ErrUnavailable
 		}
 		v := View{Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
-		if entry.Input.Kind == "course" && len(entry.TeacherIDs) > 0 {
+		if includeTeacherIDs && entry.Input.Kind == "course" && len(entry.TeacherIDs) > 0 {
 			v.TeacherIDs = slices.Clone(entry.TeacherIDs)
 		}
 		v.CanEdit = v.Mine && entry.State == "published" && entry.FirstPublishedAt != nil && s.now().Before(entry.FirstPublishedAt.Add(s.Config.EditWindow))
@@ -169,19 +169,26 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		}
 		v.Author = Author{Anonymous: !identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }), Handle: identity.Handle, Disclosures: labels}
 		if identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }) {
-			if s.Profiles == nil {
-				return nil, ErrUnavailable
-			}
 			profile, ok := profiles[entry.Owner]
-			if !ok {
+			if !ok && s.Profiles != nil {
 				var err error
-				profile, err = s.Profiles.Lookup(ctx, entry.Owner)
-				if err != nil {
+				profile, err = s.lookupProfile(ctx, entry.Owner)
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				if err != nil && !own {
 					return nil, err
 				}
-				profiles[entry.Owner] = profile
+				if err == nil {
+					profiles[entry.Owner] = profile
+					ok = true
+				}
 			}
-			v.Author.Profile = &profile
+			if ok {
+				v.Author.Profile = &profile
+			} else if !own {
+				return nil, ErrUnavailable
+			}
 		}
 		v.Upvotes = entry.Projection.Upvotes
 		v.Downvotes = entry.Projection.Downvotes
@@ -191,15 +198,18 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 	return out, nil
 }
 func (s *Service) Get(ctx context.Context, p Principal, id string) (View, error) {
-	return s.get(ctx, p, id, false)
+	return s.GetWithOptions(ctx, p, id, ViewOptions{})
 }
 func (s *Service) GetOwn(ctx context.Context, p Principal, id string) (View, error) {
-	if p.Subject == "" {
+	return s.GetWithOptions(ctx, p, id, ViewOptions{Own: true})
+}
+
+// GetWithOptions reads a public or owner-scoped entry with the requested response fields.
+func (s *Service) GetWithOptions(ctx context.Context, p Principal, id string, options ViewOptions) (View, error) {
+	own := options.Own
+	if own && p.Subject == "" {
 		return View{}, ErrForbidden
 	}
-	return s.get(ctx, p, id, true)
-}
-func (s *Service) get(ctx context.Context, p Principal, id string, own bool) (View, error) {
 	school := ""
 	if !own {
 		var e error
@@ -239,7 +249,7 @@ func (s *Service) get(ctx context.Context, p Principal, id string, own bool) (Vi
 	if err != nil {
 		return View{}, err
 	}
-	views, err := s.render(ctx, p, []Entry{entry}, own, school)
+	views, err := s.render(ctx, p, []Entry{entry}, own, school, options.IncludeTeacherIDs)
 	if err != nil {
 		return View{}, err
 	}
@@ -269,37 +279,43 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 	if err := decodeCursor(&f); err != nil {
 		return out, err
 	}
-	if f.TargetID != "" {
+	// Personal filters refer only to this owner's locally stored IDs.
+	f.EquivalentTargets, f.EquivalentTeachers = nil, nil
+	if f.Owner == "" && f.TargetID != "" {
 		kind := "course"
 		if f.Kind == "mentor" {
 			kind = "teacher"
 		}
-		if f.Owner == "" {
-			object, err := s.Catalog.Target(ctx, kind, f.TargetID)
-			if err != nil {
-				return out, err
-			}
-			if object.SchoolID != f.SchoolID {
-				return out, ErrForbidden
-			}
+		object, err := s.catalogTarget(ctx, kind, f.TargetID)
+		if errors.Is(err, ErrNotFound) && (f.Kind == "reply" || f.Kind == "") {
+			kind = "teacher"
+			object, err = s.catalogTarget(ctx, kind, f.TargetID)
 		}
-		var err error
+		if err != nil {
+			return out, err
+		}
+		if object.SchoolID != f.SchoolID {
+			return out, ErrForbidden
+		}
+		if object.Inactive {
+			return out, ErrNotFound
+		}
 		f.EquivalentTargets, err = s.equivalentIDs(ctx, kind, f.TargetID)
 		if err != nil {
 			return out, err
 		}
 	}
-	if f.TeacherID != "" {
-		if f.Owner == "" {
-			object, err := s.Catalog.Target(ctx, "teacher", f.TeacherID)
-			if err != nil {
-				return out, err
-			}
-			if object.SchoolID != f.SchoolID {
-				return out, ErrForbidden
-			}
+	if f.Owner == "" && f.TeacherID != "" {
+		object, err := s.catalogTarget(ctx, "teacher", f.TeacherID)
+		if err != nil {
+			return out, err
 		}
-		var err error
+		if object.SchoolID != f.SchoolID {
+			return out, ErrForbidden
+		}
+		if object.Inactive {
+			return out, ErrNotFound
+		}
 		f.EquivalentTeachers, err = s.equivalentIDs(ctx, "teacher", f.TeacherID)
 		if err != nil {
 			return out, err
@@ -319,12 +335,12 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 		}
 		var entries []Entry
 		err := s.Repo.Transaction(ctx, func(t Transaction) error {
-			if stepFilter.RootID != "" {
+			if stepFilter.RootID != "" && stepFilter.Owner == "" {
 				root, err := s.accessible(t, stepFilter.RootID)
 				if err != nil {
 					return err
 				}
-				if stepFilter.Owner == "" && root.SchoolID != stepFilter.SchoolID {
+				if root.SchoolID != stepFilter.SchoolID {
 					return ErrForbidden
 				}
 			}
@@ -346,7 +362,7 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 				return Page{Items: []View{}}, err
 			}
 		}
-		items, err := s.render(ctx, p, entries, f.Owner != "", f.SchoolID)
+		items, err := s.render(ctx, p, entries, f.Owner != "", f.SchoolID, f.IncludeTeacherIDs)
 		if err != nil {
 			return Page{Items: []View{}}, err
 		}

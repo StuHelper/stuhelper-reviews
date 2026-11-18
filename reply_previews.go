@@ -77,7 +77,7 @@ func (s *Service) addReplyPreviews(ctx context.Context, p Principal, out *Page, 
 	if err != nil {
 		return err
 	}
-	views, err := s.render(ctx, p, batch.Entries, false, school)
+	views, err := s.render(ctx, p, batch.Entries, false, school, false)
 	if err != nil {
 		return err
 	}

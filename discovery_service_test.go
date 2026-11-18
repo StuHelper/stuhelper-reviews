@@ -199,3 +199,31 @@ func TestDiscoveryRelayInspectionUsesCurrentModerationRequest(t *testing.T) {
 		t.Fatal(inspect, e)
 	}
 }
+
+func TestSearchVotesOnlyIncludeIndexedRoots(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	in := input("course", "autumn", 4)
+	in.Signed = true
+	course := create(t, f, "signed", in)
+	mentor := create(t, f, "mentor", r.Input{Kind: "mentor", TargetID: "teacher-a", Title: "Mentor", Body: "Advice"})
+	reply, err := f.service.Reply(ctx, student, mentor.ID, "reply", r.Input{Kind: "reply", TargetID: "teacher-a", Body: "Reply"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	voter := r.Principal{Subject: "voter"}
+	for _, v := range []r.Result{course, mentor, reply} {
+		if _, err := f.service.Action(ctx, voter, v.ID, "vote", r.Action{Action: "vote", Vote: -1}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.service.Profiles = nil
+	got, err := f.service.DiscoveryMyVotes(ctx, voter, "", 1)
+	if err != nil || got.NextCursor != "" || len(got.Items) != 1 || got.Items[0].Target.ID != course.ID || got.Items[0].Choice != "down" {
+		t.Fatal(got, err)
+	}
+	receipts, err := f.service.MyVotes(ctx, voter, "", 10)
+	if err != nil || len(receipts) != 3 {
+		t.Fatal(receipts, err)
+	}
+}

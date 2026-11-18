@@ -41,11 +41,11 @@ func TestPresentationConfigAndAttributionChangesAreScopedAndVersioned(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	stats, err := f.service.Stats(ctx, "teacher", "teacher-a", nil, nil)
+	stats, err := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 20)
 	if err != nil || stats.Dimensions[0].Samples != 0 {
 		t.Fatal("old teacher retained attribution", stats, err)
 	}
-	stats, err = f.service.Stats(ctx, "teacher", "teacher-b", nil, nil)
+	stats, err = f.service.ReadStatsPage(ctx, student, "teacher", "teacher-b", nil, nil, "", 20)
 	if err != nil || stats.Dimensions[0].Samples != 1 {
 		t.Fatal(stats, err)
 	}

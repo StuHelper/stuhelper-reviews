@@ -201,6 +201,16 @@
               "default": false
             },
             "description": "为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。"
+          },
+          {
+            "name": "include_teacher_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
           }
         ],
         "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
@@ -397,6 +407,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_teacher_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
           }
         ],
         "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
@@ -941,6 +961,16 @@
               "default": false
             },
             "description": "为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。"
+          },
+          {
+            "name": "include_teacher_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
           }
         ]
       }
@@ -1595,6 +1625,16 @@
               "type": "string",
               "maxLength": 128
             }
+          },
+          {
+            "name": "include_teacher_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
           }
         ],
         "responses": {
@@ -2838,6 +2878,19 @@
         "properties": {
           "code": {
             "type": "string"
+          },
+          "subcode": {
+            "type": "string",
+            "description": "稳定的机器可读细分子错误码，直接映射前端八种语言（含阿拉伯语 RTL）翻译键。"
+          },
+          "field": {
+            "type": "string",
+            "description": "出错的请求字段或参数名称，用于表单焦点定位与 aria-invalid/aria-describedby 无障碍播报。"
+          },
+          "current_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "409 修订号冲突且调用方已通过归属或管理授权校验时返回的服务端当前修订号。"
           }
         },
         "required": [
@@ -2883,7 +2936,8 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 5
-            }
+            },
+            "description": "固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。"
           },
           "signed": {
             "type": "boolean"
@@ -2978,7 +3032,8 @@
           "level": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 5
+            "maximum": 5,
+            "description": "五级展示等级：0=样本不足（对应 rating_texts[locale][dim][0]），1..5=第一级至第五级（对应 rating_texts[locale][dim][1..5]）。"
           },
           "samples": {
             "type": "integer"
@@ -3035,7 +3090,7 @@
             "items": {
               "type": "string"
             },
-            "description": "课程评价发布时记录的任课教师归属快照（单选教师时为该教师，未单选教师时为该学期本人选课任课教师并集）；非课程评价或无教师归属时省略。"
+            "description": "课程评价发布时记录的任课教师归属快照（单选教师时为该教师，未单选教师时为该学期本人选课任课教师并集）；非课程评价或无教师归属时省略。 仅在 include_teacher_ids=true 时返回。"
           },
           "title": {
             "type": "string"
@@ -3051,7 +3106,8 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 5
-            }
+            },
+            "description": "固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。"
           },
           "author": {
             "$ref": "#/components/schemas/Author"
@@ -3147,7 +3203,8 @@
             "maxItems": 5,
             "items": {
               "$ref": "#/components/schemas/Band"
-            }
+            },
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           }
         },
         "required": [
@@ -3174,7 +3231,8 @@
             "maxItems": 5,
             "items": {
               "$ref": "#/components/schemas/Band"
-            }
+            },
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           },
           "from": {
             "type": "string",
@@ -3318,13 +3376,25 @@
               "restore",
               "delete",
               "edit",
-              "identity"
+              "identity",
+              "feature",
+              "unfeature",
+              "reassign"
             ]
           },
           "body": {
             "type": "string"
           },
           "subject": {
+            "type": "string"
+          },
+          "author_handle": {
+            "type": "string"
+          },
+          "teacher_id": {
+            "type": "string"
+          },
+          "evidence_revision": {
             "type": "string"
           },
           "signed": {
@@ -3396,10 +3466,10 @@
           },
           "state": {
             "type": "string",
+            "description": "Requests without an authenticated session return HTTP 401.",
             "enum": [
               "ready",
               "choose_term",
-              "unauthenticated",
               "forbidden",
               "enrollment_required",
               "unavailable",
@@ -3565,6 +3635,7 @@
       },
       "RatingTexts": {
         "type": "object",
+        "description": "按八种支持语言（zh-CN、en-US、ja-JP、ko-KR、fr-FR、es-ES、ru-RU、ar-EG，其中 ar-EG 为 RTL 文案）组织的五维评分提示文案字典。rating_texts[locale][dim][score] 中 dim 固定为 0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；score 固定为 0=暂无足够数据/未选择，1..5=第一级至第五级展示与无障碍 aria-valuetext 文案（难度与工作量使用程度描述而非质量好坏）。",
         "additionalProperties": {
           "type": "array",
           "minItems": 5,
@@ -3857,7 +3928,8 @@
               "$ref": "#/components/schemas/Band"
             },
             "minItems": 5,
-            "maxItems": 5
+            "maxItems": 5,
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           },
           "recommendation": {
             "$ref": "#/components/schemas/Recommendation"
@@ -3903,7 +3975,8 @@
               "$ref": "#/components/schemas/Band"
             },
             "minItems": 5,
-            "maxItems": 5
+            "maxItems": 5,
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           },
           "recommendation": {
             "$ref": "#/components/schemas/Recommendation"
@@ -3914,7 +3987,8 @@
               "$ref": "#/components/schemas/RatingDistribution"
             },
             "minItems": 5,
-            "maxItems": 5
+            "maxItems": 5,
+            "description": "五维评分分布柱状比例，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；weights 下标 0..4 依次对应 1..5 分档。"
           },
           "terms": {
             "type": "array",
