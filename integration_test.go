@@ -169,11 +169,11 @@ func TestTeacherCourseStatisticsPaginationPreservesOverallWeights(t *testing.T) 
 	ctx := context.Background()
 	create(t, f, "one", input("a-course", "autumn", 1))
 	create(t, f, "two", input("b-course", "autumn", 5))
-	first, err := f.service.StatsPage(ctx, "teacher", "teacher-a", nil, nil, "", 1)
+	first, err := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 1)
 	if err != nil || len(first.Courses) != 1 || first.Next != "a-course" || first.Dimensions[0].Level != 3 {
 		t.Fatal("incorrect first statistics page", err)
 	}
-	second, err := f.service.StatsPage(ctx, "teacher", "teacher-a", nil, nil, first.Next, 1)
+	second, err := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, first.Next, 1)
 	if err != nil || len(second.Courses) != 1 || second.Courses[0].CourseID != "b-course" || second.Courses[0].Dimensions[0].Level != 5 || second.Dimensions != first.Dimensions {
 		t.Fatal("pagination changed equal-course aggregate", err)
 	}
@@ -200,12 +200,12 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 	}
 	v := create(t, f, "all", input("course", "autumn", 4))
 	for _, teacher := range []string{"teacher-a", "teacher-b"} {
-		s, e := f.service.Stats(ctx, "teacher", teacher, nil, nil)
+		s, e := f.service.ReadStatsPage(ctx, student, "teacher", teacher, nil, nil, "", 20)
 		if e != nil || s.Dimensions[0].Samples != 1 {
 			t.Fatal("co-teacher missing", e)
 		}
 	}
-	s, e := f.service.Stats(ctx, "teacher", "teacher-c", nil, nil)
+	s, e := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-c", nil, nil, "", 20)
 	if e != nil || s.Dimensions[0].Samples != 0 {
 		t.Fatal("cross-term attribution")
 	}
@@ -229,7 +229,7 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 	if _, e = f.service.Create(ctx, student, "optional", input("course", "autumn", 3)); e != nil {
 		t.Fatal(e)
 	}
-	s, e = f.service.Stats(ctx, "teacher", "teacher-a", nil, nil)
+	s, e = f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 20)
 	if e != nil || s.Dimensions[0].Samples != 0 {
 		t.Fatal("optional missing evidence invented teachers")
 	}
@@ -315,7 +315,7 @@ func TestTeacherEqualCourseWeightsAndBandBoundaries(t *testing.T) {
 		create(t, f, fmt.Sprintf("many-%d", i), input("course-many", "autumn", 5))
 	}
 	create(t, f, "one", input("course-one", "spring", 1))
-	s, e := f.service.Stats(ctx, "teacher", "teacher-a", nil, nil)
+	s, e := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 20)
 	if e != nil || s.Dimensions[0].Level != 3 || s.Dimensions[0].Samples != 10 || s.Dimensions[0].Courses != 2 {
 		t.Fatalf("unequal course weighting: %+v %v", s, e)
 	}
@@ -323,13 +323,13 @@ func TestTeacherEqualCourseWeightsAndBandBoundaries(t *testing.T) {
 		course := fmt.Sprintf("boundary-%d", low)
 		create(t, f, course+"a", input(course, "autumn", low))
 		create(t, f, course+"b", input(course, "autumn", low+1))
-		v, e := f.service.Stats(ctx, "course", course, nil, nil)
+		v, e := f.service.ReadStatsPage(ctx, student, "course", course, nil, nil, "", 20)
 		if e != nil || v.Dimensions[0].Level != low+1 {
 			t.Fatal("boundary must round upward", v, e)
 		}
 	}
 	create(t, f, "mentor", r.Input{Kind: "mentor", TargetID: "teacher-a", Title: "Guide", Body: "Mentor text"})
-	same, e := f.service.Stats(ctx, "teacher", "teacher-a", nil, nil)
+	same, e := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 20)
 	if e != nil || same.Dimensions[0].Samples != 18 {
 		t.Fatal("mentor affected score", same, e)
 	}
@@ -355,7 +355,7 @@ func TestWithdrawalWindowExpiryVotesAndPermanentDeletion(t *testing.T) {
 			t.Fatal("withdrawn discussion visible")
 		}
 	}
-	s, e := f.service.Stats(ctx, "course", "course", nil, nil)
+	s, e := f.service.ReadStatsPage(ctx, student, "course", "course", nil, nil, "", 20)
 	if e != nil || s.Dimensions[0].Samples != 0 {
 		t.Fatal("withdrawn entry counted")
 	}
