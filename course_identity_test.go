@@ -87,7 +87,7 @@ func TestCourseIdentityPreservesHistoryNewWritesAndCanonicalIdempotency(t *testi
 		if err != nil || len(page.Items) != 2 {
 			t.Fatal(page, err)
 		}
-		stats, err := f.service.Stats(ctx, "course", id, nil, nil)
+		stats, err := f.service.ReadStatsPage(ctx, student, "course", id, nil, nil, "", 20)
 		if err != nil || len(stats.Courses) != 1 || stats.Dimensions[0].Samples != 2 {
 			t.Fatal(stats, err)
 		}

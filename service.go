@@ -812,12 +812,6 @@ func (s *Service) commitRepublish(t Transaction, p Principal, e Entry, key, dige
 	*out = result(e)
 	return nil
 }
-func (s *Service) Stats(ctx context.Context, kind, target string, from, until *time.Time) (Statistics, error) {
-	return s.StatsPage(ctx, kind, target, from, until, "", 20)
-}
-func (s *Service) StatsPage(ctx context.Context, kind, target string, from, until *time.Time, after string, limit int) (Statistics, error) {
-	return s.statsPage(ctx, kind, target, from, until, after, limit, "")
-}
 func (s *Service) statsPage(ctx context.Context, kind, target string, from, until *time.Time, after string, limit int, school string) (Statistics, error) {
 	out := Statistics{From: from, Until: until, Courses: []CourseStatistic{}}
 	if limit < 1 || limit > 100 {
@@ -833,7 +827,7 @@ func (s *Service) statsPage(ctx context.Context, kind, target string, from, unti
 	var rows []Aggregate
 	err = s.Repo.Transaction(ctx, func(t Transaction) error {
 		var e error
-		rows, e = t.Aggregates(kind, ids, school, from, until)
+		rows, e = t.Aggregates(kind, ids, school, from, until, s.now())
 		return e
 	})
 	if err != nil {

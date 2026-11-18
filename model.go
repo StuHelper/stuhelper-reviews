@@ -314,7 +314,7 @@ type Transaction interface {
 	Withdrawals(subject, after string, limit int, now time.Time) ([]Entry, error)
 	Replay(string) (Replay, error)
 	SaveReplay(string, Replay) error
-	Aggregates(kind string, targets []string, school string, from, until *time.Time) ([]Aggregate, error)
+	Aggregates(kind string, targets []string, school string, from, until *time.Time, now time.Time) ([]Aggregate, error)
 	Event(Event) error
 	AuditRead(Event) error
 	AdminEntries(school, kind, state, after string, limit int, now time.Time) ([]Entry, error)

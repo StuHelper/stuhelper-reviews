@@ -90,3 +90,5 @@ postgres/audit_query_test.go 的 TestPublicAuditQuery 使用独立 PostgreSQL �
 升级时清除已逻辑删除或隐藏评价遗留的撤回期限。审核历史保留原始版本，管理员仍可恢复现行记录。
 
 管理员查看一次详情或历史，系统记录一条独立审计。同一时刻的多次查看分别留痕。读取历史时在讨论锁内核对当前状态，一次读取讨论身份并应用到各修订。
+
+统计统一通过 ReadStatsPage 读取，调用方提供当前主体。学校范围在 SQL 分组前生效，评价的到期判断使用服务时钟。Go 调用方从 Stats 和 StatsPage 迁移到该入口。
