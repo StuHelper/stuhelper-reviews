@@ -34,7 +34,7 @@ GET /api/v1/reviews/me/overview 只使用认证主体。review_count 是本人�
 
 pending_courses 通过 catalog 的当前授权选课来源取得候选，排除本人已保存的非删除评价课程与学期组合，最多返回二十项及完整候选计数。重复选课按课程和学期去重，不限制再次评价的权限。
 
-本人选课展示授权、选课来源或资格未就绪时，pending_courses.state 为 unavailable，count 为 null，items 为空。本人评价与草稿数量仍可读取。接口不接受目标账号参数，也不从他人的选课推断本人的待办。
+本人选课展示授权、选课来源、目录别名接口或资格未就绪及子调用超时时，pending_courses.state 为 unavailable，count 为 null，items 为空。本人评价与草稿数量仍可读取。接口不接受目标账号参数，也不从他人的选课推断本人的待办。
 
 GET /api/v1/reviews 新增 sort=upvotes，通过触发器同步的 upvotes 列与复合索引按赞同数、时间、ID 降序分页。快速查看可使用 limit=1。列表仍执行原有内容与作者展示授权，游标绑定原筛选条件。
 

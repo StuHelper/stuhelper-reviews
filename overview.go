@@ -2,7 +2,6 @@ package reviews
 
 import (
 	"context"
-	"errors"
 )
 
 type PendingCourse struct {
@@ -53,8 +52,8 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 	out.PendingCourses = PendingCourses{State: "unavailable", Reason: "enrollment_unavailable", Items: []PendingCourse{}}
 	school, err := s.contentScope(ctx, p, "")
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return OwnOverview{}, err
+		if ctx.Err() != nil {
+			return OwnOverview{}, ctx.Err()
 		}
 		return out, nil
 	}
@@ -65,8 +64,8 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 	}
 	candidates, err := s.catalogOwnReviewCourses(ctx, courses, p)
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return OwnOverview{}, err
+		if ctx.Err() != nil {
+			return OwnOverview{}, ctx.Err()
 		}
 		return out, nil
 	}
@@ -85,11 +84,17 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 	}
 	courseAliases, err := s.catalogSummaryAliases(ctx, refs, school, "course")
 	if err != nil {
-		return OwnOverview{}, err
+		if ctx.Err() != nil {
+			return OwnOverview{}, ctx.Err()
+		}
+		return out, nil
 	}
 	termAliases, err := s.catalogSummaryAliases(ctx, refs, school, "term")
 	if err != nil {
-		return OwnOverview{}, err
+		if ctx.Err() != nil {
+			return OwnOverview{}, ctx.Err()
+		}
+		return out, nil
 	}
 	err = s.Repo.Transaction(ctx, func(tx Transaction) error {
 		port, ok := tx.(SummaryTransaction)
