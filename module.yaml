@@ -133,16 +133,21 @@ scenario_tests:
     - closure_test.go#TestClosureRejectsPublicationAlreadyWaitingForExternalModeration
     - closure_test.go#TestPublicAuditPrivacyRuntimePrivilegesAndFullAccountClosure
   REV-UI-01:
+    - ui_backend_test.go#TestTargetedSummaryUsesScopedCatalogLookups
+    - ui_backend_test.go#TestTeacherSummaryBindsOnlyRequestedAliases
     - ui_backend_test.go#TestSummaryTermsUseCatalogOrderInsteadOfDisplayNames
     - ui_backend_test.go#TestUISummariesVisibleSamplesTermsTeacherWeightsAndAliases
+    - ui_backend_test.go#TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan
   REV-UI-02:
     - ui_backend_test.go#TestUISummaryPolicyBoundariesAndCurrentAuthorization
   REV-UI-03:
     - ui_backend_test.go#TestUIOwnOverviewPendingOwnershipExpiryAndUnavailable
   REV-UI-04:
+    - ui_backend_test.go#TestExistingVotesAndReplayDeadlinesSurviveUpgrade
     - http_compatibility_test.go#TestLegacyReviewHTTPShapeAndExplicitPreviews
     - reply_previews_test.go#TestReplyPreviewsAreBoundedOrderedAndMatchVisibleReplies
     - reply_previews_test.go#TestReplyPreviewsRecheckMandatoryTeacherDisclosure
     - reply_previews_test.go#TestReplyPreviewPageUsesOneBatchForOneHundredRoots
     - notification_titles_test.go#TestNotificationTitlesRespectScopePublicationAndRootNames
     - ui_backend_test.go#TestUIReviewHTTPAndUpvotePagination
+    - ui_backend_test.go#TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan

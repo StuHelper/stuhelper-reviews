@@ -1,7 +1,7 @@
 ---
 type: spec
 status: Accepted
-updated: 2026-11-09
+updated: 2026-11-19
 ---
 
 # 搜索来源与可靠投递
@@ -18,7 +18,7 @@ contracts/discovery-event.schema.json 固定 search 9e791c6 的 discovery.v1 约
 
 模块导出 OutboxChannel。postgres.Repository.PendingOutbox(ctx, limit, excludeSubjects) 返回待发送 Envelope，每批 1 至 100 条，最多排除 1000 个主题。nil 与空集合等价，排除在 LIMIT 前执行，同主题按写入顺序读取。
 
-outbox 只用 sent_at 表示确认状态，未发送部分索引支持空闲与积压查询。读取不认领、不确认事件。ConfirmOutbox(ctx, id) 在所有订阅消费者持久提交后调用，重复确认保留首次时间，不存在的 ID 返回 not_found。
+outbox 只用 sent_at 表示确认状态，未发送部分索引支持空闲与积压查询。读取不认领、不确认事件。ConfirmOutbox(ctx, id) 在所有订阅消费者持久提交后调用，重复确认保留首次时间，不存在的 ID 返回 not_found。PruneOutbox 与 PruneReplays 分别按确认时间和到期时间提供每次最多 1000 条的有界清理。
 
 backend relay 负责 LISTEN、启动和重连补读，以及每 60 秒的未发送索引兜底。失败按 5 秒起的指数退避重试，最长一小时，累计 24 小时转待处理。excludeSubjects 接收退避和待处理主题，消费者按事件 ID 去重。
 

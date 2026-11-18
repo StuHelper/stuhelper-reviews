@@ -275,7 +275,22 @@ func (t *transaction) Replay(key string) (reviews.Replay, error) {
 	return read[reviews.Replay](t, `SELECT data FROM reviews.replays WHERE key=$1`, key)
 }
 func (t *transaction) SaveReplay(key string, v reviews.Replay) error {
-	return t.save(`INSERT INTO reviews.replays(key,object_id,owner,data) VALUES($1,$2,$3,$4) ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,data=excluded.data`, v, key, v.ObjectID, v.Owner)
+	var expires any
+	if !v.Until.IsZero() {
+		expires = v.Until
+	}
+	return t.save(`INSERT INTO reviews.replays(key,object_id,owner,expires_at,data) VALUES($1,$2,$3,$4,$5) ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,expires_at=excluded.expires_at,data=excluded.data`, v, key, v.ObjectID, v.Owner, expires)
+}
+func (r *Repository) PruneReplays(ctx context.Context, before time.Time, limit int) (int64, error) {
+	if before.IsZero() || limit < 1 || limit > 1000 {
+		return 0, reviews.ErrInput
+	}
+	res, err := r.DB.ExecContext(ctx, `DELETE FROM reviews.replays WHERE key IN (SELECT key FROM reviews.replays WHERE expires_at IS NOT NULL AND expires_at<=$1 ORDER BY expires_at,key LIMIT $2 FOR UPDATE SKIP LOCKED)`, before, limit)
+	if err != nil {
+		return 0, safe(err)
+	}
+	n, err := res.RowsAffected()
+	return n, safe(err)
 }
 func (t *transaction) Event(v reviews.Event) error {
 	if e := t.save(`INSERT INTO reviews.audit(id,reason,result,data) VALUES($1,$2,'success',$3)`, v, v.ID, v.Reason); e != nil {
