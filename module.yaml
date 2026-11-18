@@ -110,6 +110,7 @@ scenario_tests:
   CM-14:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   AE-ACCESS-05:
+    - course_identity_test.go#TestOwnerRecordsAndMentorDiscussionFilters
     - own_references_test.go#TestOwnNamesAndValidatedDraftAssociationsSurviveAdmissionExpiry
     - own_references_test.go#TestOwnReferenceHTTPDoesNotOpenPublicContent
     - content_test.go#TestContentHTTPReadAdmissionAndOwnRecordException
