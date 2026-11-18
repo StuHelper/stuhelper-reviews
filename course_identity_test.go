@@ -114,3 +114,67 @@ func TestCourseIdentityPreservesHistoryNewWritesAndCanonicalIdempotency(t *testi
 		t.Fatal("alias bypassed revoked access", err)
 	}
 }
+
+type listCatalog struct {
+	*courseIdentityCatalog
+	aliasReads int
+}
+
+func (c *listCatalog) EquivalentIDs(ctx context.Context, kind, id string) ([]string, error) {
+	c.aliasReads++
+	if c.failed {
+		return nil, r.ErrUnavailable
+	}
+	return c.courseIdentityCatalog.EquivalentIDs(ctx, kind, id)
+}
+func (c *listCatalog) Target(ctx context.Context, kind, id string) (r.Target, error) {
+	if kind == "course" && id == "teacher-a" {
+		return r.Target{}, r.ErrNotFound
+	}
+	return c.courseIdentityCatalog.Target(ctx, kind, id)
+}
+func TestOwnerRecordsAndMentorDiscussionFilters(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	port := &listCatalog{courseIdentityCatalog: &courseIdentityCatalog{catalog: f.catalog}}
+	f.service.Catalog = port
+	in := input("course", "autumn", 4)
+	in.Signed = true
+	course := create(t, f, "signed", in)
+	mentor := create(t, f, "mentor", r.Input{Kind: "mentor", TargetID: "teacher-a", Title: "Mentor", Body: "Advice"})
+	reply, err := f.service.Reply(ctx, student, mentor.ID, "reply", r.Input{Kind: "reply", TargetID: "teacher-a", Body: "Reply"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"reply", ""} {
+		page, err := f.service.List(ctx, student, r.Filter{TargetID: "teacher-a", Kind: kind, Limit: 10})
+		found := false
+		for _, v := range page.Items {
+			found = found || v.ID == reply.ID
+		}
+		if err != nil || !found {
+			t.Errorf("mentor discussion %q: %+v %v", kind, page, err)
+		}
+	}
+	port.failed = true
+	port.aliasReads = 0
+	f.service.Profiles = nil
+	f.access.revoked = true
+	for _, id := range []string{"course", "unrelated"} {
+		page, err := f.service.List(ctx, student, r.Filter{Owner: student.Subject, TargetID: id, Limit: 10})
+		want := 0
+		if id == "course" {
+			want = 1
+		}
+		if err != nil || len(page.Items) != want {
+			t.Errorf("own filter %s: %+v %v", id, page, err)
+		}
+	}
+	if port.aliasReads != 0 {
+		t.Errorf("own filters resolved %d aliases", port.aliasReads)
+	}
+	v, err := f.service.GetOwn(ctx, student, course.ID)
+	if err != nil || v.ID != course.ID || v.Author.Profile != nil || v.Body != in.Body {
+		t.Fatal(v, err)
+	}
+}

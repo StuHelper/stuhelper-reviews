@@ -3244,13 +3244,25 @@
               "restore",
               "delete",
               "edit",
-              "identity"
+              "identity",
+              "feature",
+              "unfeature",
+              "reassign"
             ]
           },
           "body": {
             "type": "string"
           },
           "subject": {
+            "type": "string"
+          },
+          "author_handle": {
+            "type": "string"
+          },
+          "teacher_id": {
+            "type": "string"
+          },
+          "evidence_revision": {
             "type": "string"
           },
           "signed": {
@@ -3322,10 +3334,10 @@
           },
           "state": {
             "type": "string",
+            "description": "Requests without an authenticated session return HTTP 401.",
             "enum": [
               "ready",
               "choose_term",
-              "unauthenticated",
               "forbidden",
               "enrollment_required",
               "unavailable",

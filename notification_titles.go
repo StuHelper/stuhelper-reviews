@@ -70,7 +70,7 @@ func (s *Service) NotificationTitles(ctx context.Context, p Principal, ids []str
 		if len(targets) == 0 {
 			continue
 		}
-		values, e := catalog.SummaryTargets(ctx, kind, targets)
+		values, e := s.catalogSummaryTargets(ctx, catalog, kind, targets)
 		if e != nil {
 			return nil, e
 		}
