@@ -47,6 +47,10 @@ func (h Handler) Routes() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if h.Service == nil {
+			respond(w, nil, reviews.ErrUnavailable)
+			return
+		}
 		if r.Method != "GET" && r.Header.Get("Origin") != "" {
 			u, e := url.Parse(r.Header.Get("Origin"))
 			if e != nil || u.Host != r.Host {
