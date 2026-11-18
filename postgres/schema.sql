@@ -72,3 +72,7 @@ CREATE TABLE IF NOT EXISTS reviews.activity_contributions(root_id text NOT NULL,
 REVOKE ALL ON reviews.activity_contributions FROM PUBLIC;
 
 CREATE INDEX IF NOT EXISTS reviews_vote_activity_day ON reviews.votes(id,created_at);
+
+-- Repair retained moderator decisions made before deletion cleared the withdrawal deadline.
+UPDATE reviews.entries SET expires_at=NULL, data=jsonb_set(data,'{expires_at}','null')
+ WHERE state IN ('deleted','hidden') AND expires_at IS NOT NULL;

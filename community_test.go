@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/StuHelper/stuhelper-reviews/postgres"
 	"slices"
 	"sync"
 	"testing"
@@ -422,5 +423,31 @@ func TestSoftDeletePreservesHistoryDraftPaginationAndIsolatedSweep(t *testing.T)
 	remaining, err := f.service.Sweep(ctx, 100)
 	if err != nil || remaining != 0 {
 		t.Fatalf("expected all expired entries swept, remaining=%d err=%v", remaining, err)
+	}
+}
+
+func TestLegacySoftDeletionRemainsRestorable(t *testing.T) {
+	f := fixture(t)
+	repo, db := database(t)
+	f.service.Repo = repo
+	ctx := context.Background()
+	root := create(t, f, "legacy", input("course", "autumn", 4))
+	admin := r.Principal{Subject: "admin"}
+	deleted, err := f.service.Apply(ctx, admin, r.Decision{ID: "delete", ObjectID: root.ID, Revision: 1, Action: "delete", Reason: "Removed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE reviews.entries SET expires_at=now()-interval '2 days',data=jsonb_set(data,'{expires_at}',to_jsonb(now()-interval '2 days')) WHERE id=$1`, root.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(postgres.Schema); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.service.Sweep(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := f.service.Apply(ctx, admin, r.Decision{ID: "restore", ObjectID: root.ID, Revision: deleted.Revision, Action: "restore", Reason: "Retained history"})
+	if err != nil || restored.State != "published" {
+		t.Fatal(restored, err)
 	}
 }

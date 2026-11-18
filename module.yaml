@@ -76,6 +76,7 @@ scenario_tests:
     - integration_test.go#TestDiscussionIdentityVotingDraftConflictsAndModeration
     - community_test.go#TestComposerUsesCurrentFactsAndDiscussionIdentity
   ACAD-30:
+    - community_test.go#TestLegacySoftDeletionRemainsRestorable
     - integration_test.go#TestWithdrawalWindowExpiryVotesAndPermanentDeletion
     - community_test.go#TestSoftDeletePreservesHistoryDraftPaginationAndIsolatedSweep
   ACAD-32:
