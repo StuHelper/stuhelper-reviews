@@ -69,7 +69,7 @@ AUDIT-01：postgres.Repository.ReadAudit(ctx, auditquery.Request) 返回 auditqu
 
 摘要只含模块、内部对象、管理操作者标识、时间、操作、原因、结果与范围。用户内容与投票事件的操作者固定脱敏为 anonymous，匿名作者反查须通过受敏感能力保护的 accountquery 执行。
 
-表结构直接定义最终形态，不转换历史数据。CheckRuntime 拒绝具备 audit、discovery_history 或 activity_history 删改权限的运行身份，行级与清空触发器维护清理修订。
+CheckRuntime 检查 audit、discovery_history 和 activity_history。运行身份具备任一列的 UPDATE 权限，或具备表级 DELETE、TRUNCATE 权限时，检查失败。行级与清空触发器维护清理修订。
 
 postgres/audit_query_test.go 的 TestPublicAuditQuery 使用独立 PostgreSQL 数据库，验证条件筛选、范围、空原因、unknown、脱敏、回填与延迟提交、清理失效和取消。OpenAPI 路径保持现状，本接口供可信 Go 装配使用。
 
