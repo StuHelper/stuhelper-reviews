@@ -37,10 +37,25 @@ func (t *transaction) CloseOwner(owner, id string) error {
 	if _, e = t.tx.ExecContext(t.ctx, `UPDATE reviews.votes SET subject='anonymous:'||gen_random_uuid()::text WHERE subject=$1`, owner); e != nil {
 		return safe(e)
 	}
-	if _, e = t.tx.ExecContext(t.ctx, `DELETE FROM reviews.replays WHERE key IN (SELECT id FROM reviews.audit WHERE data->>'Actor'=$1 AND data->>'Type'='reviews.voted.v1')`, owner); e != nil {
+	if _, e = t.tx.ExecContext(t.ctx, `DELETE FROM reviews.replays WHERE owner=$1`, owner); e != nil {
 		return safe(e)
 	}
-	if _, e = t.tx.ExecContext(t.ctx, `UPDATE reviews.audit SET data=jsonb_set(data,'{Actor}','""') WHERE data->>'Actor'=$1 AND data->>'Type'='reviews.voted.v1'`, owner); e != nil {
+	if _, e = t.tx.ExecContext(t.ctx, `DELETE FROM reviews.drafts WHERE owner=$1`, owner); e != nil {
+		return safe(e)
+	}
+	withdrawn, e := list[r.Entry](t, `SELECT data FROM reviews.entries WHERE owner=$1 AND state='withdrawn' ORDER BY id`, owner)
+	if e != nil {
+		return e
+	}
+	for _, entry := range withdrawn {
+		if e = t.DeleteEntry(entry); e != nil {
+			return e
+		}
+	}
+	if _, e = t.tx.ExecContext(t.ctx, `UPDATE reviews.identities SET data=jsonb_set(data,'{Signed}','false') WHERE subject=$1 AND COALESCE((data->>'Signed')::boolean,false)`, owner); e != nil {
+		return safe(e)
+	}
+	if _, e = t.tx.ExecContext(t.ctx, `UPDATE reviews.entries SET data=(jsonb_set(data,'{input,signed}','false') #- '{input,disclosures}') WHERE owner=$1`, owner); e != nil {
 		return safe(e)
 	}
 
@@ -61,7 +76,7 @@ func (t *transaction) closedEntry(e *r.Entry) error {
 	if err = t.tx.QueryRowContext(t.ctx, `SELECT EXISTS(SELECT 1 FROM reviews.entries WHERE id=$1)`, e.ID).Scan(&exists); err != nil {
 		return safe(err)
 	}
-	if !exists {
+	if !exists || e.ChangeOrigin == "author" {
 		return r.ErrForbidden
 	}
 	e.Input.Signed = false

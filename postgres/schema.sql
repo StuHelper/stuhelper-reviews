@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS reviews.votes(id text NOT NULL REFERENCES reviews.ent
 CREATE INDEX IF NOT EXISTS reviews_votes_owner ON reviews.votes(subject,id);
 CREATE TABLE IF NOT EXISTS reviews.drafts(id text PRIMARY KEY, owner text NOT NULL, data jsonb NOT NULL);
 CREATE INDEX IF NOT EXISTS reviews_drafts_owner ON reviews.drafts(owner,id);
-CREATE TABLE IF NOT EXISTS reviews.replays(key text PRIMARY KEY, object_id text NOT NULL, data jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS reviews.replays(key text PRIMARY KEY, object_id text NOT NULL, owner text NOT NULL DEFAULT '', data jsonb NOT NULL);
+ALTER TABLE reviews.replays ADD COLUMN IF NOT EXISTS owner text NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS reviews_replays_owner ON reviews.replays(owner) WHERE owner<>'';
 CREATE TABLE IF NOT EXISTS reviews.audit(id text PRIMARY KEY, data jsonb NOT NULL, reason text NOT NULL DEFAULT '', result text NOT NULL DEFAULT 'unknown' CHECK(result IN ('success','denied','failed','unknown')), recorded_xid xid8 NOT NULL DEFAULT pg_current_xact_id(), audit_actor text NOT NULL DEFAULT 'unknown', audit_target text NOT NULL DEFAULT 'unknown', audit_action text NOT NULL DEFAULT 'unknown', audit_school text NOT NULL DEFAULT '*', audit_group text NOT NULL DEFAULT '*', audit_time timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS reviews.outbox(id text PRIMARY KEY, data jsonb NOT NULL, seq bigint GENERATED ALWAYS AS IDENTITY UNIQUE, sent_at timestamptz);
 CREATE INDEX IF NOT EXISTS reviews_outbox_pending ON reviews.outbox((data->>'source') COLLATE "C",(data->>'subject') COLLATE "C",seq) WHERE sent_at IS NULL;
@@ -41,7 +43,9 @@ CREATE OR REPLACE FUNCTION reviews.audit_project() RETURNS trigger LANGUAGE plpg
 CREATE OR REPLACE TRIGGER audit_project BEFORE INSERT OR UPDATE ON reviews.audit FOR EACH ROW EXECUTE FUNCTION reviews.audit_project();
 CREATE OR REPLACE FUNCTION reviews.audit_invalidate() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN UPDATE reviews.audit_retention SET revision=revision+1 WHERE singleton; RETURN NULL; END $$;
 REVOKE ALL ON FUNCTION reviews.audit_invalidate() FROM PUBLIC;
-CREATE OR REPLACE TRIGGER audit_invalidate AFTER UPDATE OR DELETE OR TRUNCATE ON reviews.audit FOR EACH STATEMENT EXECUTE FUNCTION reviews.audit_invalidate();
+DROP TRIGGER IF EXISTS audit_invalidate ON reviews.audit;
+CREATE TRIGGER audit_invalidate AFTER UPDATE OR DELETE ON reviews.audit FOR EACH ROW EXECUTE FUNCTION reviews.audit_invalidate();
+CREATE OR REPLACE TRIGGER truncate_audit AFTER TRUNCATE ON reviews.audit FOR EACH STATEMENT EXECUTE FUNCTION reviews.audit_invalidate();
 CREATE INDEX IF NOT EXISTS audit_query_order ON reviews.audit(audit_time DESC,(id::text) COLLATE "C" DESC);
 
 -- Immutable source versions outlive business deletion, so rebuilds include tombstones.
@@ -51,7 +55,9 @@ CREATE TABLE IF NOT EXISTS reviews.discovery_retention(singleton boolean PRIMARY
 INSERT INTO reviews.discovery_retention(singleton) VALUES(true) ON CONFLICT DO NOTHING;
 CREATE OR REPLACE FUNCTION reviews.invalidate_discovery() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN UPDATE reviews.discovery_retention SET revision=revision+1 WHERE singleton; RETURN NULL; END $$;
 REVOKE ALL ON FUNCTION reviews.invalidate_discovery() FROM PUBLIC;
-CREATE OR REPLACE TRIGGER invalidate_discovery AFTER UPDATE OR DELETE OR TRUNCATE ON reviews.discovery_history FOR EACH STATEMENT EXECUTE FUNCTION reviews.invalidate_discovery();
+DROP TRIGGER IF EXISTS invalidate_discovery ON reviews.discovery_history;
+CREATE TRIGGER invalidate_discovery AFTER UPDATE OR DELETE ON reviews.discovery_history FOR EACH ROW EXECUTE FUNCTION reviews.invalidate_discovery();
+CREATE OR REPLACE TRIGGER truncate_discovery AFTER TRUNCATE ON reviews.discovery_history FOR EACH STATEMENT EXECUTE FUNCTION reviews.invalidate_discovery();
 REVOKE ALL ON TABLE reviews.discovery_history,reviews.discovery_retention FROM PUBLIC;
 
 -- Provider-owned daily aggregates and immutable versions used by rebuild cursors.

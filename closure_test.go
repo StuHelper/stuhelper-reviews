@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	r "github.com/StuHelper/stuhelper-reviews"
+	"github.com/StuHelper/stuhelper-reviews/auditquery"
 	"github.com/StuHelper/stuhelper-reviews/postgres"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestClosureRetainsAnonymousVotes(t *testing.T) {
@@ -110,5 +112,241 @@ func TestClosureRejectsPublicationAlreadyWaitingForExternalModeration(t *testing
 	page, e := f.service.List(ctx, r.Principal{Subject: "reader"}, r.Filter{Limit: 20})
 	if e != nil || len(page.Items) != 0 {
 		t.Fatal("late content persisted", page, e)
+	}
+}
+
+func TestPublicAuditPrivacyRuntimePrivilegesAndFullAccountClosure(t *testing.T) {
+	f := fixture(t)
+	repo, migration := database(t)
+	f.service.Repo = repo
+	ctx := context.Background()
+	facts := factsFor(f, false)
+	f.service.Disclosures = facts
+
+	// 1. A-01: Anonymous review, reply, and active voter must never leak real Subject in ReadAudit,
+	// while moderator inspections and decisions must retain moderator Actor.
+	anonAuthor := r.Principal{Subject: "anon-student"}
+	anonInput := input("course", "autumn", 4)
+	anonInput.Signed = false
+	anonEntry, err := f.service.Create(ctx, anonAuthor, "anon-create", anonInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeVoter := r.Principal{Subject: "active-voter"}
+	if _, err = f.service.Action(ctx, activeVoter, anonEntry.ID, "anon-vote", r.Action{Action: "vote", Vote: 1}); err != nil {
+		t.Fatal(err)
+	}
+	admin := r.Principal{Subject: "admin"}
+	if _, err = f.service.AdminGet(ctx, admin, anonEntry.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	scopes := []auditquery.Scope{{School: "*", Group: "*", Module: "reviews"}}
+	batch, err := repo.ReadAudit(ctx, auditquery.Request{
+		Scopes: scopes,
+		Target: "entry/" + anonEntry.ID,
+		Until:  f.now.Add(time.Hour),
+		Limit:  50,
+	})
+	if err != nil || len(batch.Records) == 0 {
+		t.Fatalf("expected audit records for entry, got %+v err=%v", batch, err)
+	}
+	foundAdmin := false
+	for _, rec := range batch.Records {
+		if rec.Actor == anonAuthor.Subject || rec.Actor == activeVoter.Subject {
+			t.Fatalf("ReadAudit leaked private user Subject: %+v", rec)
+		}
+		if rec.Action == "reviews.inspected.v1" && rec.Actor == admin.Subject {
+			foundAdmin = true
+		}
+	}
+	if !foundAdmin {
+		t.Fatalf("expected moderator Actor in ReadAudit, got %+v", batch.Records)
+	}
+	for _, who := range []string{anonAuthor.Subject, activeVoter.Subject} {
+		byActor, err := repo.ReadAudit(ctx, auditquery.Request{
+			Scopes: scopes,
+			Actor:  who,
+			Until:  f.now.Add(time.Hour),
+			Limit:  50,
+		})
+		if err != nil || len(byActor.Records) != 0 {
+			t.Fatalf("ReadAudit Actor filter matched private user %s: %+v err=%v", who, byActor, err)
+		}
+	}
+
+	// 2. A-13 & A-01: Signed author with ordinary draft, withdrawn draft, published signed entry,
+	// and a reply under another user's root closes their account.
+	closingUser := r.Principal{Subject: "closing-user"}
+	draftRes, err := f.service.SaveDraft(ctx, closingUser, "", "draft-1", input("course", "autumn", 3), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withdrawnPost, err := f.service.Create(ctx, closingUser, "to-withdraw", input("other", "autumn", 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.service.Action(ctx, closingUser, withdrawnPost.ID, "withdraw-it", r.Action{Action: "withdraw", Revision: withdrawnPost.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	signedIn := input("course", "spring", 5)
+	signedIn.Signed = true
+	signedIn.Disclosures = []string{"department"}
+	signedPost, err := f.service.Create(ctx, closingUser, "signed-post", signedIn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replyRes, err := f.service.Reply(ctx, closingUser, anonEntry.ID, "closing-reply", r.Input{
+		Kind:     "reply",
+		TargetID: "course",
+		Body:     "Reply from soon-closed user",
+		Signed:   false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replyAdminBefore, err := f.service.AdminGet(ctx, admin, replyRes.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A-11: Open a ReadAudit snapshot before account closures; closures and 0-row maintenance updates
+	// must NOT invalidate active ReadAudit or DiscoverySnapshot cursors.
+	page1, err := repo.ReadAudit(ctx, auditquery.Request{
+		Scopes: scopes,
+		Until:  f.now.Add(time.Hour),
+		Limit:  1,
+	})
+	if err != nil || len(page1.Records) != 1 || page1.Snapshot == "" {
+		t.Fatalf("failed to open ReadAudit snapshot: %+v err=%v", page1, err)
+	}
+	discPage1, err := repo.DiscoverySnapshot(ctx, "", 1)
+	if err != nil || discPage1.Next == "" {
+		t.Fatalf("failed to open DiscoverySnapshot cursor: %+v err=%v", discPage1, err)
+	}
+
+	if err = f.service.AnonymizeOwner(ctx, "never-wrote-anything", "33333333-3333-4333-8333-333333333333"); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.service.AnonymizeOwner(ctx, closingUser.Subject, "44444444-4444-4444-8444-444444444444"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = migration.Exec(`UPDATE reviews.audit SET reason = reason WHERE id = 'nonexistent'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = migration.Exec(`UPDATE reviews.discovery_history SET data = data WHERE id = 'nonexistent'`); err != nil {
+		t.Fatal(err)
+	}
+
+	r0 := page1.Records[0]
+	if _, err = repo.ReadAudit(ctx, auditquery.Request{
+		Scopes:   scopes,
+		Until:    f.now.Add(time.Hour),
+		Snapshot: page1.Snapshot,
+		Before:   &auditquery.Position{Time: r0.CreatedAt, Source: r0.Source, ID: r0.ID},
+		Limit:    10,
+	}); err != nil {
+		t.Fatalf("ReadAudit snapshot invalidated by account closure or 0-row update: %v", err)
+	}
+	if _, err = repo.DiscoverySnapshot(ctx, discPage1.Next, 10); err != nil {
+		t.Fatalf("DiscoverySnapshot cursor invalidated by 0-row update: %v", err)
+	}
+
+	// Closed author must not appear in ReadAudit for their historical post.
+	closedAudit, err := repo.ReadAudit(ctx, auditquery.Request{
+		Scopes: scopes,
+		Target: "entry/" + signedPost.ID,
+		Until:  f.now.Add(time.Hour),
+		Limit:  50,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rec := range closedAudit.Records {
+		if rec.Actor == closingUser.Subject {
+			t.Fatalf("ReadAudit leaked closed owner Subject: %+v", rec)
+		}
+	}
+
+	// Ordinary and withdrawn drafts must be deleted and new draft writes blocked.
+	if _, err = f.service.GetDraft(ctx, closingUser, draftRes.ID); !errors.Is(err, r.ErrNotFound) {
+		t.Fatalf("ordinary draft survived closure: %v", err)
+	}
+	if _, err = f.service.GetDraft(ctx, closingUser, withdrawnPost.ID); !errors.Is(err, r.ErrNotFound) {
+		t.Fatalf("withdrawn draft survived closure: %v", err)
+	}
+	remainingDrafts, err := f.service.Drafts(ctx, closingUser, "", 20)
+	if err != nil || len(remainingDrafts) != 0 {
+		t.Fatalf("closed user still has drafts: %+v err=%v", remainingDrafts, err)
+	}
+	if _, err = f.service.SaveDraft(ctx, closingUser, "", "post-close-draft", input("course", "autumn", 3), 0); !errors.Is(err, r.ErrForbidden) {
+		t.Fatalf("closed user allowed to SaveDraft: %v", err)
+	}
+
+	// AdminGet, AdminList, and History must hide Signed and Disclosures for closed owners.
+	adminEntry, err := f.service.AdminGet(ctx, admin, signedPost.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !adminEntry.Anonymous || adminEntry.Input.Signed || len(adminEntry.Input.Disclosures) != 0 {
+		t.Fatalf("AdminGet leaked closed owner signed/disclosures state: %+v", adminEntry)
+	}
+	adminList, err := f.service.AdminList(ctx, admin, "school", "course", "published", "", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range adminList.Items {
+		if item.ID == signedPost.ID && (!item.Anonymous || item.Input.Signed || len(item.Input.Disclosures) != 0) {
+			t.Fatalf("AdminList leaked closed owner signed/disclosures state: %+v", item)
+		}
+	}
+	hist, err := f.service.History(ctx, admin, signedPost.ID, 0, 20)
+	if err != nil || len(hist) == 0 {
+		t.Fatalf("History failed: %+v err=%v", hist, err)
+	}
+	for _, item := range hist {
+		if !item.Anonymous || item.Input.Signed || len(item.Input.Disclosures) != 0 {
+			t.Fatalf("History leaked closed owner signed/disclosures state: %+v", item)
+		}
+	}
+
+	// Moderator cannot switch a closed user's reply under another user's root back to Signed: true.
+	otherRoot, err := f.service.AdminGet(ctx, admin, anonEntry.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.service.Apply(ctx, admin, r.Decision{
+		ID:           "unmask-closed-reply",
+		ObjectID:     anonEntry.ID,
+		Revision:     otherRoot.Revision,
+		Action:       "identity",
+		AuthorHandle: replyAdminBefore.AuthorHandle,
+		Signed:       true,
+		Reason:       "Attempt to unmask closed reply author",
+	}); !errors.Is(err, r.ErrForbidden) {
+		t.Fatalf("moderator unmasked closed user's reply: %v", err)
+	}
+
+	// 3. A-11: CheckRuntime must reject UPDATE/DELETE/TRUNCATE on audit and history tables.
+	if err = repo.CheckRuntime(ctx); err != nil {
+		t.Fatalf("CheckRuntime failed on valid runtime role: %v", err)
+	}
+	var runtimeRole string
+	if err = repo.DB.QueryRow(`SELECT current_user`).Scan(&runtimeRole); err != nil {
+		t.Fatal(err)
+	}
+	for _, tbl := range []string{"reviews.audit", "reviews.discovery_history", "reviews.activity_history"} {
+		if _, err = migration.Exec(`GRANT DELETE ON ` + tbl + ` TO ` + runtimeRole); err != nil {
+			t.Fatal(err)
+		}
+		if err = repo.CheckRuntime(ctx); !errors.Is(err, r.ErrUnavailable) {
+			t.Fatalf("CheckRuntime accepted runtime role with DELETE on %s: %v", tbl, err)
+		}
+		if _, err = migration.Exec(`REVOKE UPDATE,DELETE,TRUNCATE ON ` + tbl + ` FROM ` + runtimeRole); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = repo.CheckRuntime(ctx); err != nil {
+		t.Fatalf("CheckRuntime failed after revoking excess privileges: %v", err)
 	}
 }

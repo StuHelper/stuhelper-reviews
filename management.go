@@ -110,7 +110,7 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 		if e = t.Event(Event{ID: rk, Type: "reviews.presentation.v1", Subject: in.SchoolID, SchoolID: in.SchoolID, Actor: p.Subject, Revision: in.Revision, At: s.now()}); e != nil {
 			return e
 		}
-		return t.SaveReplay(rk, Replay{Digest: h, ObjectID: in.SchoolID, Until: s.now().Add(24 * time.Hour)})
+		return t.SaveReplay(rk, Replay{Owner: p.Subject, Digest: h, ObjectID: in.SchoolID, Until: s.now().Add(24 * time.Hour)})
 	})
 	if err != nil {
 		return PresentationView{}, err
