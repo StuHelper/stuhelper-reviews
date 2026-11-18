@@ -82,7 +82,7 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 		} else {
 			course = target
 		}
-		object, err := s.Catalog.Target(ctx, targetKind, target)
+		object, err := s.catalogTarget(ctx, targetKind, target)
 		if err != nil {
 			return out, err
 		}
