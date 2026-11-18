@@ -19,7 +19,7 @@ func (s *Service) CurrentActivity(ctx context.Context, p Principal, id string) (
 	if e != nil {
 		return empty, false, e
 	}
-	object, e := s.Catalog.Target(ctx, target.Kind, target.ID)
+	object, e := s.catalogTarget(ctx, target.Kind, target.ID)
 	if errors.Is(e, ErrNotFound) || errors.Is(e, ErrForbidden) {
 		return empty, false, nil
 	}
@@ -92,7 +92,7 @@ func (s *Service) activityTeacherIDs(ctx context.Context, school string, ids []s
 	}
 	out := []string{}
 	for _, id := range ids {
-		target, e := s.Catalog.Target(ctx, "teacher", id)
+		target, e := s.catalogTarget(ctx, "teacher", id)
 		if e != nil {
 			return nil, e
 		}

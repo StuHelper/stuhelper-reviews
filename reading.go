@@ -130,7 +130,7 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 			profile, ok := profiles[entry.Owner]
 			if !ok && s.Profiles != nil {
 				var err error
-				profile, err = s.Profiles.Lookup(ctx, entry.Owner)
+				profile, err = s.lookupProfile(ctx, entry.Owner)
 				if ctx.Err() != nil {
 					return nil, ctx.Err()
 				}
@@ -241,10 +241,10 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 		if f.Kind == "mentor" {
 			kind = "teacher"
 		}
-		object, err := s.Catalog.Target(ctx, kind, f.TargetID)
+		object, err := s.catalogTarget(ctx, kind, f.TargetID)
 		if errors.Is(err, ErrNotFound) && (f.Kind == "reply" || f.Kind == "") {
 			kind = "teacher"
-			object, err = s.Catalog.Target(ctx, kind, f.TargetID)
+			object, err = s.catalogTarget(ctx, kind, f.TargetID)
 		}
 		if err != nil {
 			return out, err
@@ -261,7 +261,7 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 		}
 	}
 	if f.Owner == "" && f.TeacherID != "" {
-		object, err := s.Catalog.Target(ctx, "teacher", f.TeacherID)
+		object, err := s.catalogTarget(ctx, "teacher", f.TeacherID)
 		if err != nil {
 			return out, err
 		}

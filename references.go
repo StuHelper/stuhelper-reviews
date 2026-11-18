@@ -18,7 +18,7 @@ func (s *Service) equivalentIDs(ctx context.Context, kind, id string) ([]string,
 	if !ok {
 		return []string{id}, nil
 	}
-	ids, err := port.EquivalentIDs(ctx, kind, id)
+	ids, err := s.catalogEquivalentIDs(ctx, port, kind, id)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (s *Service) canonicalAggregates(ctx context.Context, rows []Aggregate) ([]
 	for _, row := range rows {
 		ids = append(ids, row.CourseID)
 	}
-	mapping, err := port.CanonicalCourses(ctx, ids)
+	mapping, err := s.catalogCanonicalCourses(ctx, port, ids)
 	if err != nil {
 		return nil, err
 	}

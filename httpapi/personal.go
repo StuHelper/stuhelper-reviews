@@ -6,7 +6,7 @@ import (
 )
 
 func (h Handler) compose(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.principal(w, r, false)
+	p, ok := h.principal(w, r, true)
 	if !ok {
 		return
 	}
