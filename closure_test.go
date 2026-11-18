@@ -186,6 +186,18 @@ func TestPublicAuditPrivacyRuntimePrivilegesAndFullAccountClosure(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	withdrawnReply, err := f.service.Reply(ctx, closingUser, withdrawnPost.ID, "reply-to-withdraw", r.Input{
+		Kind: "reply", TargetID: "other", Body: "Withdrawn with its root",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withdrawnPost.ID >= withdrawnReply.ID {
+		t.Fatal("fixture must exercise root-first deletion order")
+	}
+	if _, err = f.service.Action(ctx, closingUser, withdrawnReply.ID, "withdraw-reply", r.Action{Action: "withdraw", Revision: withdrawnReply.Revision}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = f.service.Action(ctx, closingUser, withdrawnPost.ID, "withdraw-it", r.Action{Action: "withdraw", Revision: withdrawnPost.Revision}); err != nil {
 		t.Fatal(err)
 	}
@@ -268,6 +280,11 @@ func TestPublicAuditPrivacyRuntimePrivilegesAndFullAccountClosure(t *testing.T) 
 		}
 	}
 
+	var remainingWithdrawn int
+	if err := migration.QueryRow(`SELECT count(*) FROM reviews.entries WHERE id IN ($1, $2)`, withdrawnPost.ID, withdrawnReply.ID).Scan(&remainingWithdrawn); err != nil || remainingWithdrawn != 0 {
+		t.Fatalf("withdrawn root and reply remaining after closure: %d, err=%v", remainingWithdrawn, err)
+	}
+
 	// Ordinary and withdrawn drafts must be deleted and new draft writes blocked.
 	if _, err = f.service.GetDraft(ctx, closingUser, draftRes.ID); !errors.Is(err, r.ErrNotFound) {
 		t.Fatalf("ordinary draft survived closure: %v", err)
@@ -343,6 +360,15 @@ func TestPublicAuditPrivacyRuntimePrivilegesAndFullAccountClosure(t *testing.T) 
 			t.Fatalf("CheckRuntime accepted runtime role with DELETE on %s: %v", tbl, err)
 		}
 		if _, err = migration.Exec(`REVOKE UPDATE,DELETE,TRUNCATE ON ` + tbl + ` FROM ` + runtimeRole); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = migration.Exec(`GRANT UPDATE(data) ON ` + tbl + ` TO ` + runtimeRole); err != nil {
+			t.Fatal(err)
+		}
+		if err = repo.CheckRuntime(ctx); !errors.Is(err, r.ErrUnavailable) {
+			t.Errorf("CheckRuntime accepted column UPDATE on %s: %v", tbl, err)
+		}
+		if _, err = migration.Exec(`REVOKE UPDATE(data) ON ` + tbl + ` FROM ` + runtimeRole); err != nil {
 			t.Fatal(err)
 		}
 	}
