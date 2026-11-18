@@ -89,6 +89,7 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 				return ErrConflict
 			}
 			entry.State = "hidden"
+			entry.ExpiresAt = nil
 		case "restore":
 			if entry.State != "hidden" && entry.State != "deleted" {
 				return ErrConflict
@@ -104,6 +105,7 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 				return ErrConflict
 			}
 			entry.State = "deleted"
+			entry.ExpiresAt = nil
 		case "edit":
 			if d.Body == nil || !textOK(*d.Body, 16000) || strings.TrimSpace(*d.Body) == "" {
 				return ErrInput
