@@ -20,6 +20,8 @@ contracts/discovery-event.schema.json 固定 search 9e791c6 的 discovery.v1 约
 
 outbox 只用 sent_at 表示确认状态，未发送部分索引支持空闲与积压查询。读取不认领、不确认事件。ConfirmOutbox(ctx, id) 在所有订阅消费者持久提交后调用，重复确认保留首次时间，不存在的 ID 返回 not_found。PruneOutbox 与 PruneReplays 分别按确认时间和到期时间提供每次最多 1000 条的有界清理。
 
+运行身份负责读取和确认 outbox。已确认事件由具备 outbox 表 SELECT、DELETE 权限的独立维护身份清理。
+
 backend relay 负责 LISTEN、启动和重连补读，以及每 60 秒的未发送索引兜底。失败按 5 秒起的指数退避重试，最长一小时，累计 24 小时转待处理。excludeSubjects 接收退避和待处理主题，消费者按事件 ID 去重。
 
 Service.DiscoveryCurrent(ctx, principal, ids) 接收 1 至 100 个 ID，每次检查当前内容准入和学校，只返回当前发布且未过期的课程评价文档。撤销准入返回空集合，依赖故障返回错误。

@@ -286,14 +286,7 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 	if err != nil {
 		return out, err
 	}
-	entry.ReviewRequested = state == "review" || state == "pending"
-	if state == "review" {
-		state = "published"
-	}
-	entry.State = state
-	if state == "published" {
-		entry.FirstPublishedAt = &now
-	}
+	applyModerationOutcome(&entry, state, now)
 	err = s.Repo.Transaction(ctx, func(t Transaction) error {
 		if draftID != "" {
 			if e := t.Lock("draft:" + draftID); e != nil {
@@ -445,10 +438,6 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 	if err != nil {
 		return out, err
 	}
-	reviewRequested := state == "review" || state == "pending"
-	if state == "review" {
-		state = "published"
-	}
 	err = s.Repo.Transaction(ctx, func(t Transaction) error {
 		if e := t.Lock(rk); e != nil {
 			return e
@@ -503,10 +492,8 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		}
 		in.Signed = identity.Signed
 		now := s.now()
-		entry := Entry{ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion, State: state, ReviewRequested: reviewRequested}
-		if state == "published" {
-			entry.FirstPublishedAt = &now
-		}
+		entry := Entry{ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
+		applyModerationOutcome(&entry, state, now)
 		if e = t.SaveEntry(entry); e != nil {
 			return e
 		}
@@ -790,19 +777,7 @@ func (s *Service) commitRepublish(t Transaction, p Principal, e Entry, key, dige
 	e.Revision++
 	e.UpdatedAt = s.now()
 	e.RuleVersion = g.RuleVersion
-	e.ReviewRequested = state == "review" || state == "pending"
-	if state == "review" {
-		state = "published"
-	}
-	e.State = state
-	// Pending moderation keeps the withdrawal expiry; editing cannot extend it.
-	if state == "published" {
-		e.ExpiresAt = nil
-		if e.FirstPublishedAt == nil {
-			now := s.now()
-			e.FirstPublishedAt = &now
-		}
-	}
+	applyModerationOutcome(&e, state, s.now())
 	if err = t.SaveEntry(e); err != nil {
 		return err
 	}
@@ -873,4 +848,21 @@ func (s *Service) statsPage(ctx context.Context, kind, target string, from, unti
 		}
 	}
 	return out, nil
+}
+
+// applyModerationOutcome folds pre/post-publication moderation outcomes onto an entry.
+// Pending moderation preserves any existing withdrawal ExpiresAt so editing cannot extend it.
+func applyModerationOutcome(e *Entry, state string, now time.Time) {
+	e.ReviewRequested = state == "review" || state == "pending"
+	if state == "review" {
+		state = "published"
+	}
+	e.State = state
+	if state == "published" {
+		e.ExpiresAt = nil
+		if e.FirstPublishedAt == nil {
+			publishedAt := now
+			e.FirstPublishedAt = &publishedAt
+		}
+	}
 }

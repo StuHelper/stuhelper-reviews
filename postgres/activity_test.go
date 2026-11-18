@@ -42,7 +42,18 @@ func activityDatabase(t *testing.T) (*Repository, *Repository, *sql.DB) {
 	if _, e = admin.Exec(`CREATE ROLE ` + role + ` LOGIN; CREATE ROLE ` + cleaner + ` LOGIN`); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = db.Exec(`REVOKE ALL ON SCHEMA public FROM PUBLIC;GRANT USAGE ON SCHEMA reviews TO ` + role + `,` + cleaner + `;GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA reviews TO ` + role + `;REVOKE UPDATE,DELETE ON reviews.audit,reviews.discovery_history,reviews.activity_history FROM ` + role + `;GRANT USAGE ON ALL SEQUENCES IN SCHEMA reviews TO ` + role + `;GRANT SELECT ON reviews.activity_buckets TO ` + cleaner + `;GRANT SELECT,DELETE ON reviews.activity_history TO ` + cleaner); e != nil {
+	grants := `
+		REVOKE ALL ON SCHEMA public FROM PUBLIC;
+		GRANT USAGE ON SCHEMA reviews TO ` + role + `,` + cleaner + `;
+		GRANT SELECT ON reviews.activity_buckets TO ` + cleaner + `;
+		GRANT SELECT,DELETE ON reviews.activity_history TO ` + cleaner + `;
+		GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA reviews TO ` + role + `;
+		GRANT SELECT,INSERT,UPDATE,DELETE ON reviews.entries,reviews.votes,reviews.drafts,reviews.replays,reviews.activity_contributions TO ` + role + `;
+		GRANT SELECT,INSERT,UPDATE ON reviews.identities,reviews.presentations,reviews.activity_buckets,reviews.outbox TO ` + role + `;
+		GRANT SELECT,INSERT ON reviews.audit,reviews.history,reviews.presentation_history,reviews.discovery_history,reviews.activity_history,reviews.closed_owners TO ` + role + `;
+		GRANT SELECT ON reviews.audit_retention,reviews.discovery_retention,reviews.activity_retention TO ` + role + `;
+	`
+	if _, e = db.Exec(grants); e != nil {
 		t.Fatal(e)
 	}
 	runtimeCfg := cfg.Copy()
@@ -51,6 +62,10 @@ func activityDatabase(t *testing.T) (*Repository, *Repository, *sql.DB) {
 	cleanerCfg := cfg.Copy()
 	cleanerCfg.User = cleaner
 	maintenance := stdlib.OpenDB(*cleanerCfg)
+	repo := &Repository{DB: runtime}
+	if err := repo.CheckRuntime(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		maintenance.Close()
 		runtime.Close()
@@ -63,7 +78,7 @@ func activityDatabase(t *testing.T) (*Repository, *Repository, *sql.DB) {
 		}
 		admin.Close()
 	})
-	return &Repository{DB: runtime}, &Repository{DB: maintenance}, db
+	return repo, &Repository{DB: maintenance}, db
 }
 func TestActivitySnapshotSchemaRollbackAndBoundedCleanup(t *testing.T) {
 	repo, maintenance, db := activityDatabase(t)

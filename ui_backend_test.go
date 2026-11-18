@@ -428,7 +428,7 @@ func TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan(t *testing.T) {
 		}
 	}
 	// Unconfirmed rows must never be deleted by PruneOutbox; confirmed rows older than cutoff are boundedly deleted.
-	prunedOutbox, err := repo.PruneOutbox(ctx, time.Now().UTC().Add(time.Minute), 2)
+	prunedOutbox, err := outboxPruner(t, migration).PruneOutbox(ctx, time.Now().UTC().Add(time.Minute), 2)
 	if err != nil || prunedOutbox != 2 {
 		t.Fatalf("expected bounded 2 confirmed outbox rows pruned, got n=%d err=%v", prunedOutbox, err)
 	}
