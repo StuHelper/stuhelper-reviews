@@ -7,8 +7,10 @@ import (
 	"github.com/StuHelper/stuhelper-reviews/httpapi"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestContentHTTPReadAdmissionAndOwnRecordException(t *testing.T) {
@@ -96,5 +98,29 @@ func TestContentListsStatisticsAndComposerRespectServedSchool(t *testing.T) {
 	own, e := f.service.GetOwn(ctx, student, foreign.ID)
 	if e != nil || own.ID != foreign.ID {
 		t.Fatal("own historical school record lost", e)
+	}
+}
+
+func TestStatisticsUseServiceClockAndRequireScopedEntryPoint(t *testing.T) {
+	f := fixture(t)
+	repo, db := database(t)
+	f.service.Repo = repo
+	ctx := context.Background()
+	entry := create(t, f, "clock", input("course", "autumn", 4))
+	deadline := f.now.Add(time.Hour)
+	if _, err := db.Exec(`UPDATE reviews.entries SET expires_at=$2 WHERE id=$1`, entry.ID, deadline); err != nil {
+		t.Fatal(err)
+	}
+	for i, now := range []time.Time{deadline.Add(-time.Second), deadline} {
+		f.now = now
+		stats, err := f.service.ReadStatsPage(ctx, student, "course", "course", nil, nil, "", 20)
+		if err != nil || stats.Dimensions[0].Samples != 1-i {
+			t.Errorf("clock boundary %d: %+v %v", i, stats, err)
+		}
+	}
+	for _, name := range []string{"Stats", "StatsPage"} {
+		if _, ok := reflect.TypeOf(f.service).MethodByName(name); ok {
+			t.Errorf("unscoped service method %s", name)
+		}
 	}
 }

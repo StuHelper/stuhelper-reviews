@@ -3,6 +3,7 @@ package reviews_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -144,15 +145,37 @@ func TestDiagnosticsClientCancellationAndOutboxMetrics(t *testing.T) {
 		if ev.Dependency == "postgres" && ev.SQLState == "23505" && ev.Category == "conflict" {
 			sawSQLState = true
 		}
-		if ev.Dependency == "http" && ev.Category == "canceled" {
+		if ev.Dependency == "http" && ev.Operation == "GET /api/v1/reviews" && ev.Category == "canceled" {
 			sawCanceled = true
 		}
-		if ev.Dependency == "http" && ev.Category == "unavailable" {
+		if ev.Dependency == "http" && ev.Operation == "GET /api/v1/reviews" && ev.Category == "unavailable" {
 			sawHTTPUnavailable = true
 		}
 	}
 	if !sawModeration || !sawSQLState || !sawCanceled || !sawHTTPUnavailable {
 		t.Fatalf("missing expected diagnostic events: mod=%v sql=%v cancel=%v http503=%v (%s)",
 			sawModeration, sawSQLState, sawCanceled, sawHTTPUnavailable, fmt.Sprintf("%+v", captured))
+	}
+}
+
+func TestDisclosureDiagnosticsKeepProviderCategory(t *testing.T) {
+	f := fixture(t)
+	for _, tc := range []struct {
+		cause    error
+		category string
+	}{{context.Canceled, "canceled"}, {context.DeadlineExceeded, "timeout"}} {
+		f.service.Disclosures = &disclosureFixture{err: tc.cause}
+		var observed []string
+		f.service.OnDiagnostic = func(e r.DiagnosticEvent) {
+			if e.Dependency == "disclosures" && e.Operation == "disclosure_facts" {
+				observed = append(observed, e.Category)
+			}
+		}
+		in := input("course", "autumn", 5)
+		in.Disclosures = []string{"department"}
+		_, err := f.service.Create(context.Background(), student, "diagnostic-"+tc.category, in)
+		if !errors.Is(err, r.ErrUnavailable) || len(observed) != 1 || observed[0] != tc.category {
+			t.Errorf("cause %v, diagnostic categories %v, public error %v", tc.cause, observed, err)
+		}
 	}
 }

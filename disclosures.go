@@ -62,10 +62,8 @@ func (s *Service) disclosureContext(ctx context.Context, p Principal, school, co
 		s.emitDiagnostic("disclosure_facts", "disclosures", time.Now(), ErrUnavailable)
 		return out, ErrUnavailable
 	}
-	start := time.Now()
-	facts, err := s.Disclosures.Facts(ctx, p, school, course, term)
+	facts, err := s.disclosureFacts(ctx, p, school, course, term)
 	if err != nil {
-		s.emitDiagnostic("disclosure_facts", "disclosures", start, ErrUnavailable)
 		return out, ErrUnavailable
 	}
 	if !s.now().Before(facts.ValidUntil) {
@@ -89,7 +87,7 @@ func (s *Service) disclosureContext(ctx context.Context, p Principal, school, co
 			if !ok {
 				return out, ErrUnavailable
 			}
-			out.ownCourse, err = catalog.HasTaught(ctx, facts.TeacherIDs, course)
+			out.ownCourse, err = s.catalogHasTaught(ctx, catalog, facts.TeacherIDs, course)
 			if err != nil {
 				return out, ErrUnavailable
 			}

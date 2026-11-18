@@ -66,26 +66,30 @@ func (s *Service) emitDiagnostic(op, dep string, start time.Time, err error) {
 	})
 }
 
-func (s *Service) catalogTarget(ctx context.Context, op, kind, id string) (Target, error) {
+func (s *Service) catalogTargetFor(ctx context.Context, op, kind, id string) (Target, error) {
 	if s.Catalog == nil {
 		err := ErrUnavailable
 		s.emitDiagnostic(op, "catalog", time.Now(), err)
 		return Target{}, err
 	}
 	start := time.Now()
-	out, err := s.Catalog.Target(ctx, kind, id)
+	callCtx, cancel := s.externalCtx(ctx)
+	defer cancel()
+	out, err := s.Catalog.Target(callCtx, kind, id)
 	s.emitDiagnostic(op, "catalog", start, err)
-	return out, err
+	return out, wrapExternalErr(ctx, err)
 }
 
-func (s *Service) catalogEvidence(ctx context.Context, op string, p Principal, course, term string) ([]Evidence, error) {
+func (s *Service) catalogEvidenceFor(ctx context.Context, op string, p Principal, course, term string) ([]Evidence, error) {
 	if s.Catalog == nil {
 		err := ErrUnavailable
 		s.emitDiagnostic(op, "catalog", time.Now(), err)
 		return nil, err
 	}
 	start := time.Now()
-	out, err := s.Catalog.Evidence(ctx, p, course, term)
+	callCtx, cancel := s.externalCtx(ctx)
+	defer cancel()
+	out, err := s.Catalog.Evidence(callCtx, p, course, term)
 	s.emitDiagnostic(op, "catalog", start, err)
-	return out, err
+	return out, wrapExternalErr(ctx, err)
 }

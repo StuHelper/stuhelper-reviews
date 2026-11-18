@@ -72,7 +72,6 @@ const (
 	ComposerStateEnrollmentRequired ComposerState = "enrollment_required"
 	ComposerStateForbidden          ComposerState = "forbidden"
 	ComposerStateReady              ComposerState = "ready"
-	ComposerStateUnauthenticated    ComposerState = "unauthenticated"
 	ComposerStateUnavailable        ComposerState = "unavailable"
 )
 
@@ -88,8 +87,6 @@ func (e ComposerState) Valid() bool {
 	case ComposerStateForbidden:
 		return true
 	case ComposerStateReady:
-		return true
-	case ComposerStateUnauthenticated:
 		return true
 	case ComposerStateUnavailable:
 		return true
@@ -438,6 +435,8 @@ type Author struct {
 // Band defines model for Band.
 type Band struct {
 	Courses int `json:"courses"`
+
+	// Level 五级展示等级：0=样本不足（对应 rating_texts[locale][dim][0]），1..5=第一级至第五级（对应 rating_texts[locale][dim][1..5]）。
 	Level   int `json:"level"`
 	Samples int `json:"samples"`
 }
@@ -449,9 +448,11 @@ type Composer struct {
 	Identity     ComposerIdentity    `json:"identity"`
 	Requirements []Requirement       `json:"requirements"`
 	RuleVersion  string              `json:"rule_version"`
-	State        ComposerState       `json:"state"`
-	TeacherIds   []string            `json:"teacher_ids"`
-	TeacherReply *bool               `json:"teacher_reply,omitempty"`
+
+	// State Requests without an authenticated session return HTTP 401.
+	State        ComposerState `json:"state"`
+	TeacherIds   []string      `json:"teacher_ids"`
+	TeacherReply *bool         `json:"teacher_reply,omitempty"`
 
 	// TeacherRequired true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。
 	TeacherRequired *bool `json:"teacher_required,omitempty"`
@@ -460,12 +461,14 @@ type Composer struct {
 // ComposerIdentity defines model for Composer.Identity.
 type ComposerIdentity string
 
-// ComposerState defines model for Composer.State.
+// ComposerState Requests without an authenticated session return HTTP 401.
 type ComposerState string
 
 // CourseStatistic defines model for CourseStatistic.
 type CourseStatistic struct {
-	CourseId   string `json:"course_id"`
+	CourseId string `json:"course_id"`
+
+	// Dimensions 五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。
 	Dimensions []Band `json:"dimensions"`
 }
 
@@ -518,8 +521,10 @@ type Input struct {
 	// Disclosures Only field names. Values are obtained from current authoritative, authorized facts. Defaults to no disclosure.
 	Disclosures *[]DisclosureKey `json:"disclosures,omitempty"`
 	Kind        InputKind        `json:"kind"`
-	Ratings     []int            `json:"ratings"`
-	Signed      bool             `json:"signed"`
+
+	// Ratings 固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。
+	Ratings []int `json:"ratings"`
+	Signed  bool  `json:"signed"`
 
 	// TargetId  体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。
 	TargetId string `json:"target_id"`
@@ -581,6 +586,7 @@ type PendingCoursesState string
 
 // Presentation defines model for Presentation.
 type Presentation struct {
+	// RatingTexts 按八种支持语言（zh-CN、en-US、ja-JP、ko-KR、fr-FR、es-ES、ru-RU、ar-EG，其中 ar-EG 为 RTL 文案）组织的五维评分提示文案字典。rating_texts[locale][dim][score] 中 dim 固定为 0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；score 固定为 0=暂无足够数据/未选择，1..5=第一级至第五级展示与无障碍 aria-valuetext 文案（难度与工作量使用程度描述而非质量好坏）。
 	RatingTexts RatingTexts `json:"rating_texts"`
 	Revision    int         `json:"revision"`
 	SchoolId    string      `json:"school_id"`
@@ -589,6 +595,7 @@ type Presentation struct {
 // PresentationView defines model for PresentationView.
 type PresentationView struct {
 	Configured *struct {
+		// RatingTexts 按八种支持语言（zh-CN、en-US、ja-JP、ko-KR、fr-FR、es-ES、ru-RU、ar-EG，其中 ar-EG 为 RTL 文案）组织的五维评分提示文案字典。rating_texts[locale][dim][score] 中 dim 固定为 0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；score 固定为 0=暂无足够数据/未选择，1..5=第一级至第五级展示与无障碍 aria-valuetext 文案（难度与工作量使用程度描述而非质量好坏）。
 		RatingTexts RatingTexts `json:"rating_texts"`
 		Revision    int         `json:"revision"`
 		SchoolId    string      `json:"school_id"`
@@ -615,7 +622,7 @@ type RatingDistribution struct {
 	Weights []int `json:"weights"`
 }
 
-// RatingTexts defines model for RatingTexts.
+// RatingTexts 按八种支持语言（zh-CN、en-US、ja-JP、ko-KR、fr-FR、es-ES、ru-RU、ar-EG，其中 ar-EG 为 RTL 文案）组织的五维评分提示文案字典。rating_texts[locale][dim][score] 中 dim 固定为 0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；score 固定为 0=暂无足够数据/未选择，1..5=第一级至第五级展示与无障碍 aria-valuetext 文案（难度与工作量使用程度描述而非质量好坏）。
 type RatingTexts map[string][][]string
 
 // Recommendation Accepted: four bands from the mean recommendation dimension. Fewer than the configured minimum samples is unrated. No exact mean is exposed.
@@ -676,7 +683,10 @@ type ReviewSummaries struct {
 
 // ReviewSummary defines model for ReviewSummary.
 type ReviewSummary struct {
-	Dimensions   []Band                `json:"dimensions"`
+	// Dimensions 五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。
+	Dimensions []Band `json:"dimensions"`
+
+	// Distribution 五维评分分布柱状比例，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；weights 下标 0..4 依次对应 1..5 分档。
 	Distribution *[]RatingDistribution `json:"distribution,omitempty"`
 	Kind         ReviewSummaryKind     `json:"kind"`
 
@@ -692,15 +702,18 @@ type ReviewSummaryKind string
 
 // Statistics defines model for Statistics.
 type Statistics struct {
-	Courses    []CourseStatistic `json:"courses"`
-	Dimensions []Band            `json:"dimensions"`
-	From       *time.Time        `json:"from"`
-	Next       string            `json:"next"`
-	Until      *time.Time        `json:"until"`
+	Courses []CourseStatistic `json:"courses"`
+
+	// Dimensions 五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。
+	Dimensions []Band     `json:"dimensions"`
+	From       *time.Time `json:"from"`
+	Next       string     `json:"next"`
+	Until      *time.Time `json:"until"`
 }
 
 // TermSummary defines model for TermSummary.
 type TermSummary struct {
+	// Dimensions 五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。
 	Dimensions []Band `json:"dimensions"`
 
 	// Recommendation Accepted: four bands from the mean recommendation dimension. Fewer than the configured minimum samples is unrated. No exact mean is exposed.
@@ -726,7 +739,9 @@ type View struct {
 	MyVote      int        `json:"my_vote"`
 	ParentId    *string    `json:"parent_id,omitempty"`
 	PublishedAt *time.Time `json:"published_at"`
-	Ratings     []int      `json:"ratings"`
+
+	// Ratings 固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。
+	Ratings []int `json:"ratings"`
 
 	// ReplyCount 评价列表中的根评价附带当前请求人可见的已发布回复总数，包括嵌套回复。删除、隐藏、撤回、到期及必需实名授权撤销的回复不计入。本人列表仅在仍有当前内容阅读权限时提供；详情和回复行可省略。 仅 include_reply_preview=true 时返回。
 	ReplyCount *int `json:"reply_count,omitempty"`

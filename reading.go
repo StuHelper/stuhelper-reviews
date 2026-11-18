@@ -127,22 +127,26 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		}
 		v.Author = Author{Anonymous: !identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }), Handle: identity.Handle, Disclosures: labels}
 		if identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }) {
-			if s.Profiles == nil {
-				s.emitDiagnostic("profile_lookup", "profiles", time.Now(), ErrUnavailable)
-				return nil, ErrUnavailable
-			}
 			profile, ok := profiles[entry.Owner]
-			if !ok {
+			if !ok && s.Profiles != nil {
 				var err error
-				start := time.Now()
-				profile, err = s.Profiles.Lookup(ctx, entry.Owner)
-				s.emitDiagnostic("profile_lookup", "profiles", start, err)
-				if err != nil {
+				profile, err = s.lookupProfile(ctx, entry.Owner)
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				if err != nil && !own {
 					return nil, err
 				}
-				profiles[entry.Owner] = profile
+				if err == nil {
+					profiles[entry.Owner] = profile
+					ok = true
+				}
 			}
-			v.Author.Profile = &profile
+			if ok {
+				v.Author.Profile = &profile
+			} else if !own {
+				return nil, ErrUnavailable
+			}
 		}
 		v.Upvotes = entry.Projection.Upvotes
 		v.Downvotes = entry.Projection.Downvotes
@@ -230,37 +234,43 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 	if err := decodeCursor(&f); err != nil {
 		return out, err
 	}
-	if f.TargetID != "" {
+	// Personal filters refer only to this owner's locally stored IDs.
+	f.EquivalentTargets, f.EquivalentTeachers = nil, nil
+	if f.Owner == "" && f.TargetID != "" {
 		kind := "course"
 		if f.Kind == "mentor" {
 			kind = "teacher"
 		}
-		if f.Owner == "" {
-			object, err := s.Catalog.Target(ctx, kind, f.TargetID)
-			if err != nil {
-				return out, err
-			}
-			if object.SchoolID != f.SchoolID {
-				return out, ErrForbidden
-			}
+		object, err := s.catalogTarget(ctx, kind, f.TargetID)
+		if errors.Is(err, ErrNotFound) && (f.Kind == "reply" || f.Kind == "") {
+			kind = "teacher"
+			object, err = s.catalogTarget(ctx, kind, f.TargetID)
 		}
-		var err error
+		if err != nil {
+			return out, err
+		}
+		if object.SchoolID != f.SchoolID {
+			return out, ErrForbidden
+		}
+		if object.Inactive {
+			return out, ErrNotFound
+		}
 		f.EquivalentTargets, err = s.equivalentIDs(ctx, kind, f.TargetID)
 		if err != nil {
 			return out, err
 		}
 	}
-	if f.TeacherID != "" {
-		if f.Owner == "" {
-			object, err := s.Catalog.Target(ctx, "teacher", f.TeacherID)
-			if err != nil {
-				return out, err
-			}
-			if object.SchoolID != f.SchoolID {
-				return out, ErrForbidden
-			}
+	if f.Owner == "" && f.TeacherID != "" {
+		object, err := s.catalogTarget(ctx, "teacher", f.TeacherID)
+		if err != nil {
+			return out, err
 		}
-		var err error
+		if object.SchoolID != f.SchoolID {
+			return out, ErrForbidden
+		}
+		if object.Inactive {
+			return out, ErrNotFound
+		}
 		f.EquivalentTeachers, err = s.equivalentIDs(ctx, "teacher", f.TeacherID)
 		if err != nil {
 			return out, err
@@ -270,12 +280,12 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 	f.Now = s.now()
 	var entries []Entry
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		if f.RootID != "" {
+		if f.RootID != "" && f.Owner == "" {
 			root, err := s.accessible(t, f.RootID)
 			if err != nil {
 				return err
 			}
-			if f.Owner == "" && root.SchoolID != f.SchoolID {
+			if root.SchoolID != f.SchoolID {
 				return ErrForbidden
 			}
 		}

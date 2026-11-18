@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
-	"net/url"
+
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,8 @@ type Authenticate func(*http.Request) (reviews.Principal, error)
 type Handler struct {
 	Service      *reviews.Service
 	Authenticate Authenticate
+	// PublicOrigin is the trusted browser origin when a reverse proxy terminates TLS.
+	PublicOrigin string
 	OnDiagnostic reviews.DiagnosticHook
 }
 
@@ -79,17 +82,42 @@ func (h Handler) Routes() http.Handler {
 		}
 		tracker.Header().Set("Cache-Control", "no-store")
 		tracker.Header().Set("X-Content-Type-Options", "nosniff")
-		if r.Method != "GET" && r.Header.Get("Origin") != "" {
-			u, e := url.Parse(r.Header.Get("Origin"))
-			if e != nil || u.Host != r.Host {
-				respond(tracker, nil, reviews.ErrForbidden)
-				return
-			}
+		if h.Service == nil {
+			respond(tracker, nil, reviews.ErrUnavailable)
+			return
+		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !h.sameOriginWrite(r) {
+			respond(tracker, nil, reviews.ErrForbidden)
+			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
-		m.ServeHTTP(tracker, r.WithContext(ctx))
+		tracker.req = r.WithContext(ctx)
+		m.ServeHTTP(tracker, tracker.req)
 	})
+}
+func (h Handler) sameOriginWrite(r *http.Request) bool {
+	for _, site := range r.Header.Values("Sec-Fetch-Site") {
+		if site != "same-origin" && site != "none" {
+			return false
+		}
+	}
+	origins := r.Header.Values("Origin")
+	if len(origins) == 0 || len(origins) == 1 && origins[0] == "" {
+		return true
+	}
+	if len(origins) != 1 {
+		return false
+	}
+	expected := h.PublicOrigin
+	if expected == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		expected = scheme + "://" + r.Host
+	}
+	return strings.EqualFold(origins[0], expected)
 }
 func respond(w http.ResponseWriter, v any, e error) {
 	w.Header().Set("Content-Type", "application/json")
@@ -134,6 +162,10 @@ func respond(w http.ResponseWriter, v any, e error) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) error {
+	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || media != "application/json" || len(r.Header.Values("Content-Type")) != 1 {
+		return reviews.ErrInput
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 128<<10)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
