@@ -6,9 +6,12 @@ import (
 	"time"
 )
 
-func adminView(e Entry) AdminEntry {
+func adminView(e Entry, closed bool) AdminEntry {
 	in := e.Input
-	in.Signed = e.Projection.Identity.Signed
+	in.Signed = e.Projection.Identity.Signed && !closed
+	if closed {
+		in.Disclosures = nil
+	}
 	return AdminEntry{ChangeOrigin: e.ChangeOrigin, ChangeReason: e.ChangeReason, Featured: e.Featured, ID: e.ID, RootID: e.RootID, SchoolID: e.SchoolID, Input: in, AuthorHandle: e.Projection.Identity.Handle, Anonymous: !in.Signed, State: e.State, Revision: e.Revision, CreatedAt: e.CreatedAt, PublishedAt: e.FirstPublishedAt}
 }
 func (s *Service) auditRead(t Transaction, p Principal, school, subject string, revision int64) error {
@@ -53,7 +56,11 @@ func (s *Service) AdminGet(ctx context.Context, p Principal, id string) (AdminEn
 		if err != nil {
 			return err
 		}
-		out = adminView(entry)
+		closed, err := t.ClosedOwners([]string{entry.Owner})
+		if err != nil {
+			return err
+		}
+		out = adminView(entry, closed[entry.Owner])
 		return s.auditRead(t, p, entry.SchoolID, "entry/"+entry.ID, entry.Revision)
 	})
 	return out, err
@@ -75,8 +82,16 @@ func (s *Service) AdminList(ctx context.Context, p Principal, school, kind, stat
 			out.Next = entries[limit-1].ID
 			entries = entries[:limit]
 		}
+		owners := make([]string, 0, len(entries))
 		for _, entry := range entries {
-			out.Items = append(out.Items, adminView(entry))
+			owners = append(owners, entry.Owner)
+		}
+		closed, err := t.ClosedOwners(owners)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			out.Items = append(out.Items, adminView(entry, closed[entry.Owner]))
 		}
 		return s.auditRead(t, p, school, "school/"+school+"/entries/"+hash([]string{kind, state, after}), 0)
 	})
@@ -109,6 +124,10 @@ func (s *Service) History(ctx context.Context, p Principal, id string, before in
 				return ErrNotFound
 			}
 		}
+		closed, e := t.ClosedOwners([]string{live.Owner})
+		if e != nil {
+			return e
+		}
 		entries, e := t.History(id, before, limit)
 		if e != nil {
 			return e
@@ -118,7 +137,7 @@ func (s *Service) History(ctx context.Context, p Principal, id string, before in
 			if e != nil {
 				return e
 			}
-			out = append(out, adminView(entry))
+			out = append(out, adminView(entry, closed[entry.Owner]))
 		}
 		return s.auditRead(t, p, current.SchoolID, "history/"+id, current.Revision)
 	})
