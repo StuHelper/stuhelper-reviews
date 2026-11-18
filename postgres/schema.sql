@@ -72,3 +72,8 @@ CREATE TABLE IF NOT EXISTS reviews.activity_contributions(root_id text NOT NULL,
 REVOKE ALL ON reviews.activity_contributions FROM PUBLIC;
 
 CREATE INDEX IF NOT EXISTS reviews_vote_activity_day ON reviews.votes(id,created_at);
+
+CREATE INDEX IF NOT EXISTS reviews_published_teacher_replies ON reviews.entries(root_id,id)
+ WHERE state='published' AND COALESCE((data->>'teacher_reply')::boolean,false);
+CREATE INDEX IF NOT EXISTS reviews_activity_roots ON reviews.entries(kind,(data->>'activity_target_id'),id)
+ WHERE state='published';

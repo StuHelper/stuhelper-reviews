@@ -1,7 +1,7 @@
 ---
 type: spec
 status: Accepted
-updated: 2026-11-15
+updated: 2026-11-18
 ---
 
 # 热门活动来源
@@ -61,3 +61,5 @@ PruneActivityHistory(ctx, beforeDay, limit) 每次最多删除 1000 条旧修订
 | 场景 | 验证条件 |
 | --- | --- |
 | REV-ACTIVITY-01 | 本来源计数、权限、并发、回滚、事件 Schema、固定分页、墓碑和清理上限 |
+
+活动读取批量加载仍存在且需要核验的回复，按教师、学校、课程与学期复用当次披露事实。核验期间桶修订发生变化时重查一次。再次变化返回 unavailable，以便调用方重试。

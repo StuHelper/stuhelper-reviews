@@ -285,6 +285,7 @@ type Repository interface {
 }
 type Transaction interface {
 	DiscoveryCurrent(string, []string, time.Time) ([]DiscoveryDocument, error)
+	ActivityDisclosureCandidates([]string) ([]Entry, error)
 	ClosedOwners([]string) (map[string]bool, error)
 	CloseOwner(string, string) error
 	OwnedReferences(string, []string, time.Time) ([]string, error)
