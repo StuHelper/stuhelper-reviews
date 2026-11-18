@@ -63,6 +63,7 @@ scenario_tests:
     - discovery_service_test.go#TestDiscoveryRelayInspectionUsesCurrentModerationRequest
     - discovery_delivery_test.go#TestDiscoveryOutboxNotificationRollbackExclusionAndConfirmation
   REV-DISCOVERY-02:
+    - discovery_service_test.go#TestSearchVotesOnlyIncludeIndexedRoots
     - discovery_service_test.go#TestDiscoveryMyVotesCurrentPermissionsPaginationAndCancellation
   AUDIT-01:
     - postgres/audit_query_test.go#TestPublicAuditQuery

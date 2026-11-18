@@ -284,6 +284,7 @@ type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
 }
 type Transaction interface {
+	DiscoveryVotes(subject, school, after string, limit int, now time.Time) ([]DiscoveryVote, error)
 	DiscoveryCurrent(string, []string, time.Time) ([]DiscoveryDocument, error)
 	ClosedOwners([]string) (map[string]bool, error)
 	CloseOwner(string, string) error
