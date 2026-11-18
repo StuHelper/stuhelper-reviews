@@ -51,8 +51,11 @@ func database(t *testing.T) (*postgres.Repository, *sql.DB) {
 	if _, e = migration.Exec(postgres.Schema); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = migration.Exec(`REVOKE ALL ON SCHEMA public FROM PUBLIC; GRANT CONNECT ON DATABASE ` + name + ` TO ` + role + `; GRANT USAGE ON SCHEMA reviews TO ` + role + `; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA reviews TO ` + role + `; CREATE SCHEMA unrelated; CREATE TABLE unrelated.private_data(id integer); REVOKE ALL ON SCHEMA unrelated FROM PUBLIC;`); e != nil {
+	if _, e = migration.Exec(`REVOKE ALL ON SCHEMA public FROM PUBLIC; GRANT CONNECT ON DATABASE ` + name + ` TO ` + role + `; GRANT USAGE ON SCHEMA reviews TO ` + role + `; GRANT USAGE ON ALL SEQUENCES IN SCHEMA reviews TO ` + role + `; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA reviews TO ` + role + `; REVOKE UPDATE,DELETE ON reviews.audit,reviews.discovery_history,reviews.activity_history FROM ` + role + `; CREATE SCHEMA unrelated; CREATE TABLE unrelated.private_data(id integer); REVOKE ALL ON SCHEMA unrelated FROM PUBLIC;`); e != nil {
 		t.Fatal(e)
+	}
+	if err := (&postgres.Repository{DB: migration}).CheckRuntime(context.Background()); err == nil {
+		t.Fatal("CheckRuntime accepted migration identity")
 	}
 	runtime := dbcfg.Copy()
 	runtime.User = role
@@ -60,11 +63,18 @@ func database(t *testing.T) (*postgres.Repository, *sql.DB) {
 	db := stdlib.OpenDB(*runtime)
 	db.SetMaxOpenConns(12)
 	t.Cleanup(func() { db.Close() })
+	repo := &postgres.Repository{DB: db}
+	if err := repo.CheckRuntime(context.Background()); err != nil {
+		t.Fatalf("CheckRuntime rejected runtime role: %v", err)
+	}
 	if _, e = db.Exec(`SELECT * FROM unrelated.private_data`); e == nil {
 		t.Fatal("runtime identity escaped its schema")
 	}
 	if _, e = db.Exec(`CREATE TABLE reviews.forbidden_ddl(id integer)`); e == nil {
 		t.Fatal("runtime identity can execute migrations")
 	}
-	return &postgres.Repository{DB: db}, migration
+	if _, e = db.Exec(`DELETE FROM reviews.audit`); e == nil {
+		t.Fatal("runtime identity can delete audit")
+	}
+	return repo, migration
 }

@@ -1,7 +1,7 @@
 ---
 type: spec
 status: Accepted
-updated: 2026-11-18
+updated: 2026-11-19
 ---
 
 # 搜索来源与可靠投递

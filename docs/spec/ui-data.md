@@ -1,7 +1,7 @@
 ---
 type: spec
 status: Accepted
-updated: 2026-11-18
+updated: 2026-11-19
 ---
 
 # 原型评分与本人待办

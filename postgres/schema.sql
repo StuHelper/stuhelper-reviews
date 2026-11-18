@@ -50,7 +50,9 @@ END $$;
 CREATE OR REPLACE TRIGGER sync_entry_upvotes AFTER INSERT OR UPDATE OR DELETE ON reviews.votes FOR EACH ROW EXECUTE FUNCTION reviews.sync_entry_upvotes();
 CREATE TABLE IF NOT EXISTS reviews.drafts(id text PRIMARY KEY, owner text NOT NULL, data jsonb NOT NULL);
 CREATE INDEX IF NOT EXISTS reviews_drafts_owner ON reviews.drafts(owner,id);
-CREATE TABLE IF NOT EXISTS reviews.replays(key text PRIMARY KEY, object_id text NOT NULL, expires_at timestamptz, data jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS reviews.replays(key text PRIMARY KEY, object_id text NOT NULL, owner text NOT NULL DEFAULT '', expires_at timestamptz, data jsonb NOT NULL);
+ALTER TABLE reviews.replays ADD COLUMN IF NOT EXISTS owner text NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS reviews_replays_owner ON reviews.replays(owner) WHERE owner<>'';
 DO $$ BEGIN
  IF NOT EXISTS (SELECT FROM pg_attribute WHERE attrelid='reviews.replays'::regclass AND attname='expires_at' AND NOT attisdropped) THEN
   ALTER TABLE reviews.replays ADD COLUMN expires_at timestamptz;
@@ -81,7 +83,9 @@ CREATE OR REPLACE FUNCTION reviews.audit_project() RETURNS trigger LANGUAGE plpg
 CREATE OR REPLACE TRIGGER audit_project BEFORE INSERT OR UPDATE ON reviews.audit FOR EACH ROW EXECUTE FUNCTION reviews.audit_project();
 CREATE OR REPLACE FUNCTION reviews.audit_invalidate() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN UPDATE reviews.audit_retention SET revision=revision+1 WHERE singleton; RETURN NULL; END $$;
 REVOKE ALL ON FUNCTION reviews.audit_invalidate() FROM PUBLIC;
-CREATE OR REPLACE TRIGGER audit_invalidate AFTER UPDATE OR DELETE OR TRUNCATE ON reviews.audit FOR EACH STATEMENT EXECUTE FUNCTION reviews.audit_invalidate();
+DROP TRIGGER IF EXISTS audit_invalidate ON reviews.audit;
+CREATE TRIGGER audit_invalidate AFTER UPDATE OR DELETE ON reviews.audit FOR EACH ROW EXECUTE FUNCTION reviews.audit_invalidate();
+CREATE OR REPLACE TRIGGER truncate_audit AFTER TRUNCATE ON reviews.audit FOR EACH STATEMENT EXECUTE FUNCTION reviews.audit_invalidate();
 CREATE INDEX IF NOT EXISTS audit_query_order ON reviews.audit(audit_time DESC,(id::text) COLLATE "C" DESC);
 CREATE INDEX IF NOT EXISTS audit_actor_order ON reviews.audit(audit_actor,audit_time DESC,(id::text) COLLATE "C" DESC);
 CREATE INDEX IF NOT EXISTS audit_target_order ON reviews.audit(audit_target,audit_time DESC,(id::text) COLLATE "C" DESC);
@@ -94,7 +98,9 @@ CREATE TABLE IF NOT EXISTS reviews.discovery_retention(singleton boolean PRIMARY
 INSERT INTO reviews.discovery_retention(singleton) VALUES(true) ON CONFLICT DO NOTHING;
 CREATE OR REPLACE FUNCTION reviews.invalidate_discovery() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN UPDATE reviews.discovery_retention SET revision=revision+1 WHERE singleton; RETURN NULL; END $$;
 REVOKE ALL ON FUNCTION reviews.invalidate_discovery() FROM PUBLIC;
-CREATE OR REPLACE TRIGGER invalidate_discovery AFTER UPDATE OR DELETE OR TRUNCATE ON reviews.discovery_history FOR EACH STATEMENT EXECUTE FUNCTION reviews.invalidate_discovery();
+DROP TRIGGER IF EXISTS invalidate_discovery ON reviews.discovery_history;
+CREATE TRIGGER invalidate_discovery AFTER UPDATE OR DELETE ON reviews.discovery_history FOR EACH ROW EXECUTE FUNCTION reviews.invalidate_discovery();
+CREATE OR REPLACE TRIGGER truncate_discovery AFTER TRUNCATE ON reviews.discovery_history FOR EACH STATEMENT EXECUTE FUNCTION reviews.invalidate_discovery();
 REVOKE ALL ON TABLE reviews.discovery_history,reviews.discovery_retention FROM PUBLIC;
 
 -- Provider-owned daily aggregates and immutable versions used by rebuild cursors.
@@ -115,3 +121,26 @@ CREATE TABLE IF NOT EXISTS reviews.activity_contributions(root_id text NOT NULL,
 REVOKE ALL ON reviews.activity_contributions FROM PUBLIC;
 
 CREATE INDEX IF NOT EXISTS reviews_vote_activity_day ON reviews.votes(id,created_at);
+
+-- Attribute legacy receipts before removing their only audit-to-account link.
+UPDATE reviews.replays r SET owner=a.data->>'Actor'
+ FROM reviews.audit a WHERE a.id=r.key AND r.owner='' AND COALESCE(a.data->>'Actor','') NOT IN ('','anonymous');
+UPDATE reviews.replays r SET owner=d.owner FROM reviews.drafts d WHERE r.owner='' AND r.object_id=d.id;
+DELETE FROM reviews.replays r USING reviews.closed_owners c WHERE r.owner=c.owner;
+UPDATE reviews.audit SET data=jsonb_set(data,'{Actor}','"anonymous"')
+ WHERE audit_action IN ('reviews.created.v1','reviews.replied.v1','reviews.republished.v1','reviews.withdraw.v1',
+ 'reviews.delete.v1','reviews.draft_saved.v1','reviews.voted.v1') AND audit_actor<>'anonymous';
+
+-- Old closures may already be complete at the host. Their private drafts
+-- and already-withdrawn discussions no longer contribute to public activity.
+DELETE FROM reviews.drafts d USING reviews.closed_owners c WHERE d.owner=c.owner;
+DELETE FROM reviews.entries e USING reviews.entries w,reviews.closed_owners c
+ WHERE w.owner=c.owner AND w.state='withdrawn' AND (e.id=w.id OR (w.id=w.root_id AND e.root_id=w.id));
+UPDATE reviews.identities i SET data=jsonb_set(i.data,'{Signed}','false') FROM reviews.closed_owners c
+ WHERE i.subject=c.owner AND (i.data->>'Signed')::boolean;
+UPDATE reviews.entries e SET data=jsonb_set(e.data,'{input,signed}','false') #- '{input,disclosures}'
+ FROM reviews.closed_owners c WHERE e.owner=c.owner AND ((e.data#>>'{input,signed}')::boolean OR e.data#>'{input,disclosures}' IS NOT NULL);
+
+-- Repair retained moderator decisions made before deletion cleared the withdrawal deadline.
+UPDATE reviews.entries SET expires_at=NULL, data=jsonb_set(data,'{expires_at}','null')
+ WHERE state IN ('deleted','hidden') AND expires_at IS NOT NULL;
