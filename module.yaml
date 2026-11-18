@@ -75,6 +75,7 @@ scenario_tests:
   ACAD-19:
     - integration_test.go#TestDiscussionIdentityVotingDraftConflictsAndModeration
     - community_test.go#TestComposerUsesCurrentFactsAndDiscussionIdentity
+    - tx_timeout_test.go#TestExternalDependencyTimeoutsAndLockFreeTransactions
   ACAD-30:
     - integration_test.go#TestWithdrawalWindowExpiryVotesAndPermanentDeletion
   ACAD-32:

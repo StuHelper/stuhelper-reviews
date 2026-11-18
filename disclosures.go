@@ -61,7 +61,7 @@ func (s *Service) disclosureContext(ctx context.Context, p Principal, school, co
 	if s.Disclosures == nil {
 		return out, ErrUnavailable
 	}
-	facts, err := s.Disclosures.Facts(ctx, p, school, course, term)
+	facts, err := s.disclosureFacts(ctx, p, school, course, term)
 	if err != nil {
 		return out, ErrUnavailable
 	}
@@ -86,7 +86,7 @@ func (s *Service) disclosureContext(ctx context.Context, p Principal, school, co
 			if !ok {
 				return out, ErrUnavailable
 			}
-			out.ownCourse, err = catalog.HasTaught(ctx, facts.TeacherIDs, course)
+			out.ownCourse, err = s.catalogHasTaught(ctx, catalog, facts.TeacherIDs, course)
 			if err != nil {
 				return out, ErrUnavailable
 			}

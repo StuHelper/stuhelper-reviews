@@ -63,7 +63,7 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 	if !ok || !refsOK {
 		return out, nil
 	}
-	candidates, err := courses.OwnReviewCourses(ctx, p)
+	candidates, err := s.catalogOwnReviewCourses(ctx, courses, p)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return OwnOverview{}, err
@@ -83,11 +83,11 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 		out.PendingCourses = PendingCourses{State: "available", Count: &count, Items: []PendingCourse{}}
 		return out, nil
 	}
-	courseAliases, err := refs.SummaryAliases(ctx, school, "course")
+	courseAliases, err := s.catalogSummaryAliases(ctx, refs, school, "course")
 	if err != nil {
 		return OwnOverview{}, err
 	}
-	termAliases, err := refs.SummaryAliases(ctx, school, "term")
+	termAliases, err := s.catalogSummaryAliases(ctx, refs, school, "term")
 	if err != nil {
 		return OwnOverview{}, err
 	}

@@ -141,7 +141,7 @@ func (s *Service) attribution(ctx context.Context, p Principal, id, teacher stri
 	if entry.Input.Kind != "course" || entry.State == "withdrawn" {
 		return out, nil, ErrConflict
 	}
-	evidence, err := s.Catalog.Evidence(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
+	evidence, err := s.catalogEvidence(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
 	if err != nil {
 		return out, nil, err
 	}

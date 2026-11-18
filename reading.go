@@ -127,13 +127,10 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		}
 		v.Author = Author{Anonymous: !identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }), Handle: identity.Handle, Disclosures: labels}
 		if identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }) {
-			if s.Profiles == nil {
-				return nil, ErrUnavailable
-			}
 			profile, ok := profiles[entry.Owner]
 			if !ok {
 				var err error
-				profile, err = s.Profiles.Lookup(ctx, entry.Owner)
+				profile, err = s.lookupProfile(ctx, entry.Owner)
 				if err != nil {
 					return nil, err
 				}
@@ -233,7 +230,7 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 			kind = "teacher"
 		}
 		if f.Owner == "" {
-			object, err := s.Catalog.Target(ctx, kind, f.TargetID)
+			object, err := s.catalogTarget(ctx, kind, f.TargetID)
 			if err != nil {
 				return out, err
 			}
@@ -249,7 +246,7 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 	}
 	if f.TeacherID != "" {
 		if f.Owner == "" {
-			object, err := s.Catalog.Target(ctx, "teacher", f.TeacherID)
+			object, err := s.catalogTarget(ctx, "teacher", f.TeacherID)
 			if err != nil {
 				return out, err
 			}

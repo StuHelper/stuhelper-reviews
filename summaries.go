@@ -146,7 +146,7 @@ func (s *Service) ReadSummaries(ctx context.Context, p Principal, kind string, i
 	if !ok {
 		return out, ErrUnavailable
 	}
-	targets, err := catalog.SummaryTargets(ctx, kind, ids)
+	targets, err := s.catalogSummaryTargets(ctx, catalog, kind, ids)
 	if err != nil {
 		return out, err
 	}
@@ -210,20 +210,20 @@ func (s *Service) summaryMetrics(ctx context.Context, kind, school string, targe
 	if !ok || !s.Config.Recommendations.valid() {
 		return nil, ErrUnavailable
 	}
-	courseAliases, err := port.SummaryAliases(ctx, school, "course")
+	courseAliases, err := s.catalogSummaryAliases(ctx, port, school, "course")
 	if err != nil {
 		return nil, err
 	}
 	targetAliases := courseAliases
 	if kind == "teacher" {
-		targetAliases, err = port.SummaryAliases(ctx, school, "teacher")
+		targetAliases, err = s.catalogSummaryAliases(ctx, port, school, "teacher")
 		if err != nil {
 			return nil, err
 		}
 	}
 	termAliases := map[string]string{}
 	if charts {
-		termAliases, err = port.SummaryAliases(ctx, school, "term")
+		termAliases, err = s.catalogSummaryAliases(ctx, port, school, "term")
 		if err != nil {
 			return nil, err
 		}
@@ -354,7 +354,7 @@ func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kin
 			return nil, ErrUnavailable
 		}
 		var err error
-		termNames, err = catalog.SummaryTargets(ctx, "term", termIDs)
+		termNames, err = s.catalogSummaryTargets(ctx, catalog, "term", termIDs)
 		if err != nil {
 			return nil, err
 		}

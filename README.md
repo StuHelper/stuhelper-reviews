@@ -39,7 +39,7 @@ bash scripts/check-with-postgres.sh
 
 先修改 `contracts/reviews.openapi.json`，再执行 `make generate`。首次迁移由独立身份执行 `postgres.Schema`，运行身份仅访问 reviews schema。Handler 解析输入，Service 检查当前资格与对象状态，Repository 保存数据。
 
-重复写入使用幂等键；同键不同内容拒绝。业务变化、审计、outbox 在同一事务提交。审核交接由 backend relay 按统一 outbox 接口投递和重试，审核决定按决定 ID 与内容修订拒绝重复效果和旧决定。
+重复写入使用幂等键，同键不同内容拒绝。所有外部依赖调用均设有独立超时上限并在入库事务及讨论锁外完成，入库事务内仅加锁核对版本并同事务提交业务变化、审计与 outbox。审核决定按决定 ID 与内容修订拒绝重复效果和旧决定。
 
 PostgreSQL 测试覆盖资格缺失、不同学期教师、内容准入、本人记录例外、跨学校统计隔离、身份继承、并发重复提交、统计、撤回、到期、草稿分页、投票和审核。测试使用合成身份与独立数据库。
 
