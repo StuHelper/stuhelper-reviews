@@ -484,9 +484,12 @@ export interface components {
             object_id: string;
             revision: number;
             /** @enum {string} */
-            action: "publish" | "hide" | "restore" | "delete" | "edit" | "identity";
+            action: "publish" | "hide" | "restore" | "delete" | "edit" | "identity" | "feature" | "unfeature" | "reassign";
             body?: string;
             subject?: string;
+            author_handle?: string;
+            teacher_id?: string;
+            evidence_revision?: string;
             signed?: boolean;
             reason: string;
         };
@@ -502,8 +505,11 @@ export interface components {
         };
         Composer: {
             allowed: boolean;
-            /** @enum {string} */
-            state: "ready" | "choose_term" | "unauthenticated" | "forbidden" | "enrollment_required" | "unavailable" | "disclosure_required";
+            /**
+             * @description Requests without an authenticated session return HTTP 401.
+             * @enum {string}
+             */
+            state: "ready" | "choose_term" | "forbidden" | "enrollment_required" | "unavailable" | "disclosure_required";
             requirements: components["schemas"]["Requirement"][];
             teacher_ids: string[];
             /** @enum {string} */

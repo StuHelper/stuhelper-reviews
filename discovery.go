@@ -80,41 +80,17 @@ func (s *Service) DiscoveryMyVotes(ctx context.Context, p Principal, cursor stri
 	if e != nil {
 		return out, e
 	}
-	var entries []Entry
-	e = s.Repo.Transaction(ctx, func(t Transaction) error {
-		var e error
-		entries, e = t.Voted(p.Subject, cursor, limit+1, s.now())
-		return e
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		var err error
+		out.Items, err = t.DiscoveryVotes(p.Subject, school, cursor, limit+1, s.now())
+		return err
 	})
-	if e != nil {
-		return out, e
+	if err != nil {
+		return DiscoveryVotePage{}, err
 	}
-	if len(entries) > limit {
-		entries = entries[:limit]
-		out.NextCursor = entries[len(entries)-1].ID
-	}
-	for _, entry := range entries {
-		if entry.SchoolID != school {
-			continue
-		}
-		view, e := s.Get(ctx, p, entry.ID)
-		if errors.Is(e, ErrNotFound) || errors.Is(e, ErrForbidden) {
-			continue
-		}
-		if e != nil {
-			return DiscoveryVotePage{}, e
-		}
-		choice := ""
-		if view.MyVote == 1 {
-			choice = "up"
-		}
-		if view.MyVote == -1 {
-			choice = "down"
-		}
-		if choice == "" {
-			continue
-		}
-		out.Items = append(out.Items, DiscoveryVote{DiscoveryTarget{Source: "reviews", ID: entry.ID, Kind: "review"}, choice})
+	if len(out.Items) > limit {
+		out.Items = out.Items[:limit]
+		out.NextCursor = out.Items[limit-1].Target.ID
 	}
 	return out, nil
 }

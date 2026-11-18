@@ -144,4 +144,19 @@ func TestDefaultRatingTextsCoverEightLocalesAndPresentationFallback(t *testing.T
 	if schoolSaved.Effective.RatingTexts["zh-CN"][0][5] != "全局强烈推荐" {
 		t.Fatalf("expected school effective texts to inherit global override, got %q", schoolSaved.Effective.RatingTexts["zh-CN"][0][5])
 	}
+	// Later global changes must not alter a previously returned idempotent response.
+	updated := r.DefaultRatingTexts()
+	updated["zh-CN"][0][5] = "新的全局文案"
+	if _, err := f.service.SavePresentation(ctx, globalAdmin, "global-update", r.Presentation{SchoolID: "*", Revision: 1, RatingTexts: updated}); err != nil {
+		t.Fatal(err)
+	}
+	current, err := f.service.Presentation(ctx, "school")
+	if err != nil || current.Effective.RatingTexts["zh-CN"][0][5] != "新的全局文案" {
+		t.Fatal(current, err)
+	}
+	replayed, err := f.service.SavePresentation(ctx, admin, "school-empty", r.Presentation{SchoolID: "school", RatingTexts: map[string][][]string{}})
+	if err != nil || replayed.Configured == nil || replayed.Configured.Revision != schoolSaved.Configured.Revision || replayed.Effective.RatingTexts["zh-CN"][0][5] != "全局强烈推荐" {
+		t.Fatal("replay did not preserve the effective texts from the original revision", replayed, err)
+	}
+
 }

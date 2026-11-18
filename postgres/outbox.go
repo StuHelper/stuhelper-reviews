@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	m "github.com/StuHelper/stuhelper-reviews"
+	"time"
 )
 
 var _ m.OutboxReader = (*Repository)(nil)
@@ -37,6 +38,17 @@ func (r *Repository) ConfirmOutbox(ctx context.Context, id string) error {
 		return m.ErrNotFound
 	}
 	return nil
+}
+func (r *Repository) PruneOutbox(ctx context.Context, before time.Time, limit int) (int64, error) {
+	if before.IsZero() || limit < 1 || limit > 1000 {
+		return 0, m.ErrInput
+	}
+	res, e := r.DB.ExecContext(ctx, `DELETE FROM reviews.outbox WHERE id IN (SELECT id FROM reviews.outbox WHERE sent_at IS NOT NULL AND sent_at<$1 ORDER BY sent_at,id LIMIT $2)`, before, limit)
+	if e != nil {
+		return 0, safe(e)
+	}
+	n, e := res.RowsAffected()
+	return n, safe(e)
 }
 func (t *transaction) saveEnvelope(v m.Envelope) error {
 	if v.SpecVersion != "1.0" || v.Source != "reviews" || v.ID == "" || len(v.ID) > 200 || v.Subject == "" || len(v.Subject) > 512 || v.Type == "" || v.Time.IsZero() {

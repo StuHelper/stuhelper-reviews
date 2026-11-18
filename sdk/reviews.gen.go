@@ -72,7 +72,6 @@ const (
 	ComposerStateEnrollmentRequired ComposerState = "enrollment_required"
 	ComposerStateForbidden          ComposerState = "forbidden"
 	ComposerStateReady              ComposerState = "ready"
-	ComposerStateUnauthenticated    ComposerState = "unauthenticated"
 	ComposerStateUnavailable        ComposerState = "unavailable"
 )
 
@@ -88,8 +87,6 @@ func (e ComposerState) Valid() bool {
 	case ComposerStateForbidden:
 		return true
 	case ComposerStateReady:
-		return true
-	case ComposerStateUnauthenticated:
 		return true
 	case ComposerStateUnavailable:
 		return true
@@ -451,9 +448,11 @@ type Composer struct {
 	Identity     ComposerIdentity    `json:"identity"`
 	Requirements []Requirement       `json:"requirements"`
 	RuleVersion  string              `json:"rule_version"`
-	State        ComposerState       `json:"state"`
-	TeacherIds   []string            `json:"teacher_ids"`
-	TeacherReply *bool               `json:"teacher_reply,omitempty"`
+
+	// State Requests without an authenticated session return HTTP 401.
+	State        ComposerState `json:"state"`
+	TeacherIds   []string      `json:"teacher_ids"`
+	TeacherReply *bool         `json:"teacher_reply,omitempty"`
 
 	// TeacherRequired true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。
 	TeacherRequired *bool `json:"teacher_required,omitempty"`
@@ -462,7 +461,7 @@ type Composer struct {
 // ComposerIdentity defines model for Composer.Identity.
 type ComposerIdentity string
 
-// ComposerState defines model for Composer.State.
+// ComposerState Requests without an authenticated session return HTTP 401.
 type ComposerState string
 
 // CourseStatistic defines model for CourseStatistic.
