@@ -158,6 +158,22 @@ func (t *transaction) Identity(root, subject string) (reviews.Identity, error) {
 	return read[reviews.Identity](t, `SELECT data FROM reviews.identities WHERE root_id=$1 AND subject=$2`, root, subject)
 }
 func (t *transaction) SaveIdentity(v reviews.Identity) error {
+	if e := t.Lock("closure-owner:" + v.Subject); e != nil {
+		return e
+	}
+	closed, e := t.ClosedOwners([]string{v.Subject})
+	if e != nil {
+		return e
+	}
+	if closed[v.Subject] {
+		var exists bool
+		if e = t.tx.QueryRowContext(t.ctx, `SELECT EXISTS(SELECT 1 FROM reviews.identities WHERE root_id=$1 AND subject=$2)`, v.RootID, v.Subject).Scan(&exists); e != nil {
+			return safe(e)
+		}
+		if !exists || v.Signed {
+			return reviews.ErrForbidden
+		}
+	}
 	return t.save(`INSERT INTO reviews.identities(root_id,subject,data) VALUES($1,$2,$3) ON CONFLICT(root_id,subject) DO UPDATE SET data=excluded.data`, v, v.RootID, v.Subject)
 }
 func (t *transaction) Vote(id, subject string) (int, error) {
@@ -217,6 +233,16 @@ func (t *transaction) Draft(id string) (reviews.Draft, error) {
 	return read[reviews.Draft](t, `SELECT data FROM reviews.drafts WHERE id=$1`, id)
 }
 func (t *transaction) SaveDraft(v reviews.Draft) error {
+	if e := t.Lock("closure-owner:" + v.Owner); e != nil {
+		return e
+	}
+	closed, e := t.ClosedOwners([]string{v.Owner})
+	if e != nil {
+		return e
+	}
+	if closed[v.Owner] {
+		return reviews.ErrForbidden
+	}
 	return t.save(`INSERT INTO reviews.drafts(id,owner,data) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET data=excluded.data`, v, v.ID, v.Owner)
 }
 func (t *transaction) DeleteDraft(id string) error {
@@ -249,7 +275,7 @@ func (t *transaction) Replay(key string) (reviews.Replay, error) {
 	return read[reviews.Replay](t, `SELECT data FROM reviews.replays WHERE key=$1`, key)
 }
 func (t *transaction) SaveReplay(key string, v reviews.Replay) error {
-	return t.save(`INSERT INTO reviews.replays(key,object_id,data) VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE SET data=excluded.data`, v, key, v.ObjectID)
+	return t.save(`INSERT INTO reviews.replays(key,object_id,owner,data) VALUES($1,$2,$3,$4) ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,data=excluded.data`, v, key, v.ObjectID, v.Owner)
 }
 func (t *transaction) Event(v reviews.Event) error {
 	if e := t.save(`INSERT INTO reviews.audit(id,reason,result,data) VALUES($1,$2,'success',$3)`, v, v.ID, v.Reason); e != nil {

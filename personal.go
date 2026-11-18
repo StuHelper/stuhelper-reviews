@@ -73,7 +73,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 			return e
 		}
 		out = Result{ID: id, State: "draft", Revision: v.Revision}
-		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
+		return t.SaveReplay(rk, Replay{Owner: p.Subject, Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
 	})
 	return out, err
 }
@@ -128,6 +128,16 @@ func (s *Service) DeleteDraft(ctx context.Context, p Principal, id, key string, 
 		if e := t.Lock("draft:" + id); e != nil {
 			return e
 		}
+		if e := t.Lock("closure-owner:" + p.Subject); e != nil {
+			return e
+		}
+		closed, e := t.ClosedOwners([]string{p.Subject})
+		if e != nil {
+			return e
+		}
+		if closed[p.Subject] {
+			return ErrForbidden
+		}
 		r, ok, e := replay(t, rk, h, s.now())
 		if e != nil {
 			return e
@@ -150,7 +160,7 @@ func (s *Service) DeleteDraft(ctx context.Context, p Principal, id, key string, 
 			return e
 		}
 		out = Result{ID: id, State: "deleted", Revision: revision + 1}
-		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
+		return t.SaveReplay(rk, Replay{Owner: p.Subject, Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
 	})
 	return out, err
 }

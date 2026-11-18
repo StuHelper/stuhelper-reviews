@@ -250,6 +250,7 @@ type Aggregate struct {
 	Counts   [5]int
 }
 type Replay struct {
+	Owner    string
 	Digest   string
 	Result   Result
 	Until    time.Time
