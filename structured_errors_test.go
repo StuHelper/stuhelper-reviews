@@ -38,6 +38,9 @@ func TestStructuredErrorSubcodesFieldsAndConflictRevisions(t *testing.T) {
 			reader = strings.NewReader("")
 		}
 		req := httptest.NewRequest(method, path, reader)
+		if reader != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
 		if key != "" {
 			req.Header.Set("Idempotency-Key", key)
 		}

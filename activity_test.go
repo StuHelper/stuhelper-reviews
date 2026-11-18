@@ -265,3 +265,56 @@ func TestActivityInactiveTeacherDoesNotBlockCourseReview(t *testing.T) {
 		t.Fatal(ok, e)
 	}
 }
+
+type activityFactsHook struct {
+	r.DisclosureProvider
+	before func()
+	calls  int
+}
+
+func (h *activityFactsHook) Facts(ctx context.Context, p r.Principal, school, course, term string) (r.DisclosureFacts, error) {
+	h.calls++
+	if h.before != nil {
+		f := h.before
+		h.before = nil
+		f()
+	}
+	return h.DisclosureProvider.Facts(ctx, p, school, course, term)
+}
+func TestActivityChecksSharedTeacherOnceAndRechecksDeletion(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	root := create(t, f, "root", input("course", "spring", 3))
+	facts := factsFor(f, true)
+	f.service.Disclosures = facts
+	teacher := r.Principal{Subject: "teacher-account"}
+	var replies []r.Result
+	for _, key := range []string{"first", "second"} {
+		reply, err := f.service.Reply(ctx, teacher, root.ID, key, r.Input{Kind: "reply", TargetID: "course", Body: "Feedback", Disclosures: []string{"real_name", "teacher"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		replies = append(replies, reply)
+	}
+	hook := &activityFactsHook{DisclosureProvider: facts}
+	f.service.Disclosures = hook
+	id := r.ActivityID("course", "course", f.now)
+	d, ok, err := f.service.CurrentActivity(ctx, student, id)
+	if err != nil || !ok || d.Metrics["interactions"] != 2 || hook.calls != 1 {
+		t.Errorf("shared facts calls=%d activity=%v ok=%v err=%v", hook.calls, d, ok, err)
+	}
+	hook.before = func() {
+		for _, v := range replies {
+			if _, err := f.service.Action(ctx, teacher, v.ID, "delete", r.Action{Action: "delete", Revision: v.Revision}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		attr := facts.facts.Attributes["real_name"]
+		attr.MayDisclose = false
+		facts.facts.Attributes["real_name"] = attr
+	}
+	current, ok, err := f.service.CurrentActivity(ctx, student, id)
+	if err != nil || !ok || current.Revision <= d.Revision || current.Metrics["reviews"] != 1 || current.Metrics["interactions"] != 0 {
+		t.Fatal(current, ok, err)
+	}
+}

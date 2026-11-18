@@ -376,6 +376,7 @@ export interface components {
             teacher_id?: string;
             title: string;
             body: string;
+            /** @description 固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。 */
             ratings: number[];
             signed: boolean;
             /** @description Only field names. Values are obtained from current authoritative, authorized facts. Defaults to no disclosure. */
@@ -399,6 +400,7 @@ export interface components {
             expires_at?: string;
         };
         Band: {
+            /** @description 五级展示等级：0=样本不足（对应 rating_texts[locale][dim][0]），1..5=第一级至第五级（对应 rating_texts[locale][dim][1..5]）。 */
             level: number;
             samples: number;
             courses: number;
@@ -418,6 +420,7 @@ export interface components {
             teacher_id?: string;
             title: string;
             body: string;
+            /** @description 固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。 */
             ratings: number[];
             author: components["schemas"]["Author"];
             revision: number;
@@ -439,11 +442,13 @@ export interface components {
         };
         CourseStatistic: {
             course_id: string;
+            /** @description 五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。 */
             dimensions: components["schemas"]["Band"][];
         };
         Statistics: {
             courses: components["schemas"]["CourseStatistic"][];
             next: string;
+            /** @description 五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。 */
             dimensions: components["schemas"]["Band"][];
             /** Format: date-time */
             from: string | null;
@@ -485,9 +490,12 @@ export interface components {
             object_id: string;
             revision: number;
             /** @enum {string} */
-            action: "publish" | "hide" | "restore" | "delete" | "edit" | "identity";
+            action: "publish" | "hide" | "restore" | "delete" | "edit" | "identity" | "feature" | "unfeature" | "reassign";
             body?: string;
             subject?: string;
+            author_handle?: string;
+            teacher_id?: string;
+            evidence_revision?: string;
             signed?: boolean;
             reason: string;
         };
@@ -503,8 +511,11 @@ export interface components {
         };
         Composer: {
             allowed: boolean;
-            /** @enum {string} */
-            state: "ready" | "choose_term" | "unauthenticated" | "forbidden" | "enrollment_required" | "unavailable" | "disclosure_required";
+            /**
+             * @description Requests without an authenticated session return HTTP 401.
+             * @enum {string}
+             */
+            state: "ready" | "choose_term" | "forbidden" | "enrollment_required" | "unavailable" | "disclosure_required";
             requirements: components["schemas"]["Requirement"][];
             teacher_ids: string[];
             /** @enum {string} */
@@ -543,6 +554,7 @@ export interface components {
             value: string;
             required: boolean;
         };
+        /** @description 按八种支持语言（zh-CN、en-US、ja-JP、ko-KR、fr-FR、es-ES、ru-RU、ar-EG，其中 ar-EG 为 RTL 文案）组织的五维评分提示文案字典。rating_texts[locale][dim][score] 中 dim 固定为 0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；score 固定为 0=暂无足够数据/未选择，1..5=第一级至第五级展示与无障碍 aria-valuetext 文案（难度与工作量使用程度描述而非质量好坏）。 */
         RatingTexts: {
             [key: string]: string[][];
         };
@@ -611,6 +623,7 @@ export interface components {
         TermSummary: {
             term_id: string;
             review_count: number;
+            /** @description 五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。 */
             dimensions: components["schemas"]["Band"][];
             recommendation: components["schemas"]["Recommendation"];
             term_name: string;
@@ -622,8 +635,10 @@ export interface components {
             /** @enum {string} */
             kind: "course" | "teacher";
             review_count: number;
+            /** @description 五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。 */
             dimensions: components["schemas"]["Band"][];
             recommendation: components["schemas"]["Recommendation"];
+            /** @description 五维评分分布柱状比例，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；weights 下标 0..4 依次对应 1..5 分档。 */
             distribution?: components["schemas"]["RatingDistribution"][];
             terms?: components["schemas"]["TermSummary"][];
         };

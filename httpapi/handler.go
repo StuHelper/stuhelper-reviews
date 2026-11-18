@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
-	"net/url"
+
 	"strconv"
 	"strings"
 	"time"
@@ -15,10 +16,37 @@ import (
 	reviews "github.com/StuHelper/stuhelper-reviews"
 )
 
+const StatusClientClosedRequest = 499
+
 type Authenticate func(*http.Request) (reviews.Principal, error)
 type Handler struct {
 	Service      *reviews.Service
 	Authenticate Authenticate
+	// PublicOrigin is the trusted browser origin when a reverse proxy terminates TLS.
+	PublicOrigin string
+	OnDiagnostic reviews.DiagnosticHook
+}
+
+type responseTracker struct {
+	http.ResponseWriter
+	req       *http.Request
+	clientCtx context.Context
+	start     time.Time
+	hook      reviews.DiagnosticHook
+}
+
+func (t *responseTracker) Unwrap() http.ResponseWriter {
+	return t.ResponseWriter
+}
+
+func (t *responseTracker) operationName() string {
+	if t.req == nil {
+		return "http_request"
+	}
+	if t.req.Pattern != "" {
+		return t.req.Pattern
+	}
+	return t.req.Method
 }
 
 func (h Handler) Routes() http.Handler {
@@ -45,19 +73,51 @@ func (h Handler) Routes() http.Handler {
 	m.HandleFunc("DELETE /api/v1/reviews/me/drafts/{id}", h.deleteDraft)
 	m.HandleFunc("GET /api/v1/reviews/me/votes", h.votes)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if r.Method != "GET" && r.Header.Get("Origin") != "" {
-			u, e := url.Parse(r.Header.Get("Origin"))
-			if e != nil || u.Host != r.Host {
-				respond(w, nil, reviews.NewErrorDetail(reviews.ErrForbidden, "origin_mismatch", "origin", nil))
-				return
-			}
+		tracker := &responseTracker{
+			ResponseWriter: w,
+			req:            r,
+			clientCtx:      r.Context(),
+			start:          time.Now(),
+			hook:           h.OnDiagnostic,
+		}
+		tracker.Header().Set("Cache-Control", "no-store")
+		tracker.Header().Set("X-Content-Type-Options", "nosniff")
+		if h.Service == nil {
+			respond(tracker, nil, reviews.ErrUnavailable)
+			return
+		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !h.sameOriginWrite(r) {
+			respond(tracker, nil, reviews.NewErrorDetail(reviews.ErrForbidden, "origin_mismatch", "origin", nil))
+			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
-		m.ServeHTTP(w, r.WithContext(ctx))
+		tracker.req = r.WithContext(ctx)
+		m.ServeHTTP(tracker, tracker.req)
 	})
+}
+func (h Handler) sameOriginWrite(r *http.Request) bool {
+	for _, site := range r.Header.Values("Sec-Fetch-Site") {
+		if site != "same-origin" && site != "none" {
+			return false
+		}
+	}
+	origins := r.Header.Values("Origin")
+	if len(origins) == 0 || len(origins) == 1 && origins[0] == "" {
+		return true
+	}
+	if len(origins) != 1 {
+		return false
+	}
+	expected := h.PublicOrigin
+	if expected == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		expected = scheme + "://" + r.Host
+	}
+	return strings.EqualFold(origins[0], expected)
 }
 
 type errorResponse struct {
@@ -70,6 +130,20 @@ type errorResponse struct {
 func respond(w http.ResponseWriter, v any, e error) {
 	w.Header().Set("Content-Type", "application/json")
 	if e != nil {
+		tracker, tracked := w.(*responseTracker)
+		if tracked && errors.Is(e, context.Canceled) && errors.Is(tracker.clientCtx.Err(), context.Canceled) {
+			if tracker.hook != nil {
+				tracker.hook(reviews.DiagnosticEvent{
+					Operation:  tracker.operationName(),
+					Dependency: "http",
+					Category:   "canceled",
+					Duration:   time.Since(tracker.start),
+				})
+			}
+			w.WriteHeader(StatusClientClosedRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"code": "canceled"})
+			return
+		}
 		status := 503
 		code := "unavailable"
 		for _, x := range []struct {
@@ -80,6 +154,14 @@ func respond(w http.ResponseWriter, v any, e error) {
 				status = x.s
 				code = x.e.Error()
 			}
+		}
+		if tracked && tracker.hook != nil {
+			tracker.hook(reviews.DiagnosticEvent{
+				Operation:  tracker.operationName(),
+				Dependency: "http",
+				Category:   reviews.ClassifyDiagnosticCategory(e),
+				Duration:   time.Since(tracker.start),
+			})
 		}
 		payload := errorResponse{Code: code}
 		var detail reviews.ErrorDetail
@@ -95,6 +177,10 @@ func respond(w http.ResponseWriter, v any, e error) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) error {
+	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || media != "application/json" || len(r.Header.Values("Content-Type")) != 1 {
+		return reviews.ErrInput
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 128<<10)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()

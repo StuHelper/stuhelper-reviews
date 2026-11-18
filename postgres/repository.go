@@ -17,10 +17,14 @@ import (
 //go:embed schema.sql
 var Schema string
 
-type Repository struct{ DB *sql.DB }
+type Repository struct {
+	DB           *sql.DB
+	OnDiagnostic reviews.DiagnosticHook
+}
 type transaction struct {
-	tx  *sql.Tx
-	ctx context.Context
+	tx   *sql.Tx
+	ctx  context.Context
+	repo *Repository
 }
 
 func safe(e error) error {
@@ -39,48 +43,88 @@ func safe(e error) error {
 	}
 	return reviews.ErrUnavailable
 }
+
+func (r *Repository) safeOp(op string, start time.Time, raw error) error {
+	mapped := safe(raw)
+	if raw != nil && r != nil && r.OnDiagnostic != nil && !errors.Is(raw, sql.ErrNoRows) {
+		var pg *pgconn.PgError
+		sqlState := ""
+		if errors.As(raw, &pg) {
+			sqlState = reviews.SanitizeSQLState(pg.Code)
+		}
+		r.OnDiagnostic(reviews.DiagnosticEvent{
+			Operation:  op,
+			Dependency: "postgres",
+			Category:   reviews.ClassifyDiagnosticCategory(mapped),
+			SQLState:   sqlState,
+			Duration:   time.Since(start),
+		})
+	}
+	return mapped
+}
+
+func (r *Repository) emitCorruptJSON(op string, start time.Time) error {
+	if r != nil && r.OnDiagnostic != nil {
+		r.OnDiagnostic(reviews.DiagnosticEvent{
+			Operation:  op,
+			Dependency: "postgres",
+			Category:   "json_corrupt",
+			Duration:   time.Since(start),
+		})
+	}
+	return reviews.ErrUnavailable
+}
+
 func (r *Repository) Transaction(ctx context.Context, run func(reviews.Transaction) error) error {
+	start := time.Now()
 	tx, e := r.DB.BeginTx(ctx, nil)
 	if e != nil {
-		return safe(e)
+		return r.safeOp("begin_tx", start, e)
 	}
 	defer tx.Rollback()
-	if e = run(&transaction{tx, ctx}); e != nil {
+	if e = run(&transaction{tx, ctx, r}); e != nil {
 		return e
 	}
-	return safe(tx.Commit())
+	commitStart := time.Now()
+	return r.safeOp("commit_tx", commitStart, tx.Commit())
 }
 func (t *transaction) Lock(key string) error {
+	start := time.Now()
 	_, e := t.tx.ExecContext(t.ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "reviews:"+key)
-	return safe(e)
+	return t.repo.safeOp("lock", start, e)
 }
 func read[T any](t *transaction, q string, args ...any) (T, error) {
 	var v T
 	var b []byte
+	start := time.Now()
 	if e := t.tx.QueryRowContext(t.ctx, q, args...).Scan(&b); e != nil {
-		return v, safe(e)
+		return v, t.repo.safeOp("read", start, e)
 	}
 	if json.Unmarshal(b, &v) != nil {
-		return v, reviews.ErrUnavailable
+		return v, t.repo.emitCorruptJSON("read_decode", start)
 	}
 	return v, nil
 }
 func list[T any](t *transaction, q string, args ...any) ([]T, error) {
+	start := time.Now()
 	rows, e := t.tx.QueryContext(t.ctx, q, args...)
 	if e != nil {
-		return nil, safe(e)
+		return nil, t.repo.safeOp("list", start, e)
 	}
 	defer rows.Close()
 	out := []T{}
 	for rows.Next() {
 		var b []byte
 		var v T
-		if rows.Scan(&b) != nil || json.Unmarshal(b, &v) != nil {
-			return nil, reviews.ErrUnavailable
+		if err := rows.Scan(&b); err != nil {
+			return nil, t.repo.safeOp("list_scan", start, err)
+		}
+		if json.Unmarshal(b, &v) != nil {
+			return nil, t.repo.emitCorruptJSON("list_decode", start)
 		}
 		out = append(out, v)
 	}
-	return out, safe(rows.Err())
+	return out, t.repo.safeOp("list_rows", start, rows.Err())
 }
 func (t *transaction) save(q string, v any, args ...any) error {
 	b, e := json.Marshal(v)
@@ -88,8 +132,9 @@ func (t *transaction) save(q string, v any, args ...any) error {
 		return reviews.ErrInput
 	}
 	args = append(args, string(b))
+	start := time.Now()
 	_, e = t.tx.ExecContext(t.ctx, q, args...)
-	return safe(e)
+	return t.repo.safeOp("save", start, e)
 }
 func (t *transaction) Entry(id string) (reviews.Entry, error) {
 	return read[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE id=$1`, id)
@@ -152,12 +197,28 @@ func (t *transaction) projected(q string, args ...any) ([]reviews.Entry, error) 
 	return out, safe(rows.Err())
 }
 func (t *transaction) Expired(now time.Time, limit int) ([]reviews.Entry, error) {
-	return list[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE expires_at<=$1 ORDER BY expires_at,id LIMIT $2`, now, limit)
+	return list[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE state IN ('withdrawn','pending') AND expires_at<=$1 ORDER BY expires_at,id LIMIT $2`, now, limit)
 }
 func (t *transaction) Identity(root, subject string) (reviews.Identity, error) {
 	return read[reviews.Identity](t, `SELECT data FROM reviews.identities WHERE root_id=$1 AND subject=$2`, root, subject)
 }
 func (t *transaction) SaveIdentity(v reviews.Identity) error {
+	if e := t.Lock("closure-owner:" + v.Subject); e != nil {
+		return e
+	}
+	closed, e := t.ClosedOwners([]string{v.Subject})
+	if e != nil {
+		return e
+	}
+	if closed[v.Subject] {
+		var exists bool
+		if e = t.tx.QueryRowContext(t.ctx, `SELECT EXISTS(SELECT 1 FROM reviews.identities WHERE root_id=$1 AND subject=$2)`, v.RootID, v.Subject).Scan(&exists); e != nil {
+			return safe(e)
+		}
+		if !exists || v.Signed {
+			return reviews.ErrForbidden
+		}
+	}
 	return t.save(`INSERT INTO reviews.identities(root_id,subject,data) VALUES($1,$2,$3) ON CONFLICT(root_id,subject) DO UPDATE SET data=excluded.data`, v, v.RootID, v.Subject)
 }
 func (t *transaction) Vote(id, subject string) (int, error) {
@@ -217,6 +278,16 @@ func (t *transaction) Draft(id string) (reviews.Draft, error) {
 	return read[reviews.Draft](t, `SELECT data FROM reviews.drafts WHERE id=$1`, id)
 }
 func (t *transaction) SaveDraft(v reviews.Draft) error {
+	if e := t.Lock("closure-owner:" + v.Owner); e != nil {
+		return e
+	}
+	closed, e := t.ClosedOwners([]string{v.Owner})
+	if e != nil {
+		return e
+	}
+	if closed[v.Owner] {
+		return reviews.ErrForbidden
+	}
 	return t.save(`INSERT INTO reviews.drafts(id,owner,data) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET data=excluded.data`, v, v.ID, v.Owner)
 }
 func (t *transaction) DeleteDraft(id string) error {
@@ -226,14 +297,45 @@ func (t *transaction) DeleteDraft(id string) error {
 func (t *transaction) Drafts(subject, after string, limit int) ([]reviews.Draft, error) {
 	return list[reviews.Draft](t, `SELECT data FROM reviews.drafts WHERE owner=$1 AND id>$2 ORDER BY id LIMIT $3`, subject, after, limit)
 }
-func (t *transaction) Withdrawals(subject, after string, limit int) ([]reviews.Entry, error) {
-	return list[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE owner=$1 AND id>$2 AND state IN ('withdrawn','pending') AND expires_at IS NOT NULL ORDER BY id LIMIT $3`, subject, after, limit)
+func (t *transaction) Withdrawals(subject, after string, limit int, now time.Time) ([]reviews.Entry, error) {
+	rows, e := t.tx.QueryContext(t.ctx, `SELECT e.data,i.data FROM reviews.entries e JOIN reviews.identities i ON i.root_id=e.root_id AND i.subject=e.owner WHERE e.owner=$1 AND e.id>$2 AND e.state='withdrawn' AND e.expires_at>$4 ORDER BY e.id LIMIT $3`, subject, after, limit, now)
+	if e != nil {
+		return nil, safe(e)
+	}
+	defer rows.Close()
+	out := []reviews.Entry{}
+	for rows.Next() {
+		var raw, rawIdentity []byte
+		var entry reviews.Entry
+		var identity reviews.Identity
+		if rows.Scan(&raw, &rawIdentity) != nil || json.Unmarshal(raw, &entry) != nil || json.Unmarshal(rawIdentity, &identity) != nil {
+			return nil, reviews.ErrUnavailable
+		}
+		entry.Input.Signed = identity.Signed
+		out = append(out, entry)
+	}
+	return out, safe(rows.Err())
 }
 func (t *transaction) Replay(key string) (reviews.Replay, error) {
 	return read[reviews.Replay](t, `SELECT data FROM reviews.replays WHERE key=$1`, key)
 }
 func (t *transaction) SaveReplay(key string, v reviews.Replay) error {
-	return t.save(`INSERT INTO reviews.replays(key,object_id,data) VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE SET data=excluded.data`, v, key, v.ObjectID)
+	var expires any
+	if !v.Until.IsZero() {
+		expires = v.Until
+	}
+	return t.save(`INSERT INTO reviews.replays(key,object_id,owner,expires_at,data) VALUES($1,$2,$3,$4,$5) ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,expires_at=excluded.expires_at,data=excluded.data`, v, key, v.ObjectID, v.Owner, expires)
+}
+func (r *Repository) PruneReplays(ctx context.Context, before time.Time, limit int) (int64, error) {
+	if before.IsZero() || limit < 1 || limit > 1000 {
+		return 0, reviews.ErrInput
+	}
+	res, err := r.DB.ExecContext(ctx, `DELETE FROM reviews.replays WHERE key IN (SELECT key FROM reviews.replays WHERE expires_at IS NOT NULL AND expires_at<=$1 ORDER BY expires_at,key LIMIT $2 FOR UPDATE SKIP LOCKED)`, before, limit)
+	if err != nil {
+		return 0, safe(err)
+	}
+	n, err := res.RowsAffected()
+	return n, safe(err)
 }
 func (t *transaction) Event(v reviews.Event) error {
 	if e := t.save(`INSERT INTO reviews.audit(id,reason,result,data) VALUES($1,$2,'success',$3)`, v, v.ID, v.Reason); e != nil {
