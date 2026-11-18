@@ -3,10 +3,13 @@ package reviews_test
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	r "github.com/StuHelper/stuhelper-reviews"
+	"github.com/StuHelper/stuhelper-reviews/httpapi"
 	"github.com/StuHelper/stuhelper-reviews/postgres"
 )
 
@@ -86,5 +89,40 @@ func TestExternalDependencyTimeoutsAndLockFreeTransactions(t *testing.T) {
 	_, err = f.service.Create(ctx, student, "hung-create", input("c-hung", "autumn", 4))
 	if !errors.Is(err, r.ErrUnavailable) || time.Since(start) > time.Second {
 		t.Fatalf("expected bounded ErrUnavailable timeout on hung external Check, got err=%v elapsed=%v", err, time.Since(start))
+	}
+}
+
+type presentationTimeoutAccess struct {
+	*access
+	deadline  time.Time
+	remaining time.Duration
+}
+
+func (a *presentationTimeoutAccess) Authorize(ctx context.Context, p r.Principal, action, school string) (r.Grant, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok || action != "configure" || school != "school" || p.Subject != "admin" {
+		return r.Grant{}, r.ErrInput
+	}
+	a.deadline = deadline
+	a.remaining = time.Until(deadline)
+	if a.remaining > time.Second {
+		return r.Grant{}, context.DeadlineExceeded
+	}
+	<-ctx.Done()
+	return r.Grant{}, ctx.Err()
+}
+
+func TestAdminPresentationBoundsAuthorization(t *testing.T) {
+	f := fixture(t)
+	auth := &presentationTimeoutAccess{access: &access{}}
+	f.service.Access = auth
+	f.service.Config.ExternalTimeout = 40 * time.Millisecond
+	h := httpapi.Handler{Service: f.service, Authenticate: func(*http.Request) (r.Principal, error) {
+		return r.Principal{Subject: "admin"}, nil
+	}}
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/reviews/admin/presentation?school_id=school", nil))
+	if rec.Code != http.StatusServiceUnavailable || auth.deadline.IsZero() || auth.remaining > f.service.Config.ExternalTimeout {
+		t.Fatalf("expected authorization deadline and 503, got remaining=%v status=%d", auth.remaining, rec.Code)
 	}
 }

@@ -45,6 +45,15 @@ func (s *Service) Presentation(ctx context.Context, school string) (Presentation
 	})
 	return out, err
 }
+func (s *Service) AdminPresentation(ctx context.Context, p Principal, school string) (PresentationView, error) {
+	if school != "*" && !validID(school) {
+		return PresentationView{}, ErrInput
+	}
+	if _, err := s.authorize(ctx, p, "configure", school); err != nil {
+		return PresentationView{}, err
+	}
+	return s.Presentation(ctx, school)
+}
 func validPresentation(v Presentation) bool {
 	if v.SchoolID != "*" && !validID(v.SchoolID) || v.Revision < 0 {
 		return false
@@ -110,7 +119,7 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 		if e = t.Event(Event{ID: rk, Type: "reviews.presentation.v1", Subject: in.SchoolID, SchoolID: in.SchoolID, Actor: p.Subject, Revision: in.Revision, At: s.now()}); e != nil {
 			return e
 		}
-		return t.SaveReplay(rk, Replay{Digest: h, ObjectID: in.SchoolID, Until: s.now().Add(24 * time.Hour)})
+		return t.SaveReplay(rk, Replay{Owner: p.Subject, Digest: h, ObjectID: in.SchoolID, Until: s.now().Add(24 * time.Hour)})
 	})
 	if err != nil {
 		return PresentationView{}, err

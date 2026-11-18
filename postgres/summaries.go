@@ -45,15 +45,28 @@ func (t *transaction) SummaryAggregates(q r.SummaryQuery) ([]r.SummaryAggregate,
 	}
 	// Bind all maps even when a branch does not need them, keeping typed
 	// parameters valid with both pgx's simple and extended protocols.
+	args := []any{q.SchoolID, q.Targets, q.Charts, q.From, q.Until, q.Now, string(courseAliases), string(targetAliases), string(termAliases)}
+	filter := ` AND ($2::text[] IS NULL OR ` + target + `=ANY($2))`
+	if len(q.Targets) > 0 {
+		expanded := q.ExpandedTargets
+		if len(expanded) == 0 {
+			expanded = q.Targets
+		}
+		args = append(args, expanded)
+		if q.Kind == "teacher" {
+			filter = ` AND e.data->'teacher_ids' ?| $10::text[] AND teachers.id=ANY($2::text[])`
+		} else {
+			filter = ` AND e.target_id=ANY($10::text[]) AND ` + target + `=ANY($2::text[])`
+		}
+	}
 	query := `WITH reference_maps AS (SELECT $7::jsonb AS course,$8::jsonb AS teacher,$9::jsonb AS term), source AS (
  SELECT ` + target + ` AS target,COALESCE($7::jsonb->>e.target_id,e.target_id) AS course,` + term + ` AS term,
  e.data->'input'->'ratings' AS ratings,e.first_published_at AS published
  FROM reviews.entries e` + join + `
  WHERE e.school_id=$1 AND e.kind='course' AND e.id=e.root_id AND e.state='published'
- AND (e.expires_at IS NULL OR e.expires_at>$6)
- AND ($2::text[] IS NULL OR ` + target + `=ANY($2)) AND $3::boolean IN (true,false)
+ AND (e.expires_at IS NULL OR e.expires_at>$6)` + filter + ` AND $3::boolean IN (true,false)
  ) SELECT ` + strings.Join(columns, ",") + ` FROM source GROUP BY target,course,term ORDER BY target,course,term LIMIT 100001`
-	rows, err := t.tx.QueryContext(t.ctx, query, q.SchoolID, q.Targets, q.Charts, q.From, q.Until, q.Now, string(courseAliases), string(targetAliases), string(termAliases))
+	rows, err := t.tx.QueryContext(t.ctx, query, args...)
 	if err != nil {
 		return nil, safe(err)
 	}

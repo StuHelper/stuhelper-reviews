@@ -224,13 +224,15 @@ func replay(t Transaction, key, digest string, now time.Time) (Result, bool, err
 }
 func (s *Service) record(t Transaction, key, digest, action string, p Principal, e Entry) error {
 	reason := ""
+	actor := "anonymous"
 	if action == "moderated" {
 		reason = e.ChangeReason
+		actor = p.Subject
 	}
-	if err := t.Event(Event{ID: key, Type: "reviews." + action + ".v1", Reason: reason, Subject: "entry/" + e.ID, SchoolID: e.SchoolID, Actor: p.Subject, Revision: e.Revision, At: s.now()}); err != nil {
+	if err := t.Event(Event{ID: key, Type: "reviews." + action + ".v1", Reason: reason, Subject: "entry/" + e.ID, SchoolID: e.SchoolID, Actor: actor, Revision: e.Revision, At: s.now()}); err != nil {
 		return err
 	}
-	return t.SaveReplay(key, Replay{Digest: digest, Result: result(e), Until: s.now().Add(24 * time.Hour), ObjectID: e.ID})
+	return t.SaveReplay(key, Replay{Owner: p.Subject, Digest: digest, Result: result(e), Until: s.now().Add(24 * time.Hour), ObjectID: e.ID})
 }
 func (s *Service) Create(ctx context.Context, p Principal, key string, in Input) (Result, error) {
 	return s.create(ctx, p, key, in, "", 0)
@@ -304,6 +306,16 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 		}
 		if e := t.Lock(rk); e != nil {
 			return e
+		}
+		if e := t.Lock("closure-owner:" + p.Subject); e != nil {
+			return e
+		}
+		closed, e := t.ClosedOwners([]string{p.Subject})
+		if e != nil {
+			return e
+		}
+		if closed[p.Subject] {
+			return ErrForbidden
 		}
 		cached, ok, e := replay(t, rk, h, now)
 		if e != nil {
@@ -471,6 +483,16 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		if current.Revision != root.Revision || base.SchoolID != root.SchoolID {
 			return ErrConflict
 		}
+		if e = t.Lock("closure-owner:" + p.Subject); e != nil {
+			return e
+		}
+		closed, e := t.ClosedOwners([]string{p.Subject})
+		if e != nil {
+			return e
+		}
+		if closed[p.Subject] {
+			return ErrForbidden
+		}
 		if in.TargetID != base.Input.TargetID {
 			return ErrInput
 		}
@@ -630,6 +652,16 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 		if e := t.Lock(rk); e != nil {
 			return e
 		}
+		if e := t.Lock("closure-owner:" + p.Subject); e != nil {
+			return e
+		}
+		closed, e := t.ClosedOwners([]string{p.Subject})
+		if e != nil {
+			return e
+		}
+		if closed[p.Subject] {
+			return ErrForbidden
+		}
 		cached, ok, e := replay(t, rk, h, s.now())
 		if e != nil {
 			return e
@@ -713,6 +745,8 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 		if entry.FirstPublishedAt == nil || !s.now().Before(entry.FirstPublishedAt.Add(s.Config.EditWindow)) {
 			return ErrWindow
 		}
+		entry.ChangeOrigin = "author"
+		entry.ChangeReason = ""
 		entry.Revision++
 		entry.UpdatedAt = s.now()
 		if in.Action == "delete" {
