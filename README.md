@@ -84,3 +84,5 @@ postgres/audit_query_test.go 的 TestPublicAuditQuery 使用独立 PostgreSQL �
 按账号信息查询的 Go 接口、能力、字段与范围限制见[账号查询规格](docs/spec/account-query.md)。
 
 原型的批量评分、分布、学期趋势与本人统计见[原型评分与待办](docs/spec/ui-data.md)。四档推荐默认值已确认，现有五档输入与教师课程等权规则保留。
+
+管理员查看一次详情或历史，系统记录一条独立审计。同一时刻的多次查看分别留痕。读取历史时在讨论锁内核对当前状态，一次读取讨论身份并应用到各修订。

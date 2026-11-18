@@ -2,8 +2,8 @@ package reviews
 
 import (
 	"context"
+	"crypto/rand"
 	"slices"
-	"time"
 )
 
 func adminView(e Entry) AdminEntry {
@@ -13,34 +13,51 @@ func adminView(e Entry) AdminEntry {
 }
 func (s *Service) auditRead(t Transaction, p Principal, school, subject string, revision int64) error {
 	now := s.now()
-	return t.AuditRead(Event{ID: hash([]string{"inspect", p.Subject, subject, now.Format(time.RFC3339Nano)}), Type: "reviews.inspected.v1", Subject: subject, SchoolID: school, Actor: p.Subject, Revision: revision, At: now})
+	return t.AuditRead(Event{ID: rand.Text(), Type: "reviews.inspected.v1", Subject: subject, SchoolID: school, Actor: p.Subject, Revision: revision, At: now})
 }
 func (s *Service) AdminGet(ctx context.Context, p Principal, id string) (AdminEntry, error) {
 	var out AdminEntry
+	err := s.readAdminEntry(ctx, p, id, func(t Transaction, entry Entry) error {
+		out = adminView(entry)
+		return s.auditRead(t, p, entry.SchoolID, "entry/"+id, entry.Revision)
+	})
+	if err != nil {
+		return AdminEntry{}, err
+	}
+	return out, nil
+}
+
+// Authorize outside the transaction, then recheck the discussion under its write lock.
+func (s *Service) readAdminEntry(ctx context.Context, p Principal, id string, read func(Transaction, Entry) error) error {
 	if p.Subject == "" {
-		return out, ErrForbidden
+		return ErrForbidden
 	}
 	if !validID(id) {
-		return out, ErrInput
+		return ErrInput
 	}
-	var entry Entry
-	err := s.Repo.Transaction(ctx, func(t Transaction) error { var err error; entry, err = t.Entry(id); return err })
+	var prior Entry
+	err := s.Repo.Transaction(ctx, func(t Transaction) error { var err error; prior, err = t.Entry(id); return err })
 	if err != nil {
-		return out, err
+		return err
 	}
-	if _, err = s.authorize(ctx, p, "moderate", entry.SchoolID); err != nil {
-		return out, err
+	if _, err = s.authorize(ctx, p, "moderate", prior.SchoolID); err != nil {
+		return err
 	}
-	err = s.Repo.Transaction(ctx, func(t Transaction) error {
-		var err error
-		entry, err = t.Entry(id)
+	return s.Repo.Transaction(ctx, func(t Transaction) error {
+		if err := t.Lock(prior.RootID); err != nil {
+			return err
+		}
+		entry, err := t.Entry(id)
 		if err != nil {
 			return err
+		}
+		if entry.RootID != prior.RootID || entry.SchoolID != prior.SchoolID {
+			return ErrConflict
 		}
 		if entry.State == "withdrawn" || entry.ExpiresAt != nil && !s.now().Before(*entry.ExpiresAt) {
 			return ErrNotFound
 		}
-		if entry.RootID != entry.ID {
+		if entry.ID != entry.RootID {
 			root, err := t.Entry(entry.RootID)
 			if err != nil {
 				return err
@@ -49,14 +66,13 @@ func (s *Service) AdminGet(ctx context.Context, p Principal, id string) (AdminEn
 				return ErrNotFound
 			}
 		}
-		entry, err = project(t, p, entry)
+		identity, err := t.Identity(entry.RootID, entry.Owner)
 		if err != nil {
 			return err
 		}
-		out = adminView(entry)
-		return s.auditRead(t, p, entry.SchoolID, "entry/"+entry.ID, entry.Revision)
+		entry.Projection = &Projection{Identity: identity}
+		return read(t, entry)
 	})
-	return out, err
 }
 func (s *Service) AdminList(ctx context.Context, p Principal, school, kind, state, after string, limit int) (AdminPage, error) {
 	out := AdminPage{Items: []AdminEntry{}}
@@ -88,39 +104,19 @@ func (s *Service) History(ctx context.Context, p Principal, id string, before in
 	if before < 0 || limit < 1 || limit > 100 {
 		return out, ErrInput
 	}
-	current, err := s.AdminGet(ctx, p, id)
-	if err != nil {
-		return out, err
-	}
-	err = s.Repo.Transaction(ctx, func(t Transaction) error {
-		live, e := t.Entry(id)
-		if e != nil {
-			return e
-		}
-		if live.State == "withdrawn" || live.ExpiresAt != nil && !s.now().Before(*live.ExpiresAt) {
-			return ErrNotFound
-		}
-		if live.RootID != live.ID {
-			root, e := t.Entry(live.RootID)
-			if e != nil {
-				return e
-			}
-			if root.State == "withdrawn" || root.ExpiresAt != nil && !s.now().Before(*root.ExpiresAt) {
-				return ErrNotFound
-			}
-		}
+	err := s.readAdminEntry(ctx, p, id, func(t Transaction, current Entry) error {
 		entries, e := t.History(id, before, limit)
 		if e != nil {
 			return e
 		}
 		for _, entry := range entries {
-			entry, e = project(t, p, entry)
-			if e != nil {
-				return e
-			}
+			entry.Projection = current.Projection
 			out = append(out, adminView(entry))
 		}
 		return s.auditRead(t, p, current.SchoolID, "history/"+id, current.Revision)
 	})
-	return out, err
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }

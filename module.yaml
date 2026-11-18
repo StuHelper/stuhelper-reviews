@@ -106,6 +106,7 @@ scenario_tests:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
     - presentation_test.go#TestPresentationHTTPPreservesRatingTexts
   CM-09:
+    - administration_test.go#TestAdministrativeReadsAuditEverySuccessfulCall
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   CM-14:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
