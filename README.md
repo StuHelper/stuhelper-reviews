@@ -92,3 +92,5 @@ postgres/audit_query_test.go 的 TestPublicAuditQuery 使用独立 PostgreSQL �
 管理员查看一次详情或历史，系统记录一条独立审计。同一时刻的多次查看分别留痕。读取历史时在讨论锁内核对当前状态，一次读取讨论身份并应用到各修订。
 
 统计统一通过 ReadStatsPage 读取，调用方提供当前主体。学校范围在 SQL 分组前生效，评价的到期判断使用服务时钟。Go 调用方从 Stats 和 StatsPage 迁移到该入口。
+
+浏览器写请求核对 Origin 的协议和主机，并拒绝跨站请求。带 JSON 正文的接口要求 application/json，可附字符集。TLS 在反向代理终止时，宿主需将受信的浏览器来源传入 Handler.PublicOrigin。

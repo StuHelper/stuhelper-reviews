@@ -71,6 +71,7 @@ scenario_tests:
     - postgres/audit_query_test.go#TestPublicAuditQuery
     - closure_test.go#TestPublicAuditPrivacyRuntimePrivilegesAndFullAccountClosure
   ACAD-04:
+    - integration_test.go#TestHTTPWriteOriginAndJSON
     - integration_test.go#TestContentAdmissionAndCurrentAccessCannotLeakIdentity
   ACAD-05:
     - integration_test.go#TestCourseTermEligibilityAndImmutableTeacherAttribution
