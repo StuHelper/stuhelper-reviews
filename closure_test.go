@@ -350,3 +350,33 @@ func TestPublicAuditPrivacyRuntimePrivilegesAndFullAccountClosure(t *testing.T) 
 		t.Fatalf("CheckRuntime failed after revoking excess privileges: %v", err)
 	}
 }
+
+func TestLegacyAuthorAuditAndClosureReceipts(t *testing.T) {
+	f := fixture(t)
+	repo, db := database(t)
+	f.service.Repo = repo
+	ctx := context.Background()
+	root := create(t, f, "legacy", input("course", "autumn", 3))
+	voter := r.Principal{Subject: "legacy-voter"}
+	if _, err := f.service.Action(ctx, voter, root.ID, "legacy", r.Action{Action: "vote", Vote: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE reviews.audit SET data=jsonb_set(data,'{Actor}',to_jsonb((CASE WHEN audit_action='reviews.voted.v1' THEN 'legacy-voter' ELSE 'student' END)::text)) WHERE audit_action IN ('reviews.created.v1','reviews.voted.v1'); ALTER TABLE reviews.replays DROP COLUMN owner`); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := db.Exec(postgres.Schema); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var private, receipts int
+	if err := db.QueryRow(`SELECT count(*) FROM reviews.audit WHERE audit_actor IN ('student','legacy-voter') OR data->>'Actor' IN ('student','legacy-voter')`).Scan(&private); err != nil || private != 0 {
+		t.Errorf("identifying audit rows %d err=%v", private, err)
+	}
+	if err := f.service.AnonymizeOwner(ctx, voter.Subject, "00000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT count(*) FROM reviews.replays WHERE key IN(SELECT id FROM reviews.audit WHERE audit_action='reviews.voted.v1')`).Scan(&receipts); err != nil || receipts != 0 {
+		t.Fatal(receipts, err)
+	}
+}

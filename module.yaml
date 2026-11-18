@@ -123,6 +123,7 @@ scenario_tests:
   ACAD-15:
     - interaction_test.go#TestExpiredAdmissionAllowsOnlyOwnVoteRemoval
   PC-07:
+    - closure_test.go#TestLegacyAuthorAuditAndClosureReceipts
     - closure_test.go#TestClosureRetainsAnonymousVotes
     - closure_test.go#TestClosedOwnerKeepsContentWithoutProfileOrDisclosures
     - closure_test.go#TestClosureRejectsPublicationAlreadyWaitingForExternalModeration

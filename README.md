@@ -84,3 +84,5 @@ postgres/audit_query_test.go 的 TestPublicAuditQuery 使用独立 PostgreSQL �
 按账号信息查询的 Go 接口、能力、字段与范围限制见[账号查询规格](docs/spec/account-query.md)。
 
 原型的批量评分、分布、学期趋势与本人统计见[原型评分与待办](docs/spec/ui-data.md)。四档推荐默认值已确认，现有五档输入与教师课程等权规则保留。
+
+升级时，迁移身份先恢复旧回执的账号归属，再匿名化用户互动审计并清理已注销账号的私人草稿。管理处置审计保留操作者，重复迁移保持同一结果。

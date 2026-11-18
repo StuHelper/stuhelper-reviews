@@ -43,7 +43,7 @@ func (t *transaction) CloseOwner(owner, id string) error {
 	if _, e = t.tx.ExecContext(t.ctx, `DELETE FROM reviews.drafts WHERE owner=$1`, owner); e != nil {
 		return safe(e)
 	}
-	withdrawn, e := list[r.Entry](t, `SELECT data FROM reviews.entries WHERE owner=$1 AND state='withdrawn' ORDER BY id`, owner)
+	withdrawn, e := list[r.Entry](t, `SELECT data FROM reviews.entries WHERE owner=$1 AND state='withdrawn' AND NOT EXISTS (SELECT 1 FROM reviews.entries root WHERE root.id=reviews.entries.root_id AND root.id<>reviews.entries.id AND root.owner=$1 AND root.state='withdrawn') ORDER BY id`, owner)
 	if e != nil {
 		return e
 	}

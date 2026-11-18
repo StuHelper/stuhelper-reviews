@@ -78,3 +78,22 @@ CREATE TABLE IF NOT EXISTS reviews.activity_contributions(root_id text NOT NULL,
 REVOKE ALL ON reviews.activity_contributions FROM PUBLIC;
 
 CREATE INDEX IF NOT EXISTS reviews_vote_activity_day ON reviews.votes(id,created_at);
+
+-- Attribute legacy receipts before removing their only audit-to-account link.
+UPDATE reviews.replays r SET owner=a.data->>'Actor'
+ FROM reviews.audit a WHERE a.id=r.key AND r.owner='' AND COALESCE(a.data->>'Actor','') NOT IN ('','anonymous');
+UPDATE reviews.replays r SET owner=d.owner FROM reviews.drafts d WHERE r.owner='' AND r.object_id=d.id;
+DELETE FROM reviews.replays r USING reviews.closed_owners c WHERE r.owner=c.owner;
+UPDATE reviews.audit SET data=jsonb_set(data,'{Actor}','"anonymous"')
+ WHERE audit_action IN ('reviews.created.v1','reviews.replied.v1','reviews.republished.v1','reviews.withdraw.v1',
+ 'reviews.delete.v1','reviews.draft_saved.v1','reviews.voted.v1') AND audit_actor<>'anonymous';
+
+-- Old closures may already be complete at the host. Their private drafts
+-- and already-withdrawn discussions no longer contribute to public activity.
+DELETE FROM reviews.drafts d USING reviews.closed_owners c WHERE d.owner=c.owner;
+DELETE FROM reviews.entries e USING reviews.entries w,reviews.closed_owners c
+ WHERE w.owner=c.owner AND w.state='withdrawn' AND (e.id=w.id OR (w.id=w.root_id AND e.root_id=w.id));
+UPDATE reviews.identities i SET data=jsonb_set(i.data,'{Signed}','false') FROM reviews.closed_owners c
+ WHERE i.subject=c.owner AND (i.data->>'Signed')::boolean;
+UPDATE reviews.entries e SET data=jsonb_set(e.data,'{input,signed}','false') #- '{input,disclosures}'
+ FROM reviews.closed_owners c WHERE e.owner=c.owner AND ((e.data#>>'{input,signed}')::boolean OR e.data#>'{input,disclosures}' IS NOT NULL);
