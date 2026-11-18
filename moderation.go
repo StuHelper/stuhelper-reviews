@@ -84,6 +84,9 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			if entry.Input.Kind != "course" || entry.State == "withdrawn" {
 				return ErrConflict
 			}
+			if attribution.Revision != entry.Revision {
+				return ErrConflict
+			}
 			entry.Input.TeacherID = d.TeacherID
 			entry.TeacherIDs = attribution.TeacherIDs
 			entry.Evidence = evidence

@@ -66,3 +66,19 @@ func (s *Service) canonicalAggregates(ctx context.Context, rows []Aggregate) ([]
 	slices.SortFunc(out, func(a, b Aggregate) int { return strings.Compare(a.CourseID, b.CourseID) })
 	return out, nil
 }
+
+func (s *Service) selectedTeachers(ctx context.Context, teacher string, teachers []string) ([]string, error) {
+	if teacher == "" {
+		return teachers, nil
+	}
+	equivalent, err := s.equivalentIDs(ctx, "teacher", teacher)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range equivalent {
+		if slices.Contains(teachers, id) {
+			return []string{teacher}, nil
+		}
+	}
+	return nil, ErrForbidden
+}

@@ -173,15 +173,9 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	}
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
-	if in.TeacherID != "" {
-		equivalent, err := s.equivalentIDs(ctx, "teacher", in.TeacherID)
-		if err != nil {
-			return target, nil, nil, g, err
-		}
-		if !slices.ContainsFunc(equivalent, func(id string) bool { return slices.Contains(ids, id) }) {
-			return target, nil, nil, g, ErrForbidden
-		}
-		ids = []string{in.TeacherID}
+	ids, e = s.selectedTeachers(ctx, in.TeacherID, ids)
+	if e != nil {
+		return target, nil, nil, g, e
 	}
 	ids, e = s.activityTeacherIDs(ctx, target.SchoolID, ids)
 	if e != nil {

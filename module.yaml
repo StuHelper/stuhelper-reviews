@@ -44,6 +44,7 @@ scenario_tests:
   REV-IDENTITY-01:
     - course_identity_test.go#TestCourseIdentityPreservesHistoryNewWritesAndCanonicalIdempotency
   REV-SPORTS-01:
+    - sports_project_test.go#TestModeratedProjectTeacherAndPreviewAudit
     - sports_project_test.go#TestSportsProjectRequiresOwnTeacherAndKeepsAttribution
   IQ-02:
     - accountquery/query_test.go#TestAccountQueryAuthorizationAndFailures
