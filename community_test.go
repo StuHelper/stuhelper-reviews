@@ -451,3 +451,62 @@ func TestLegacySoftDeletionRemainsRestorable(t *testing.T) {
 		t.Fatal(restored, err)
 	}
 }
+
+type failedExpiryEvent struct {
+	r.Transaction
+	subject string
+}
+
+func (t failedExpiryEvent) Event(e r.Event) error {
+	if e.Type == "reviews.expired.v1" && e.Subject == t.subject {
+		return r.ErrUnavailable
+	}
+	return t.Transaction.Event(e)
+}
+
+type failingSweepRepo struct {
+	r.Repository
+	subject string
+}
+
+func (repo failingSweepRepo) Transaction(ctx context.Context, fn func(r.Transaction) error) error {
+	return repo.Repository.Transaction(ctx, func(t r.Transaction) error { return fn(failedExpiryEvent{t, repo.subject}) })
+}
+func TestSweepFailureRollsBackOnlyItsDiscussion(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	repo, db := database(t)
+	f.service.Repo = repo
+	var ids []string
+	for _, key := range []string{"first", "second"} {
+		entry := create(t, f, key, input("course", "spring", 3))
+		if _, err := f.service.Action(ctx, student, entry.ID, "withdraw", r.Action{Action: "withdraw", Revision: entry.Revision}); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, entry.ID)
+		f.now = f.now.Add(time.Minute)
+	}
+	f.now = f.now.Add(25 * time.Hour)
+	f.service.Repo = failingSweepRepo{repo, "entry/" + ids[1]}
+	n, err := f.service.Sweep(ctx, 2)
+	if !errors.Is(err, r.ErrUnavailable) {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("completed %d want 1", n)
+	}
+	for i, id := range ids {
+		var exists, event bool
+		if err = db.QueryRow(`SELECT EXISTS(SELECT FROM reviews.entries WHERE id=$1),EXISTS(SELECT FROM reviews.audit WHERE audit_target='entry/'||$1 AND audit_action='reviews.expired.v1')`, id).Scan(&exists, &event); err != nil {
+			t.Fatal(err)
+		}
+		if exists != (i == 1) || event != (i == 0) {
+			t.Errorf("discussion %d exists=%t expired event=%t", i, exists, event)
+		}
+	}
+	f.service.Repo = repo
+	n, err = f.service.Sweep(ctx, 2)
+	if err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+}

@@ -92,6 +92,7 @@ scenario_tests:
   ACAD-23:
     - administration_test.go#TestModerationReadIsScopedAuditedAndUsesDiscussionHandles
   ACAD-31:
+    - community_test.go#TestSweepFailureRollsBackOnlyItsDiscussion
     - community_test.go#TestWithdrawnDraftSaveKeepsExpiryAndAttribution
     - community_test.go#TestSoftDeletePreservesHistoryDraftPaginationAndIsolatedSweep
   ACAD-35:
