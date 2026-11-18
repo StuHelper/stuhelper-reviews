@@ -105,6 +105,7 @@ scenario_tests:
   ACAD-40:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
     - presentation_test.go#TestPresentationHTTPPreservesRatingTexts
+    - rating_texts_test.go#TestDefaultRatingTextsCoverEightLocalesAndPresentationFallback
   CM-09:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   CM-14:

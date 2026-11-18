@@ -18,6 +18,13 @@ type PresentationView struct {
 	Source     string        `json:"source"`
 }
 
+func withDefaultRatingTexts(v Presentation) Presentation {
+	if len(v.RatingTexts) == 0 {
+		v.RatingTexts = DefaultRatingTexts()
+	}
+	return v
+}
+
 func (s *Service) Presentation(ctx context.Context, school string) (PresentationView, error) {
 	out := PresentationView{}
 	if school != "*" && !validID(school) {
@@ -26,7 +33,14 @@ func (s *Service) Presentation(ctx context.Context, school string) (Presentation
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		local, e := t.Presentation(school)
 		if e == nil {
-			out = PresentationView{local, &local, "school"}
+			configured := local
+			effective := local
+			if len(effective.RatingTexts) == 0 && school != "*" {
+				if global, ge := t.Presentation("*"); ge == nil && len(global.RatingTexts) > 0 {
+					effective.RatingTexts = global.RatingTexts
+				}
+			}
+			out = PresentationView{withDefaultRatingTexts(effective), &configured, "school"}
 			return nil
 		}
 		if !errors.Is(e, ErrNotFound) {
@@ -34,13 +48,13 @@ func (s *Service) Presentation(ctx context.Context, school string) (Presentation
 		}
 		global, e := t.Presentation("*")
 		if e == nil {
-			out = PresentationView{global, nil, "global"}
+			out = PresentationView{withDefaultRatingTexts(global), nil, "global"}
 			return nil
 		}
 		if !errors.Is(e, ErrNotFound) {
 			return e
 		}
-		out = PresentationView{Presentation{SchoolID: school, RatingTexts: map[string][][]string{}}, nil, "default"}
+		out = PresentationView{Presentation{SchoolID: school, RatingTexts: DefaultRatingTexts()}, nil, "default"}
 		return nil
 	})
 	return out, err
@@ -49,12 +63,11 @@ func validPresentation(v Presentation) bool {
 	if v.SchoolID != "*" && !validID(v.SchoolID) || v.Revision < 0 {
 		return false
 	}
-	locales := []string{"zh-CN", "en-US", "ja-JP", "ko-KR", "fr-FR", "es-ES", "ru-RU", "ar-EG"}
-	if len(v.RatingTexts) != 0 && len(v.RatingTexts) != 8 {
+	if len(v.RatingTexts) != 0 && len(v.RatingTexts) != len(SupportedLocales) {
 		return false
 	}
 	for locale, dimensions := range v.RatingTexts {
-		if !slices.Contains(locales, locale) || len(dimensions) != 5 {
+		if !slices.Contains(SupportedLocales[:], locale) || len(dimensions) != len(RatingDimensionKeys) {
 			return false
 		}
 		for _, texts := range dimensions {
