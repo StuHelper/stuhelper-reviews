@@ -240,3 +240,32 @@ func TestPrivateReplyListRespectsWithdrawnRoot(t *testing.T) {
 		t.Fatal("reply list survived root withdrawal", page, err)
 	}
 }
+
+type inactiveCourseCatalog struct{ *summaryCatalog }
+
+func (c inactiveCourseCatalog) Target(ctx context.Context, kind, id string) (r.Target, error) {
+	t, err := c.summaryCatalog.Target(ctx, kind, id)
+	if err == nil && id == "inactive-course" {
+		t.Inactive = true
+	}
+	return t, err
+}
+
+func TestComposerReportsInactiveTargetAndDisclosureOutage(t *testing.T) {
+	f, port := uiReviewFixture(t)
+	ctx := context.Background()
+	// 4. A-15.3: Composer rejects inactive course even when term is empty, and surfaces disclosure provider failure.
+	f.service.Catalog = inactiveCourseCatalog{port}
+	compInactive, err := f.service.Composer(ctx, student, "course", "inactive-course", "", "")
+	if err != nil || compInactive.State != "forbidden" || compInactive.Allowed {
+		t.Fatalf("Composer returned %+v err=%v for inactive course without term", compInactive, err)
+	}
+	facts := factsFor(f, false)
+	facts.err = r.ErrUnavailable
+	f.service.Disclosures = facts
+	compDiscDown, err := f.service.Composer(ctx, student, "course", "course", "autumn", "")
+	if err != nil || compDiscDown.State != "unavailable" || compDiscDown.Allowed {
+		t.Fatalf("Composer swallowed disclosure failure: %+v err=%v", compDiscDown, err)
+	}
+
+}

@@ -73,6 +73,7 @@ scenario_tests:
   ACAD-13:
     - integration_test.go#TestConcurrentCreateReplayAndNewReviewsRemainAllowed
   ACAD-19:
+    - community_test.go#TestComposerReportsInactiveTargetAndDisclosureOutage
     - integration_test.go#TestDiscussionIdentityVotingDraftConflictsAndModeration
     - community_test.go#TestComposerUsesCurrentFactsAndDiscussionIdentity
   ACAD-30:
