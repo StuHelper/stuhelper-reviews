@@ -168,3 +168,5 @@ scenario_tests:
     - notification_titles_test.go#TestNotificationTitlesRespectScopePublicationAndRootNames
     - ui_backend_test.go#TestUIReviewHTTPAndUpvotePagination
     - ui_backend_test.go#TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan
+    - list_filtering_test.go#TestRecommendedSortFiltersBoundedRefillAndCoTeachers
+    - list_filtering_test.go#TestTeacherIDsRequireExplicitHTTPOption

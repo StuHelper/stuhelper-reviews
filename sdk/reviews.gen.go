@@ -205,25 +205,25 @@ func (e PendingCoursesState) Valid() bool {
 
 // Defines values for Recommendation.
 const (
-	Average             Recommendation = "average"
-	NotRecommended      Recommendation = "not_recommended"
-	Recommended         Recommendation = "recommended"
-	StronglyRecommended Recommendation = "strongly_recommended"
-	Unrated             Recommendation = "unrated"
+	RecommendationAverage             Recommendation = "average"
+	RecommendationNotRecommended      Recommendation = "not_recommended"
+	RecommendationRecommended         Recommendation = "recommended"
+	RecommendationStronglyRecommended Recommendation = "strongly_recommended"
+	RecommendationUnrated             Recommendation = "unrated"
 )
 
 // Valid indicates whether the value is a known member of the Recommendation enum.
 func (e Recommendation) Valid() bool {
 	switch e {
-	case Average:
+	case RecommendationAverage:
 		return true
-	case NotRecommended:
+	case RecommendationNotRecommended:
 		return true
-	case Recommended:
+	case RecommendationRecommended:
 		return true
-	case StronglyRecommended:
+	case RecommendationStronglyRecommended:
 		return true
-	case Unrated:
+	case RecommendationUnrated:
 		return true
 	default:
 		return false
@@ -313,10 +313,11 @@ func (e ReviewSummaryKind) Valid() bool {
 
 // Defines values for ListReviewsParamsSort.
 const (
-	ListReviewsParamsSortId      ListReviewsParamsSort = "id"
-	ListReviewsParamsSortNewest  ListReviewsParamsSort = "newest"
-	ListReviewsParamsSortOldest  ListReviewsParamsSort = "oldest"
-	ListReviewsParamsSortUpvotes ListReviewsParamsSort = "upvotes"
+	ListReviewsParamsSortId          ListReviewsParamsSort = "id"
+	ListReviewsParamsSortNewest      ListReviewsParamsSort = "newest"
+	ListReviewsParamsSortOldest      ListReviewsParamsSort = "oldest"
+	ListReviewsParamsSortRecommended ListReviewsParamsSort = "recommended"
+	ListReviewsParamsSortUpvotes     ListReviewsParamsSort = "upvotes"
 )
 
 // Valid indicates whether the value is a known member of the ListReviewsParamsSort enum.
@@ -328,7 +329,30 @@ func (e ListReviewsParamsSort) Valid() bool {
 		return true
 	case ListReviewsParamsSortOldest:
 		return true
+	case ListReviewsParamsSortRecommended:
+		return true
 	case ListReviewsParamsSortUpvotes:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListReviewsParamsRatingGroup.
+const (
+	ListReviewsParamsRatingGroupHigh ListReviewsParamsRatingGroup = "high"
+	ListReviewsParamsRatingGroupLow  ListReviewsParamsRatingGroup = "low"
+	ListReviewsParamsRatingGroupMid  ListReviewsParamsRatingGroup = "mid"
+)
+
+// Valid indicates whether the value is a known member of the ListReviewsParamsRatingGroup enum.
+func (e ListReviewsParamsRatingGroup) Valid() bool {
+	switch e {
+	case ListReviewsParamsRatingGroupHigh:
+		return true
+	case ListReviewsParamsRatingGroupLow:
+		return true
+	case ListReviewsParamsRatingGroupMid:
 		return true
 	default:
 		return false
@@ -337,10 +361,11 @@ func (e ListReviewsParamsSort) Valid() bool {
 
 // Defines values for MyReviewsParamsSort.
 const (
-	MyReviewsParamsSortId      MyReviewsParamsSort = "id"
-	MyReviewsParamsSortNewest  MyReviewsParamsSort = "newest"
-	MyReviewsParamsSortOldest  MyReviewsParamsSort = "oldest"
-	MyReviewsParamsSortUpvotes MyReviewsParamsSort = "upvotes"
+	MyReviewsParamsSortId          MyReviewsParamsSort = "id"
+	MyReviewsParamsSortNewest      MyReviewsParamsSort = "newest"
+	MyReviewsParamsSortOldest      MyReviewsParamsSort = "oldest"
+	MyReviewsParamsSortRecommended MyReviewsParamsSort = "recommended"
+	MyReviewsParamsSortUpvotes     MyReviewsParamsSort = "upvotes"
 )
 
 // Valid indicates whether the value is a known member of the MyReviewsParamsSort enum.
@@ -352,7 +377,30 @@ func (e MyReviewsParamsSort) Valid() bool {
 		return true
 	case MyReviewsParamsSortOldest:
 		return true
+	case MyReviewsParamsSortRecommended:
+		return true
 	case MyReviewsParamsSortUpvotes:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MyReviewsParamsRatingGroup.
+const (
+	MyReviewsParamsRatingGroupHigh MyReviewsParamsRatingGroup = "high"
+	MyReviewsParamsRatingGroupLow  MyReviewsParamsRatingGroup = "low"
+	MyReviewsParamsRatingGroupMid  MyReviewsParamsRatingGroup = "mid"
+)
+
+// Valid indicates whether the value is a known member of the MyReviewsParamsRatingGroup enum.
+func (e MyReviewsParamsRatingGroup) Valid() bool {
+	switch e {
+	case MyReviewsParamsRatingGroupHigh:
+		return true
+	case MyReviewsParamsRatingGroupLow:
+		return true
+	case MyReviewsParamsRatingGroupMid:
 		return true
 	default:
 		return false
@@ -767,9 +815,12 @@ type View struct {
 
 	// TeacherId  体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。
 	TeacherId *string `json:"teacher_id,omitempty"`
-	TermId    *string `json:"term_id,omitempty"`
-	Title     string  `json:"title"`
-	Upvotes   int     `json:"upvotes"`
+
+	// TeacherIds 课程评价发布时记录的任课教师归属快照（单选教师时为该教师，未单选教师时为该学期本人选课任课教师并集）；非课程评价或无教师归属时省略。 仅在 include_teacher_ids=true 时返回。
+	TeacherIds *[]string `json:"teacher_ids,omitempty"`
+	TermId     *string   `json:"term_id,omitempty"`
+	Title      string    `json:"title"`
+	Upvotes    int       `json:"upvotes"`
 }
 
 // ListReviewsParams defines parameters for ListReviews.
@@ -781,18 +832,33 @@ type ListReviewsParams struct {
 	After    *string `form:"after,omitempty" json:"after,omitempty"`
 	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Sort Stable ID order by default; newest/oldest use creation time with an opaque cursor.
+	// Sort Stable ID order by default; newest/oldest use creation time; recommended orders featured entries first, then net helpfulness (upvotes minus downvotes), upvotes, creation time and ID descending.
 	Sort *ListReviewsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// TeacherId Course reviews attributed to this teacher at publication.
 	TeacherId *string `form:"teacher_id,omitempty" json:"teacher_id,omitempty"`
 
+	// Featured 筛选管理员认定的精选优质内容（true）或普通内容（false）。
+	Featured *bool `form:"featured,omitempty" json:"featured,omitempty"`
+
+	// HasTeacherReply 筛选是否存在当前公开有效认证教师回复的根讨论（true/false），实时核验必需实名与教师授权。
+	HasTeacherReply *bool `form:"has_teacher_reply,omitempty" json:"has_teacher_reply,omitempty"`
+
+	// RatingGroup 按课程评价推荐度维度档位筛选：low 为 1-2 分，mid 为 3 分，high 为 4-5 分。
+	RatingGroup *ListReviewsParamsRatingGroup `form:"rating_group,omitempty" json:"rating_group,omitempty"`
+
 	// IncludeReplyPreview 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。
 	IncludeReplyPreview *bool `form:"include_reply_preview,omitempty" json:"include_reply_preview,omitempty"`
+
+	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
+	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
 }
 
 // ListReviewsParamsSort defines parameters for ListReviews.
 type ListReviewsParamsSort string
+
+// ListReviewsParamsRatingGroup defines parameters for ListReviews.
+type ListReviewsParamsRatingGroup string
 
 // CreateReviewParams defines parameters for CreateReview.
 type CreateReviewParams struct {
@@ -869,21 +935,42 @@ type MyReviewsParams struct {
 	After *string `form:"after,omitempty" json:"after,omitempty"`
 	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Sort Stable ID order by default; newest/oldest use creation time with an opaque cursor.
+	// Sort Stable ID order by default; newest/oldest use creation time; recommended orders featured entries first, then net helpfulness (upvotes minus downvotes), upvotes, creation time and ID descending.
 	Sort *MyReviewsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// TeacherId Course reviews attributed to this teacher at publication.
 	TeacherId *string `form:"teacher_id,omitempty" json:"teacher_id,omitempty"`
-	Kind      *string `form:"kind,omitempty" json:"kind,omitempty"`
-	TargetId  *string `form:"target_id,omitempty" json:"target_id,omitempty"`
-	TermId    *string `form:"term_id,omitempty" json:"term_id,omitempty"`
+
+	// Featured 筛选管理员认定的精选优质内容（true）或普通内容（false）。
+	Featured *bool `form:"featured,omitempty" json:"featured,omitempty"`
+
+	// HasTeacherReply 筛选是否存在当前公开有效认证教师回复的根讨论（true/false），实时核验必需实名与教师授权。
+	HasTeacherReply *bool `form:"has_teacher_reply,omitempty" json:"has_teacher_reply,omitempty"`
+
+	// RatingGroup 按课程评价推荐度维度档位筛选：low 为 1-2 分，mid 为 3 分，high 为 4-5 分。
+	RatingGroup *MyReviewsParamsRatingGroup `form:"rating_group,omitempty" json:"rating_group,omitempty"`
+	Kind        *string                     `form:"kind,omitempty" json:"kind,omitempty"`
+	TargetId    *string                     `form:"target_id,omitempty" json:"target_id,omitempty"`
+	TermId      *string                     `form:"term_id,omitempty" json:"term_id,omitempty"`
 
 	// IncludeReplyPreview 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。
 	IncludeReplyPreview *bool `form:"include_reply_preview,omitempty" json:"include_reply_preview,omitempty"`
+
+	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
+	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
 }
 
 // MyReviewsParamsSort defines parameters for MyReviews.
 type MyReviewsParamsSort string
+
+// MyReviewsParamsRatingGroup defines parameters for MyReviews.
+type MyReviewsParamsRatingGroup string
+
+// GetOwnEntryParams defines parameters for GetOwnEntry.
+type GetOwnEntryParams struct {
+	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
+	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
+}
 
 // MyReviewsReferencesParams defines parameters for MyReviewsReferences.
 type MyReviewsReferencesParams struct {
@@ -921,6 +1008,12 @@ type GetReviewSummariesParams struct {
 
 // GetReviewSummariesParamsKind defines parameters for GetReviewSummaries.
 type GetReviewSummariesParamsKind string
+
+// GetReviewParams defines parameters for GetReview.
+type GetReviewParams struct {
+	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
+	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
+}
 
 // ReviewActionParams defines parameters for ReviewAction.
 type ReviewActionParams struct {
@@ -1122,7 +1215,7 @@ type ClientInterface interface {
 	MyReviews(ctx context.Context, params *MyReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOwnEntry performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
-	GetOwnEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOwnEntry(ctx context.Context, id string, params *GetOwnEntryParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOwnReviewOverview performs a GET /api/v1/reviews/me/overview (the `GetOwnReviewOverview` operationId) request.
 	//
@@ -1157,7 +1250,7 @@ type ClientInterface interface {
 	// GetReview performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
 	//
 	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
-	GetReview(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetReview(ctx context.Context, id string, params *GetReviewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
@@ -1482,8 +1575,8 @@ func (c *Client) MyReviews(ctx context.Context, params *MyReviewsParams, reqEdit
 }
 
 // GetOwnEntry performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
-func (c *Client) GetOwnEntry(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOwnEntryRequest(c.Server, id)
+func (c *Client) GetOwnEntry(ctx context.Context, id string, params *GetOwnEntryParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOwnEntryRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1587,8 +1680,8 @@ func (c *Client) GetReviewSummaries(ctx context.Context, params *GetReviewSummar
 // GetReview performs a GET /api/v1/reviews/{id} (the `GetReview` operationId) request.
 //
 // Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
-func (c *Client) GetReview(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetReviewRequest(c.Server, id)
+func (c *Client) GetReview(ctx context.Context, id string, params *GetReviewParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetReviewRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1783,9 +1876,57 @@ func NewListReviewsRequest(server string, params *ListReviewsParams) (*http.Requ
 
 		}
 
+		if params.Featured != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "featured", *params.Featured, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.HasTeacherReply != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "has_teacher_reply", *params.HasTeacherReply, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.RatingGroup != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "rating_group", *params.RatingGroup, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.IncludeReplyPreview != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_reply_preview", *params.IncludeReplyPreview, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeTeacherIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_teacher_ids", *params.IncludeTeacherIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2688,6 +2829,42 @@ func NewMyReviewsRequest(server string, params *MyReviewsParams) (*http.Request,
 
 		}
 
+		if params.Featured != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "featured", *params.Featured, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.HasTeacherReply != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "has_teacher_reply", *params.HasTeacherReply, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.RatingGroup != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "rating_group", *params.RatingGroup, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Kind != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -2736,6 +2913,18 @@ func NewMyReviewsRequest(server string, params *MyReviewsParams) (*http.Request,
 
 		}
 
+		if params.IncludeTeacherIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_teacher_ids", *params.IncludeTeacherIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -2751,7 +2940,7 @@ func NewMyReviewsRequest(server string, params *MyReviewsParams) (*http.Request,
 }
 
 // NewGetOwnEntryRequest constructs an http.Request for the GetOwnEntry method
-func NewGetOwnEntryRequest(server string, id string) (*http.Request, error) {
+func NewGetOwnEntryRequest(server string, id string, params *GetOwnEntryParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -2774,6 +2963,33 @@ func NewGetOwnEntryRequest(server string, id string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeTeacherIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_teacher_ids", *params.IncludeTeacherIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3162,7 +3378,7 @@ func NewGetReviewSummariesRequest(server string, params *GetReviewSummariesParam
 }
 
 // NewGetReviewRequest constructs an http.Request for the GetReview method
-func NewGetReviewRequest(server string, id string) (*http.Request, error) {
+func NewGetReviewRequest(server string, id string, params *GetReviewParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -3185,6 +3401,33 @@ func NewGetReviewRequest(server string, id string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeTeacherIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_teacher_ids", *params.IncludeTeacherIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3483,7 +3726,7 @@ type ClientWithResponsesInterface interface {
 	// GetOwnEntryWithResponse performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	GetOwnEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetOwnEntryResponse, error)
+	GetOwnEntryWithResponse(ctx context.Context, id string, params *GetOwnEntryParams, reqEditors ...RequestEditorFn) (*GetOwnEntryResponse, error)
 
 	// GetOwnReviewOverviewWithResponse performs a GET /api/v1/reviews/me/overview (the `GetOwnReviewOverview` operationId) request.
 	//
@@ -3532,7 +3775,7 @@ type ClientWithResponsesInterface interface {
 	// Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	GetReviewWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetReviewResponse, error)
+	GetReviewWithResponse(ctx context.Context, id string, params *GetReviewParams, reqEditors ...RequestEditorFn) (*GetReviewResponse, error)
 
 	// ReviewActionWithBodyWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
@@ -5884,8 +6127,8 @@ func (c *ClientWithResponses) MyReviewsWithResponse(ctx context.Context, params 
 // GetOwnEntryWithResponse performs a GET /api/v1/reviews/me/entries/{id} (the `GetOwnEntry` operationId) request.
 //
 // Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) GetOwnEntryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetOwnEntryResponse, error) {
-	rsp, err := c.GetOwnEntry(ctx, id, reqEditors...)
+func (c *ClientWithResponses) GetOwnEntryWithResponse(ctx context.Context, id string, params *GetOwnEntryParams, reqEditors ...RequestEditorFn) (*GetOwnEntryResponse, error) {
+	rsp, err := c.GetOwnEntry(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -5975,8 +6218,8 @@ func (c *ClientWithResponses) GetReviewSummariesWithResponse(ctx context.Context
 // Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection.
 //
 // Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) GetReviewWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetReviewResponse, error) {
-	rsp, err := c.GetReview(ctx, id, reqEditors...)
+func (c *ClientWithResponses) GetReviewWithResponse(ctx context.Context, id string, params *GetReviewParams, reqEditors ...RequestEditorFn) (*GetReviewResponse, error) {
+	rsp, err := c.GetReview(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

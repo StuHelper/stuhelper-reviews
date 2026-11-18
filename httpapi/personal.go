@@ -19,7 +19,12 @@ func (h Handler) ownEntry(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v, e := h.Service.GetOwn(r.Context(), p, r.PathValue("id"))
+	teachers, e := flagRequested(r, "include_teacher_ids")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{Own: true, IncludeTeacherIDs: teachers})
 	respond(w, v, e)
 }
 func (h Handler) getDraft(w http.ResponseWriter, r *http.Request) {

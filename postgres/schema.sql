@@ -23,6 +23,7 @@ CREATE INDEX IF NOT EXISTS reviews_roots ON reviews.entries(root_id,id);
 CREATE INDEX IF NOT EXISTS reviews_owner ON reviews.entries(owner,id);
 CREATE INDEX IF NOT EXISTS reviews_expiry ON reviews.entries(expires_at) WHERE expires_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS reviews_teachers ON reviews.entries USING gin((data->'teacher_ids')) WHERE kind='course';
+CREATE INDEX IF NOT EXISTS reviews_teacher_replies ON reviews.entries(root_id,id) WHERE COALESCE((data->>'teacher_reply')::boolean,false);
 CREATE TABLE IF NOT EXISTS reviews.history(id text NOT NULL REFERENCES reviews.entries(id) ON DELETE CASCADE, revision bigint NOT NULL, data jsonb NOT NULL, PRIMARY KEY(id,revision));
 CREATE TABLE IF NOT EXISTS reviews.identities(root_id text NOT NULL REFERENCES reviews.entries(id) ON DELETE CASCADE, subject text NOT NULL, data jsonb NOT NULL, PRIMARY KEY(root_id,subject));
 CREATE TABLE IF NOT EXISTS reviews.votes(id text NOT NULL REFERENCES reviews.entries(id) ON DELETE CASCADE, subject text NOT NULL, value integer NOT NULL CHECK(value IN(-1,1)), created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(id,subject));

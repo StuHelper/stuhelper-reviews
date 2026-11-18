@@ -56,6 +56,29 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
 		where = append(where, "e.school_id="+addArg(f.SchoolID))
 	}
 
+	if f.Featured != nil {
+		where = append(where, "COALESCE((e.data->>'featured')::boolean,false)="+addArg(*f.Featured))
+	}
+	if f.RatingGroup != "" {
+		rating := "(e.data->'input'->'ratings'->>0)::int"
+		switch f.RatingGroup {
+		case "low":
+			where = append(where, "e.kind='course' AND "+rating+" IN (1,2)")
+		case "mid":
+			where = append(where, "e.kind='course' AND "+rating+"=3")
+		case "high":
+			where = append(where, "e.kind='course' AND "+rating+" IN (4,5)")
+		default:
+			return nil, reviews.ErrInput
+		}
+	}
+	if f.HasTeacherReply != nil {
+		where = append(where, "e.id=e.root_id AND e.kind IN ('course','mentor')")
+		if *f.HasTeacherReply {
+			where = append(where, `EXISTS(SELECT 1 FROM reviews.entries tr WHERE tr.root_id=e.id AND tr.kind='reply' AND tr.state='published' AND (tr.expires_at IS NULL OR tr.expires_at>`+nowIdx+`) AND COALESCE((tr.data->>'teacher_reply')::boolean,false) AND NOT EXISTS(SELECT 1 FROM reviews.closed_owners c WHERE c.owner=tr.owner))`)
+		}
+	}
+	sortColumns := ""
 	order := "e.id"
 	switch f.Sort {
 	case "newest":
@@ -73,6 +96,14 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
 		if f.CursorVotes != nil && f.CursorTime != nil {
 			where = append(where, "(e.upvotes,e.created_at,e.id)<("+addArg(*f.CursorVotes)+","+addArg(*f.CursorTime)+","+addArg(f.CursorID)+")")
 		}
+	case "recommended":
+		const featured = "(CASE WHEN COALESCE((e.data->>'featured')::boolean,false) THEN 1 ELSE 0 END)"
+		const score = "(e.upvotes-(SELECT count(*) FROM reviews.votes v WHERE v.id=e.id AND v.value=-1))"
+		sortColumns = ", " + featured + " AS featured_rank, " + score + " AS net_score"
+		order = "featured_rank DESC,net_score DESC,e.upvotes DESC,e.created_at DESC,e.id DESC"
+		if f.CursorFeatured != nil && f.CursorScore != nil && f.CursorVotes != nil && f.CursorTime != nil {
+			where = append(where, "("+featured+","+score+",e.upvotes,e.created_at,e.id)<("+addArg(*f.CursorFeatured)+","+addArg(*f.CursorScore)+","+addArg(*f.CursorVotes)+","+addArg(*f.CursorTime)+","+addArg(f.CursorID)+")")
+		}
 	default:
 		if f.After != "" {
 			where = append(where, "e.id>"+addArg(f.After))
@@ -80,7 +111,7 @@ func (t *transaction) List(f reviews.Filter) ([]reviews.Entry, error) {
 	}
 
 	q := `WITH page AS MATERIALIZED (
- SELECT e.id,e.root_id,e.owner,e.data,e.upvotes,e.created_at
+ SELECT e.id,e.root_id,e.owner,e.data,e.upvotes,e.created_at` + sortColumns + `
  FROM reviews.entries e
  WHERE ` + strings.Join(where, " AND ") + ` ORDER BY ` + order + ` LIMIT ` + limitIdx + `
 ) SELECT e.data,i.data,
