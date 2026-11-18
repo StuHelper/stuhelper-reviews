@@ -46,6 +46,7 @@ func TestPresentationHTTPPreservesRatingTexts(t *testing.T) {
 	// Unknown fields must be rejected.
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("PUT", "/api/v1/reviews/admin/presentation", strings.NewReader(`{"school_id":"school","revision":1,"unknown":true}`))
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotency-Key", "unknown")
 	h.ServeHTTP(w, req)
 	if w.Code != 400 {

@@ -496,10 +496,72 @@ func TestStrictHTTPInputsAndUnavailableModerationRollback(t *testing.T) {
 	for _, body := range []string{`{"kind":"course","target_id":"course","term_id":"autumn","title":"T","body":"B","ratings":[1]}`, `{"kind":"course","target_id":"course","term_id":"autumn","title":"T","body":"B","ratings":[1,2,3,4,5],"owner":"admin"}`} {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/api/v1/reviews", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Idempotency-Key", "test")
 		h.ServeHTTP(w, req)
 		if w.Code != 400 {
 			t.Fatalf("malformed input accepted: %d", w.Code)
 		}
+	}
+}
+
+func TestHTTPWriteOriginAndJSON(t *testing.T) {
+	f := fixture(t)
+	h := httpapi.Handler{Service: f.service, Authenticate: func(*http.Request) (r.Principal, error) { return student, nil }}.Routes()
+	payload, err := json.Marshal(input("course", "autumn", 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	success := 0
+	for i, tc := range []struct {
+		origin, site, media string
+		status              int
+	}{
+		{"http://example.test", "same-origin", "application/json", 403},
+		{"", "cross-site", "application/json", 403},
+		{"https://example.test", "same-origin", "text/plain", 400},
+		{"", "", "", 400},
+		{"https://example.test", "same-origin", "application/json; charset=utf-8", 200},
+		{"", "", "application/json", 200},
+	} {
+		req := httptest.NewRequest("POST", "https://example.test/api/v1/reviews", strings.NewReader(string(payload)))
+		req.Header.Set("Idempotency-Key", fmt.Sprint(i))
+		if tc.origin != "" {
+			req.Header.Set("Origin", tc.origin)
+		}
+		if tc.site != "" {
+			req.Header.Set("Sec-Fetch-Site", tc.site)
+		}
+		req.Header.Set("Content-Type", tc.media)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.status {
+			t.Errorf("case %d status %d, want %d", i, rec.Code, tc.status)
+		}
+		if tc.status == 200 {
+			success++
+		}
+		page, err := f.service.List(context.Background(), student, r.Filter{Owner: student.Subject, Limit: 20})
+		if err != nil || len(page.Items) != success {
+			t.Errorf("case %d rows=%d want %d err=%v", i, len(page.Items), success, err)
+		}
+	}
+}
+
+func TestTrustedBrowserOriginBehindProxy(t *testing.T) {
+	f := fixture(t)
+	h := httpapi.Handler{Service: f.service, PublicOrigin: "https://example.test", Authenticate: func(*http.Request) (r.Principal, error) { return student, nil }}.Routes()
+	raw, err := json.Marshal(input("course", "autumn", 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "http://internal.test/api/v1/reviews", strings.NewReader(string(raw)))
+	req.Header.Set("Origin", "https://example.test")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "proxy")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatal(rec.Code)
 	}
 }
