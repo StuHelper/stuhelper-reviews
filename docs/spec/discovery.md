@@ -1,7 +1,7 @@
 ---
 type: spec
 status: Accepted
-updated: 2026-11-09
+updated: 2026-11-19
 ---
 
 # 搜索来源与可靠投递
@@ -18,13 +18,13 @@ contracts/discovery-event.schema.json 固定 search 9e791c6 的 discovery.v1 约
 
 模块导出 OutboxChannel。postgres.Repository.PendingOutbox(ctx, limit, excludeSubjects) 返回待发送 Envelope，每批 1 至 100 条，最多排除 1000 个主题。nil 与空集合等价，排除在 LIMIT 前执行，同主题按写入顺序读取。
 
-outbox 只用 sent_at 表示确认状态，未发送部分索引支持空闲与积压查询。读取不认领、不确认事件。ConfirmOutbox(ctx, id) 在所有订阅消费者持久提交后调用，重复确认保留首次时间，不存在的 ID 返回 not_found。
+outbox 只用 sent_at 表示确认状态，未发送部分索引支持空闲与积压查询。读取不认领、不确认事件。ConfirmOutbox(ctx, id) 在所有订阅消费者持久提交后调用，重复确认保留首次时间，不存在的 ID 返回 not_found。PruneOutbox 与 PruneReplays 分别按确认时间和到期时间提供每次最多 1000 条的有界清理。
 
 backend relay 负责 LISTEN、启动和重连补读，以及每 60 秒的未发送索引兜底。失败按 5 秒起的指数退避重试，最长一小时，累计 24 小时转待处理。excludeSubjects 接收退避和待处理主题，消费者按事件 ID 去重。
 
 Service.DiscoveryCurrent(ctx, principal, ids) 接收 1 至 100 个 ID，每次检查当前内容准入和学校，只返回当前发布且未过期的课程评价文档。撤销准入返回空集合，依赖故障返回错误。
 
-Service.DiscoveryMyVotes(ctx, principal, cursor, limit) 返回 Items 与 NextCursor，choice 为 up 或 down，每个目标重新检查当前阅读权限。分页游标按已检查的位置前进，隐藏结果不阻断后续页。已有 MyVotes 继续提供本人操作回执。
+Service.DiscoveryMyVotes(ctx, principal, cursor, limit) 返回 Items 与 NextCursor，choice 为 up 或 down，每个目标重新检查当前阅读权限。分页游标按已返回的主帖 ID 前进，隐藏结果不阻断后续页。已有 MyVotes 继续提供本人操作回执。
 
 旧 Handoff 和事务内 Events、CompleteEvent、FailEvent 已移除。relay 对普通评价事件按当前 Inspect 的修订和 ReviewRequested 判断是否交给审核，不能用一个消费者的确认跳过其他订阅者。
 
@@ -39,3 +39,5 @@ postgres.Repository.DiscoverySnapshot(ctx, cursor, limit) 供受信重建任务�
 | REV-DISCOVERY-01 | 状态变化、墓碑、Schema 校验、权限、回滚与固定快照 |
 | REV-DISCOVERY-02 | 当前有效投票、资格撤销、取消、分页和本人回执区别 |
 | REV-OUTBOX-01 | 提交通知、回滚无通知、主题排除、积压与幂等确认 |
+
+搜索投票只返回当前学校已发布、未过期的课程评价主帖。一次查询按本人投票和可见目标筛选后分页，返回 up 或 down，无需读取平台资料或认证标签。本人投票回执继续包含导师评论及回复。

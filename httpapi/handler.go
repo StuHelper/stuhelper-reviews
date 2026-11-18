@@ -50,6 +50,10 @@ func (h Handler) Routes() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if h.Service == nil {
+			respond(w, nil, reviews.ErrUnavailable)
+			return
+		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && !h.sameOriginWrite(r) {
 			respond(w, nil, reviews.ErrForbidden)
 			return

@@ -6,6 +6,7 @@ import (
 	r "github.com/StuHelper/stuhelper-reviews"
 	"slices"
 	"testing"
+	"time"
 )
 
 type sportsCatalog struct{ *catalog }
@@ -69,4 +70,66 @@ func TestSportsProjectRequiresOwnTeacherAndKeepsAttribution(t *testing.T) {
 	if err != nil || len(page.Items) != 1 || page.Items[0].Revision != result.Revision {
 		t.Fatal(page, err)
 	}
+}
+
+type mergedSportsCatalog struct{ sportsCatalog }
+
+func (c mergedSportsCatalog) EquivalentIDs(_ context.Context, kind, id string) ([]string, error) {
+	if kind == "teacher" && id == "current-teacher" {
+		return []string{id, "teacher-a"}, nil
+	}
+	return []string{id}, nil
+}
+func (c mergedSportsCatalog) CanonicalCourses(_ context.Context, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, id := range ids {
+		out[id] = id
+	}
+	return out, nil
+}
+func TestModeratedProjectTeacherAndPreviewAudit(t *testing.T) {
+	f := fixture(t)
+	repo, db := database(t)
+	f.service.Repo = repo
+	f.service.Catalog = mergedSportsCatalog{sportsCatalog{f.catalog}}
+	ctx := context.Background()
+	admin := r.Principal{Subject: "admin"}
+	in := input("project", "autumn", 4)
+	in.TeacherID = "teacher-a"
+	root := create(t, f, "project", in)
+	if _, err := f.service.PreviewAttribution(ctx, admin, root.ID, ""); !errors.Is(err, r.ErrInput) {
+		t.Errorf("teacherless preview: %v", err)
+	}
+	preview, err := f.service.PreviewAttribution(ctx, admin, root.ID, "current-teacher")
+	if err != nil || !slices.Equal(preview.TeacherIDs, []string{"current-teacher"}) {
+		t.Fatal(preview, err)
+	}
+	var reads int
+	if err := db.QueryRow(`SELECT count(*) FROM reviews.audit WHERE data->>'Type'='reviews.inspected.v1' AND data->>'Subject'=$1`, "attribution/"+root.ID).Scan(&reads); err != nil || reads != 1 {
+		t.Fatal(reads, err)
+	}
+	d := r.Decision{ID: "correct", ObjectID: root.ID, Revision: 1, Action: "reassign", Reason: "Updated source", EvidenceRevision: preview.EvidenceRevision}
+	if _, err = f.service.Apply(ctx, admin, d); !errors.Is(err, r.ErrInput) {
+		t.Fatal(err)
+	}
+	before, err := f.service.GetOwn(ctx, student, root.ID)
+	if err != nil || before.TeacherID != "teacher-a" || before.Revision != 1 {
+		t.Fatal(before, err)
+	}
+	d.TeacherID = "current-teacher"
+	if _, err = f.service.Apply(ctx, admin, d); err != nil {
+		t.Fatal(err)
+	}
+	after, err := f.service.GetOwn(ctx, student, root.ID)
+	if err != nil || after.TeacherID != d.TeacherID || after.Revision != 2 {
+		t.Fatal(after, err)
+	}
+	if _, err = db.Exec(`UPDATE reviews.entries SET state='pending',expires_at=now(),data=data||jsonb_build_object('state','pending','expires_at',now()) WHERE id=$1`, root.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.now = f.now.Add(time.Hour)
+	if _, err = f.service.PreviewAttribution(ctx, admin, root.ID, "current-teacher"); !errors.Is(err, r.ErrNotFound) {
+		t.Fatal(err)
+	}
+
 }
