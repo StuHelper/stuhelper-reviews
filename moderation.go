@@ -19,6 +19,17 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 	}
 	var attribution AttributionPreview
 	var evidence []Evidence
+	var preEntry Entry
+	if err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		var e error
+		preEntry, e = t.Entry(d.ObjectID)
+		return e
+	}); err != nil {
+		return out, err
+	}
+	if _, err := s.authorize(ctx, p, "moderate", preEntry.SchoolID); err != nil {
+		return out, err
+	}
 	if d.Action == "reassign" {
 		var err error
 		attribution, evidence, err = s.attribution(ctx, p, d.ObjectID, d.TeacherID)
@@ -36,8 +47,8 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 		if e != nil {
 			return e
 		}
-		if _, e = s.authorize(ctx, p, "moderate", entry.SchoolID); e != nil {
-			return e
+		if entry.SchoolID != preEntry.SchoolID {
+			return ErrConflict
 		}
 		if e = t.Lock(entry.RootID); e != nil {
 			return e
@@ -45,6 +56,9 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 		entry, e = t.Entry(d.ObjectID)
 		if e != nil {
 			return e
+		}
+		if entry.SchoolID != preEntry.SchoolID {
+			return ErrConflict
 		}
 		cached, ok, e := replay(t, rk, h, s.now())
 		if e != nil {
@@ -92,6 +106,7 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 				return ErrConflict
 			}
 			entry.State = "hidden"
+			entry.ExpiresAt = nil
 		case "restore":
 			if entry.State != "hidden" && entry.State != "deleted" {
 				return ErrConflict
@@ -107,6 +122,7 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 				return ErrConflict
 			}
 			entry.State = "deleted"
+			entry.ExpiresAt = nil
 		case "edit":
 			if d.Body == nil || !textOK(*d.Body, 16000) || strings.TrimSpace(*d.Body) == "" {
 				return ErrInput
