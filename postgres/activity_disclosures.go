@@ -39,3 +39,8 @@ func (r *Repository) ActivityDisclosureEntries(ctx context.Context, id string, l
 	}
 	return out, nil
 }
+
+func (t *transaction) ActivityDisclosureCandidates(ids []string) ([]m.Entry, error) {
+	return list[m.Entry](t, `SELECT e.data FROM reviews.entries e WHERE e.id=ANY($1::text[]) AND e.state='published'
+ AND NOT EXISTS (SELECT 1 FROM reviews.closed_owners c WHERE c.owner=e.owner)`, ids)
+}

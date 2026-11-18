@@ -12,6 +12,7 @@ func (v *Input) UnmarshalJSON(raw []byte) error {
 		Disclosures []string `json:"disclosures"`
 		Kind        string   `json:"kind"`
 		TargetID    string   `json:"target_id"`
+		ParentID    string   `json:"parent_id"`
 		TermID      string   `json:"term_id"`
 		TeacherID   string   `json:"teacher_id"`
 		Title       string   `json:"title"`
@@ -24,7 +25,7 @@ func (v *Input) UnmarshalJSON(raw []byte) error {
 	if d.Decode(&a) != nil || len(a.Ratings) != 5 {
 		return ErrInput
 	}
-	*v = Input{Disclosures: a.Disclosures, Kind: a.Kind, TargetID: a.TargetID, TermID: a.TermID, TeacherID: a.TeacherID, Title: a.Title, Body: a.Body, Signed: a.Signed}
+	*v = Input{Disclosures: a.Disclosures, Kind: a.Kind, TargetID: a.TargetID, ParentID: a.ParentID, TermID: a.TermID, TeacherID: a.TeacherID, Title: a.Title, Body: a.Body, Signed: a.Signed}
 	copy(v.Ratings[:], a.Ratings)
 	return nil
 }

@@ -74,30 +74,24 @@ func (s *Service) appendEntry(ctx context.Context, p Principal, id, key string, 
 		targetKind = "teacher"
 		publishAction = "publish_mentor"
 	}
-	targetCtx, cancelTarget := context.WithTimeout(ctx, 3*time.Second)
-	target, err := s.Catalog.Target(targetCtx, targetKind, snapshot.Input.TargetID)
-	cancelTarget()
+	target, err := s.catalogTarget(ctx, targetKind, snapshot.Input.TargetID)
 	if err != nil {
 		return out, err
 	}
-	if target.Inactive {
+	if target.Inactive || target.SchoolID != snapshot.SchoolID {
 		return out, ErrForbidden
 	}
-	authCtx, cancelAuth := context.WithTimeout(ctx, 3*time.Second)
-	grant, err := s.authorize(authCtx, p, publishAction, snapshot.SchoolID)
-	cancelAuth()
+	grant, err := s.authorize(ctx, p, publishAction, snapshot.SchoolID)
 	if err != nil {
 		return out, err
 	}
-	modCtx, cancelMod := context.WithTimeout(ctx, 3*time.Second)
-	outcome, err := s.check(modCtx, Entry{
+	outcome, err := s.check(ctx, Entry{
 		ID:       snapshot.ID,
 		SchoolID: snapshot.SchoolID,
 		Owner:    p.Subject,
 		Input:    Input{Kind: snapshot.Input.Kind, Title: snapshot.Input.Title, Body: in.Body},
 		Revision: snapshot.Revision + 1,
 	})
-	cancelMod()
 	if err != nil {
 		return out, err
 	}
@@ -123,6 +117,9 @@ func (s *Service) appendEntry(ctx context.Context, p Principal, id, key string, 
 		}
 		entry, err = t.Entry(id)
 		if err != nil {
+			return err
+		}
+		if err = t.Lock("closure-owner:" + p.Subject); err != nil {
 			return err
 		}
 		now = s.now()

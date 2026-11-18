@@ -50,3 +50,27 @@ func (t *transaction) saveDiscovery(e m.Entry) error {
 func (t *transaction) DiscoveryCurrent(school string, ids []string, now time.Time) ([]m.DiscoveryDocument, error) {
 	return list[m.DiscoveryDocument](t, `SELECT h.data FROM reviews.entries e JOIN reviews.discovery_history h ON h.id=e.id AND h.revision=(e.data->>'revision')::bigint WHERE e.id=ANY($1::text[]) AND e.school_id=$2 AND e.kind='course' AND e.id=e.root_id AND e.state='published' AND (e.expires_at IS NULL OR e.expires_at>$3) AND (h.data->>'visible')::boolean ORDER BY e.id COLLATE "C"`, ids, school, now)
 }
+
+func (t *transaction) DiscoveryVotes(subject, school, after string, limit int, now time.Time) ([]m.DiscoveryVote, error) {
+	rows, err := t.tx.QueryContext(t.ctx, `SELECT v.id,v.value FROM reviews.votes v JOIN reviews.entries e ON e.id=v.id
+ WHERE v.subject=$1 AND e.school_id=$2 AND v.id>$3 AND e.kind='course' AND e.id=e.root_id AND e.state='published'
+ AND (e.expires_at IS NULL OR e.expires_at>$4) ORDER BY v.id LIMIT $5`, subject, school, after, now, limit)
+	if err != nil {
+		return nil, safe(err)
+	}
+	defer rows.Close()
+	out := []m.DiscoveryVote{}
+	for rows.Next() {
+		var id string
+		var value int
+		if err := rows.Scan(&id, &value); err != nil {
+			return nil, safe(err)
+		}
+		choice := "up"
+		if value < 0 {
+			choice = "down"
+		}
+		out = append(out, m.DiscoveryVote{Target: m.DiscoveryTarget{Source: "reviews", Kind: "review", ID: id}, Choice: choice})
+	}
+	return out, safe(rows.Err())
+}

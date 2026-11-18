@@ -16,6 +16,27 @@ type OutboxReader interface {
 	ConfirmOutbox(context.Context, string) error
 }
 
+// OutboxStats reports unconfirmed outbox backlog count and the oldest pending event timestamp.
+type OutboxStats struct {
+	PendingCount    int64      `json:"pending_count"`
+	OldestPendingAt *time.Time `json:"oldest_pending_at,omitempty"`
+}
+
+type OutboxInspector interface {
+	OutboxMetrics(context.Context) (OutboxStats, error)
+}
+
+func (s *Service) OutboxMetrics(ctx context.Context) (OutboxStats, error) {
+	port, ok := s.Repo.(OutboxInspector)
+	if !ok {
+		return OutboxStats{}, ErrUnavailable
+	}
+	start := time.Now()
+	stats, err := port.OutboxMetrics(ctx)
+	s.emitDiagnostic("outbox_metrics", "postgres", start, err)
+	return stats, err
+}
+
 // Envelope carries either a discovery document or the minimal business revision.
 // Consumers select a payload type using Type; no private persistence model is sent.
 type Envelope struct {

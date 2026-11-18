@@ -13,17 +13,78 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validKey(key) || in.Kind == "reply" || validate(in, true) != nil || revision < 0 {
-		return out, ErrInput
+	if !ValidIdempotencyKey(key) {
+		return out, inputFieldErr("invalid_idempotency_key", "idempotency_key")
 	}
-	if len(in.Disclosures) > 0 {
+	if in.Kind == "reply" && !validID(in.ParentID) {
+		return out, inputFieldErr("invalid_parent_id", "parent_id")
+	}
+	if err := validate(in, true); err != nil {
+		return out, err
+	}
+	if revision < 0 {
+		return out, inputFieldErr("invalid_revision", "revision")
+	}
+	var draftRootID string
+	if in.Kind == "reply" {
+		if len(in.Disclosures) > 0 {
+			if err := s.requirePublicDisclosure(ctx, in.ParentID); err != nil {
+				return out, err
+			}
+		}
+		var base, root Entry
+		var foundParent bool
+		err := s.Repo.Transaction(ctx, func(t Transaction) error {
+			b, err := s.accessible(t, in.ParentID)
+			if errors.Is(err, ErrNotFound) {
+				if len(in.Disclosures) > 0 {
+					return err
+				}
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			r, err := s.accessible(t, b.RootID)
+			if errors.Is(err, ErrNotFound) {
+				if len(in.Disclosures) > 0 {
+					return err
+				}
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			draftRootID = b.RootID
+			base = b
+			root = r
+			foundParent = true
+			return nil
+		})
+		if err != nil {
+			return out, err
+		}
+		if foundParent && !s.sameTarget(ctx, root.Input.Kind, base.Input.TargetID, in.TargetID) {
+			return out, ErrInput
+		}
+		if len(in.Disclosures) > 0 && foundParent {
+			course, term := "", ""
+			if root.Input.Kind == "course" {
+				course = root.Input.TargetID
+				term = root.Input.TermID
+			}
+			if _, err := s.validateDisclosures(ctx, p, root.SchoolID, course, term, in); err != nil {
+				return out, err
+			}
+		}
+	} else if len(in.Disclosures) > 0 {
 		kind := "course"
 		course := in.TargetID
 		if in.Kind == "mentor" {
 			kind = "teacher"
 			course = ""
 		}
-		target, err := s.Catalog.Target(ctx, kind, in.TargetID)
+		target, err := s.catalogTarget(ctx, kind, in.TargetID)
 		if err != nil {
 			return out, err
 		}
@@ -38,7 +99,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if id == "" {
 		id = hash([]string{p.Subject, "draft", key})
 	} else if !validID(id) {
-		return out, ErrInput
+		return out, inputFieldErr("invalid_id", "id")
 	}
 	rk := hash([]string{p.Subject, "save_draft", id, key})
 	h := hash(struct {
@@ -46,6 +107,9 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 		Revision int64
 	}{in, revision})
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		if e := t.Lock("draft-owner:" + p.Subject); e != nil {
+			return e
+		}
 		if e := t.Lock("draft:" + id); e != nil {
 			return e
 		}
@@ -61,21 +125,40 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 		if e != nil && !errors.Is(e, ErrNotFound) {
 			return e
 		}
-		if e == nil && old.Owner != p.Subject {
+		isNew := errors.Is(e, ErrNotFound)
+		if !isNew && old.Owner != p.Subject {
 			return ErrNotFound
 		}
 		if old.Revision != revision {
-			return ErrConflict
+			return revisionConflictErr(old.Revision)
 		}
-		v := Draft{ID: id, Revision: old.Revision + 1, Owner: p.Subject, Input: in, UpdatedAt: s.now()}
+		if isNew {
+			if port, ok := t.(PersonalContextTransaction); ok {
+				count, err := port.DraftCount(p.Subject)
+				if err != nil {
+					return err
+				}
+				if count >= s.maxDrafts() {
+					return ErrConflict
+				}
+			}
+		}
+		if draftRootID == "" && !isNew && old.Input.ParentID == in.ParentID {
+			draftRootID = old.RootID
+		}
+		v := Draft{RootID: draftRootID, ID: id, Revision: old.Revision + 1, Owner: p.Subject, Input: in, UpdatedAt: s.now()}
 		v.ReferenceIDs, v.ReferenceState = mergeDraftReferences(old.ReferenceIDs, verified, in, referenceState)
 		if e = t.SaveDraft(v); e != nil {
 			return e
 		}
 		out = Result{ID: id, State: "draft", Revision: v.Revision}
-		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
+		return t.SaveReplay(rk, Replay{Owner: p.Subject, Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
 	})
 	return out, err
+}
+
+func (in Input) InputParentID() string {
+	return in.ParentID
 }
 func (s *Service) GetDraft(ctx context.Context, p Principal, id string) (DraftView, error) {
 	var out DraftView
@@ -119,14 +202,27 @@ func (s *Service) DeleteDraft(ctx context.Context, p Principal, id, key string, 
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(id) || !validKey(key) {
-		return out, ErrInput
+	if !validID(id) {
+		return out, inputFieldErr("invalid_id", "id")
+	}
+	if !ValidIdempotencyKey(key) {
+		return out, inputFieldErr("invalid_idempotency_key", "idempotency_key")
 	}
 	rk := hash([]string{p.Subject, "delete_draft", id, key})
 	h := hash(revision)
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		if e := t.Lock("draft:" + id); e != nil {
 			return e
+		}
+		if e := t.Lock("closure-owner:" + p.Subject); e != nil {
+			return e
+		}
+		closed, e := t.ClosedOwners([]string{p.Subject})
+		if e != nil {
+			return e
+		}
+		if closed[p.Subject] {
+			return ErrForbidden
 		}
 		r, ok, e := replay(t, rk, h, s.now())
 		if e != nil {
@@ -144,13 +240,13 @@ func (s *Service) DeleteDraft(ctx context.Context, p Principal, id, key string, 
 			return ErrNotFound
 		}
 		if draft.Revision != revision {
-			return ErrConflict
+			return revisionConflictErr(draft.Revision)
 		}
 		if e = t.DeleteDraft(id); e != nil {
 			return e
 		}
 		out = Result{ID: id, State: "deleted", Revision: revision + 1}
-		return t.SaveReplay(rk, Replay{Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
+		return t.SaveReplay(rk, Replay{Owner: p.Subject, Digest: h, Result: out, Until: s.now().Add(24 * time.Hour), ObjectID: id})
 	})
 	return out, err
 }
@@ -158,16 +254,17 @@ func (s *Service) Drafts(ctx context.Context, p Principal, after string, limit i
 	if p.Subject == "" {
 		return nil, ErrForbidden
 	}
-	if limit < 1 || limit > 100 {
+	if limit < 1 || limit > 100 || after != "" && !validID(after) {
 		return nil, ErrInput
 	}
+	now := s.now()
 	out := []DraftView{}
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		ordinary, e := t.Drafts(p.Subject, after, limit)
 		if e != nil {
 			return e
 		}
-		withdrawn, e := t.Withdrawals(p.Subject, after, limit)
+		withdrawn, e := t.Withdrawals(p.Subject, after, limit, now)
 		if e != nil {
 			return e
 		}
@@ -175,8 +272,8 @@ func (s *Service) Drafts(ctx context.Context, p Principal, after string, limit i
 			out = append(out, draftView(v))
 		}
 		for _, v := range withdrawn {
-			if v.ExpiresAt != nil && s.now().Before(*v.ExpiresAt) {
-				out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input, ReferenceIDs: draftReferenceIDs(v.Input), ReferenceState: "verified", ExpiresAt: v.ExpiresAt, Withdrawn: true})
+			if v.ExpiresAt != nil && now.Before(*v.ExpiresAt) {
+				out = append(out, DraftView{ID: v.ID, Revision: v.Revision, Input: v.Input, ReferenceIDs: draftReferenceIDs(v.Input), ReferenceState: "verified", ExpiresAt: v.ExpiresAt, Withdrawn: true, RootID: v.RootID, ParentID: v.ParentID})
 			}
 		}
 		return nil
@@ -223,35 +320,50 @@ func (s *Service) Sweep(ctx context.Context, limit int) (int, error) {
 	if limit < 1 || limit > 100 {
 		return 0, ErrInput
 	}
+	var entries []Entry
+	if err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		var e error
+		entries, e = t.Expired(s.now(), limit)
+		return e
+	}); err != nil {
+		return 0, err
+	}
 	count := 0
-	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		entries, e := t.Expired(s.now(), limit)
-		if e != nil {
-			return e
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return count, err
 		}
-		for _, entry := range entries {
-			if e = t.Lock(entry.RootID); e != nil {
+		deleted := false
+		err := s.Repo.Transaction(ctx, func(t Transaction) error {
+			if e := t.Lock(entry.RootID); e != nil {
 				return e
 			}
 			current, e := t.Entry(entry.ID)
 			if errors.Is(e, ErrNotFound) {
-				continue
+				return nil
 			}
 			if e != nil {
 				return e
 			}
-			if current.ExpiresAt == nil || s.now().Before(*current.ExpiresAt) {
-				continue
+			now := s.now()
+			if (current.State != "withdrawn" && current.State != "pending") || current.ExpiresAt == nil || now.Before(*current.ExpiresAt) {
+				return nil
 			}
 			if e = t.DeleteEntry(current); e != nil {
 				return e
 			}
-			if e = t.Event(Event{ID: hash([]string{"expire", entry.ID}), Type: "reviews.expired.v1", Subject: "entry/" + entry.ID, SchoolID: entry.SchoolID, Revision: entry.Revision + 1, At: s.now()}); e != nil {
+			if e = t.Event(Event{ID: hash([]string{"expire", current.ID}), Type: "reviews.expired.v1", Subject: "entry/" + current.ID, SchoolID: current.SchoolID, Revision: current.Revision + 1, At: now}); e != nil {
 				return e
 			}
+			deleted = true
+			return nil
+		})
+		if err != nil {
+			return count, err
+		}
+		if deleted {
 			count++
 		}
-		return nil
-	})
-	return count, err
+	}
+	return count, nil
 }
