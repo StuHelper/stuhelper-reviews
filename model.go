@@ -250,6 +250,7 @@ type Aggregate struct {
 	Counts   [5]int
 }
 type Replay struct {
+	Owner    string
 	Digest   string
 	Result   Result
 	Until    time.Time
@@ -284,7 +285,9 @@ type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
 }
 type Transaction interface {
+	DiscoveryVotes(subject, school, after string, limit int, now time.Time) ([]DiscoveryVote, error)
 	DiscoveryCurrent(string, []string, time.Time) ([]DiscoveryDocument, error)
+	ActivityDisclosureCandidates([]string) ([]Entry, error)
 	ClosedOwners([]string) (map[string]bool, error)
 	CloseOwner(string, string) error
 	OwnedReferences(string, []string, time.Time) ([]string, error)
@@ -308,7 +311,7 @@ type Transaction interface {
 	SaveDraft(Draft) error
 	DeleteDraft(string) error
 	Drafts(subject, after string, limit int) ([]Draft, error)
-	Withdrawals(subject, after string, limit int) ([]Entry, error)
+	Withdrawals(subject, after string, limit int, now time.Time) ([]Entry, error)
 	Replay(string) (Replay, error)
 	SaveReplay(string, Replay) error
 	Aggregates(kind string, targets []string, school string, from, until *time.Time) ([]Aggregate, error)

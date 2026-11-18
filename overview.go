@@ -2,7 +2,6 @@ package reviews
 
 import (
 	"context"
-	"time"
 )
 
 type PendingCourse struct {
@@ -63,9 +62,7 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 	if !ok || !refsOK {
 		return out, nil
 	}
-	callCtx, cancelCourses := context.WithTimeout(ctx, 3*time.Second)
-	candidates, err := courses.OwnReviewCourses(callCtx, p)
-	cancelCourses()
+	candidates, err := s.catalogOwnReviewCourses(ctx, courses, p)
 	if err != nil {
 		if ctx.Err() != nil {
 			return OwnOverview{}, ctx.Err()
@@ -85,18 +82,14 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 		out.PendingCourses = PendingCourses{State: "available", Count: &count, Items: []PendingCourse{}}
 		return out, nil
 	}
-	courseCtx, cancelCourseAliases := context.WithTimeout(ctx, 3*time.Second)
-	courseAliases, err := refs.SummaryAliases(courseCtx, school, "course")
-	cancelCourseAliases()
+	courseAliases, err := s.catalogSummaryAliases(ctx, refs, school, "course")
 	if err != nil {
 		if ctx.Err() != nil {
 			return OwnOverview{}, ctx.Err()
 		}
 		return out, nil
 	}
-	termCtx, cancelTermAliases := context.WithTimeout(ctx, 3*time.Second)
-	termAliases, err := refs.SummaryAliases(termCtx, school, "term")
-	cancelTermAliases()
+	termAliases, err := s.catalogSummaryAliases(ctx, refs, school, "term")
 	if err != nil {
 		if ctx.Err() != nil {
 			return OwnOverview{}, ctx.Err()
