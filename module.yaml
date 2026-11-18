@@ -128,6 +128,7 @@ scenario_tests:
   REV-UI-01:
     - ui_backend_test.go#TestSummaryTermsUseCatalogOrderInsteadOfDisplayNames
     - ui_backend_test.go#TestUISummariesVisibleSamplesTermsTeacherWeightsAndAliases
+    - ui_backend_test.go#TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan
   REV-UI-02:
     - ui_backend_test.go#TestUISummaryPolicyBoundariesAndCurrentAuthorization
   REV-UI-03:
@@ -139,3 +140,4 @@ scenario_tests:
     - reply_previews_test.go#TestReplyPreviewPageUsesOneBatchForOneHundredRoots
     - notification_titles_test.go#TestNotificationTitlesRespectScopePublicationAndRootNames
     - ui_backend_test.go#TestUIReviewHTTPAndUpvotePagination
+    - ui_backend_test.go#TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan

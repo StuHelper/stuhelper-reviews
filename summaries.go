@@ -111,7 +111,7 @@ type SummaryTransaction interface {
 
 type SummaryQuery struct {
 	Kind, SchoolID                            string
-	Targets                                   []string
+	Targets, ExpandedTargets                  []string
 	Charts                                    bool
 	From, Until, Now                          time.Time
 	CourseAliases, TargetAliases, TermAliases map[string]string
@@ -228,6 +228,27 @@ func (s *Service) summaryMetrics(ctx context.Context, kind, school string, targe
 			return nil, err
 		}
 	}
+	var expandedTargets []string
+	if len(targets) > 0 {
+		wanted := make(map[string]bool, len(targets))
+		for _, id := range targets {
+			wanted[id] = true
+		}
+		expandedTargets = slices.Clone(targets)
+		filteredTargetAliases := map[string]string{}
+		for alias, canonical := range targetAliases {
+			if wanted[canonical] && validID(alias) {
+				expandedTargets = append(expandedTargets, alias)
+				filteredTargetAliases[alias] = canonical
+			}
+		}
+		slices.Sort(expandedTargets)
+		expandedTargets = slices.Compact(expandedTargets)
+		targetAliases = filteredTargetAliases
+		if kind == "course" {
+			courseAliases = filteredTargetAliases
+		}
+	}
 	var rows []SummaryAggregate
 	err = s.Repo.Transaction(ctx, func(tx Transaction) error {
 		reader, ok := tx.(SummaryTransaction)
@@ -235,7 +256,7 @@ func (s *Service) summaryMetrics(ctx context.Context, kind, school string, targe
 			return ErrUnavailable
 		}
 		var err error
-		rows, err = reader.SummaryAggregates(SummaryQuery{Kind: kind, SchoolID: school, Targets: targets, Charts: charts, From: from, Until: until, Now: s.now(), CourseAliases: courseAliases, TargetAliases: targetAliases, TermAliases: termAliases})
+		rows, err = reader.SummaryAggregates(SummaryQuery{Kind: kind, SchoolID: school, Targets: targets, ExpandedTargets: expandedTargets, Charts: charts, From: from, Until: until, Now: s.now(), CourseAliases: courseAliases, TargetAliases: targetAliases, TermAliases: termAliases})
 		return err
 	})
 	if err != nil {

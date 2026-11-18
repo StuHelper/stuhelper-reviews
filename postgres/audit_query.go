@@ -77,23 +77,39 @@ func (r *Repository) ReadAudit(ctx context.Context, q a.Request) (out a.Batch, e
 		return out, a.ErrUnavailable
 	}
 	scopes, _ := json.Marshal(append([]a.Scope{}, q.Scopes...))
-	var from, before any
-	if !q.From.IsZero() {
-		from = q.From
+	args := make([]any, 0, 11)
+	addArg := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
 	}
-	source, id := "", ""
+	visIdx := addArg(visibility)
+	scopesIdx := addArg(scopes)
+	untilIdx := addArg(q.Until)
+	limitIdx := addArg(q.Limit)
+
+	where := []string{
+		`pg_visible_in_snapshot(recorded_xid,` + visIdx + `::pg_snapshot)`,
+		`EXISTS(SELECT 1 FROM jsonb_to_recordset(` + scopesIdx + `::jsonb) s(school text,"group" text,module text) WHERE (s.school='*' OR s.school=a.audit_school) AND (s."group"='*' OR s."group"=a.audit_group) AND s.module IN ('*','reviews'))`,
+		`audit_time < ` + untilIdx,
+	}
+	if q.Actor != "" {
+		where = append(where, `audit_actor=`+addArg(q.Actor))
+	}
+	if q.Target != "" {
+		where = append(where, `audit_target=`+addArg(q.Target))
+	}
+	if q.Action != "" {
+		where = append(where, `audit_action=`+addArg(q.Action))
+	}
+	if !q.From.IsZero() {
+		where = append(where, `audit_time >= `+addArg(q.From))
+	}
 	if q.Before != nil {
-		before = q.Before.Time
-		source = q.Before.Source
-		id = q.Before.ID
+		where = append(where, `(audit_time,'reviews' COLLATE "C",id::text COLLATE "C") < (`+addArg(q.Before.Time)+`,`+addArg(q.Before.Source)+`::text COLLATE "C",`+addArg(q.Before.ID)+`::text COLLATE "C")`)
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT id::text, audit_actor,audit_target,audit_action,audit_school,audit_group,reason,result,audit_time
- FROM reviews.audit a WHERE pg_visible_in_snapshot(recorded_xid,$1::pg_snapshot)
- AND EXISTS(SELECT 1 FROM jsonb_to_recordset($2::jsonb) s(school text,"group" text,module text) WHERE (s.school='*' OR s.school=a.audit_school) AND (s."group"='*' OR s."group"=a.audit_group) AND s.module IN ('*','reviews'))
- AND ($3='' OR audit_actor=$3) AND ($4='' OR audit_target=$4) AND ($5='' OR audit_action=$5)
- AND ($6::timestamptz IS NULL OR audit_time >= $6) AND audit_time < $7
- AND ($8::timestamptz IS NULL OR (audit_time,'reviews' COLLATE "C",id::text COLLATE "C") < ($8,$9::text COLLATE "C",$10::text COLLATE "C"))
- ORDER BY audit_time DESC,id::text COLLATE "C" DESC LIMIT $11`, visibility, scopes, q.Actor, q.Target, q.Action, from, q.Until, before, source, id, q.Limit)
+ FROM reviews.audit a WHERE `+strings.Join(where, " AND ")+`
+ ORDER BY audit_time DESC,id::text COLLATE "C" DESC LIMIT `+limitIdx, args...)
 	if err != nil {
 		return out, err
 	}
