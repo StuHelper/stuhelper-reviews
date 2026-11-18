@@ -118,6 +118,7 @@ scenario_tests:
     - presentation_test.go#TestPresentationHTTPPreservesRatingTexts
     - presentation_test.go#TestDecisionContractAndPresentationReplay
   CM-09:
+    - administration_test.go#TestAdministrativeReadsAuditEverySuccessfulCall
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   CM-14:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
