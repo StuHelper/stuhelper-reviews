@@ -97,3 +97,7 @@ UPDATE reviews.identities i SET data=jsonb_set(i.data,'{Signed}','false') FROM r
  WHERE i.subject=c.owner AND (i.data->>'Signed')::boolean;
 UPDATE reviews.entries e SET data=jsonb_set(e.data,'{input,signed}','false') #- '{input,disclosures}'
  FROM reviews.closed_owners c WHERE e.owner=c.owner AND ((e.data#>>'{input,signed}')::boolean OR e.data#>'{input,disclosures}' IS NOT NULL);
+
+-- Repair retained moderator decisions made before deletion cleared the withdrawal deadline.
+UPDATE reviews.entries SET expires_at=NULL, data=jsonb_set(data,'{expires_at}','null')
+ WHERE state IN ('deleted','hidden') AND expires_at IS NOT NULL;

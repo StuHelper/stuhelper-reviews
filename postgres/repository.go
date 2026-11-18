@@ -152,7 +152,7 @@ func (t *transaction) projected(q string, args ...any) ([]reviews.Entry, error) 
 	return out, safe(rows.Err())
 }
 func (t *transaction) Expired(now time.Time, limit int) ([]reviews.Entry, error) {
-	return list[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE expires_at<=$1 ORDER BY expires_at,id LIMIT $2`, now, limit)
+	return list[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE state IN ('withdrawn','pending') AND expires_at<=$1 ORDER BY expires_at,id LIMIT $2`, now, limit)
 }
 func (t *transaction) Identity(root, subject string) (reviews.Identity, error) {
 	return read[reviews.Identity](t, `SELECT data FROM reviews.identities WHERE root_id=$1 AND subject=$2`, root, subject)
@@ -252,8 +252,24 @@ func (t *transaction) DeleteDraft(id string) error {
 func (t *transaction) Drafts(subject, after string, limit int) ([]reviews.Draft, error) {
 	return list[reviews.Draft](t, `SELECT data FROM reviews.drafts WHERE owner=$1 AND id>$2 ORDER BY id LIMIT $3`, subject, after, limit)
 }
-func (t *transaction) Withdrawals(subject, after string, limit int) ([]reviews.Entry, error) {
-	return list[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE owner=$1 AND id>$2 AND state IN ('withdrawn','pending') AND expires_at IS NOT NULL ORDER BY id LIMIT $3`, subject, after, limit)
+func (t *transaction) Withdrawals(subject, after string, limit int, now time.Time) ([]reviews.Entry, error) {
+	rows, e := t.tx.QueryContext(t.ctx, `SELECT e.data,i.data FROM reviews.entries e JOIN reviews.identities i ON i.root_id=e.root_id AND i.subject=e.owner WHERE e.owner=$1 AND e.id>$2 AND e.state='withdrawn' AND e.expires_at>$4 ORDER BY e.id LIMIT $3`, subject, after, limit, now)
+	if e != nil {
+		return nil, safe(e)
+	}
+	defer rows.Close()
+	out := []reviews.Entry{}
+	for rows.Next() {
+		var raw, rawIdentity []byte
+		var entry reviews.Entry
+		var identity reviews.Identity
+		if rows.Scan(&raw, &rawIdentity) != nil || json.Unmarshal(raw, &entry) != nil || json.Unmarshal(rawIdentity, &identity) != nil {
+			return nil, reviews.ErrUnavailable
+		}
+		entry.Input.Signed = identity.Signed
+		out = append(out, entry)
+	}
+	return out, safe(rows.Err())
 }
 func (t *transaction) Replay(key string) (reviews.Replay, error) {
 	return read[reviews.Replay](t, `SELECT data FROM reviews.replays WHERE key=$1`, key)

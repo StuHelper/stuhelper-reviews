@@ -77,7 +77,9 @@ scenario_tests:
     - integration_test.go#TestDiscussionIdentityVotingDraftConflictsAndModeration
     - community_test.go#TestComposerUsesCurrentFactsAndDiscussionIdentity
   ACAD-30:
+    - community_test.go#TestLegacySoftDeletionRemainsRestorable
     - integration_test.go#TestWithdrawalWindowExpiryVotesAndPermanentDeletion
+    - community_test.go#TestSoftDeletePreservesHistoryDraftPaginationAndIsolatedSweep
   ACAD-32:
     - integration_test.go#TestTeacherEqualCourseWeightsAndBandBoundaries
   ACAD-34:
@@ -91,7 +93,9 @@ scenario_tests:
   ACAD-23:
     - administration_test.go#TestModerationReadIsScopedAuditedAndUsesDiscussionHandles
   ACAD-31:
+    - community_test.go#TestSweepFailureRollsBackOnlyItsDiscussion
     - community_test.go#TestWithdrawnDraftSaveKeepsExpiryAndAttribution
+    - community_test.go#TestSoftDeletePreservesHistoryDraftPaginationAndIsolatedSweep
   ACAD-35:
     - disclosures_test.go#TestVoluntaryDisclosuresRequireFreshAuthorizedFacts
   ACAD-36:

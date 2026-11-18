@@ -309,7 +309,7 @@ type Transaction interface {
 	SaveDraft(Draft) error
 	DeleteDraft(string) error
 	Drafts(subject, after string, limit int) ([]Draft, error)
-	Withdrawals(subject, after string, limit int) ([]Entry, error)
+	Withdrawals(subject, after string, limit int, now time.Time) ([]Entry, error)
 	Replay(string) (Replay, error)
 	SaveReplay(string, Replay) error
 	Aggregates(kind string, targets []string, school string, from, until *time.Time) ([]Aggregate, error)
