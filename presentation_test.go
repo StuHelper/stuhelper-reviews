@@ -149,6 +149,8 @@ func TestDecisionContractAndPresentationReplay(t *testing.T) {
 		{"GET", "/api/v1/reviews/presentation?school_id=other-school", "student", "", "", 403},
 		{"GET", "/api/v1/reviews/admin/presentation", "student", "", "", 400},
 		{"GET", "/api/v1/reviews/admin/presentation?school_id=bad!", "admin", "", "", 400},
+		{"PUT", "/api/v1/reviews/admin/presentation?school_id=", "admin", "empty-school", `{"school_id":"school","revision":0,"rating_texts":{}}`, 400},
+		{"PUT", "/api/v1/reviews/admin/presentation?school_id=school&school_id=other", "admin", "ambiguous-school", `{"school_id":"school","revision":0,"rating_texts":{}}`, 400},
 		{"PUT", "/api/v1/reviews/admin/presentation?school_id=other", "admin", "mismatch-q", `{"school_id":"school","revision":0,"rating_texts":{}}`, 400},
 		{"POST", "/api/v1/reviews/admin/entries/entry1/attribution", "admin", "", `{"teacher_id":"teacher-a"}`, 400},
 		{"POST", "/api/v1/reviews/admin/entries/entry1/attribution", "admin", "attr-k1", `{}`, 400},
@@ -170,6 +172,10 @@ func TestDecisionContractAndPresentationReplay(t *testing.T) {
 		}
 	}
 
+	unchanged, err := f.service.AdminPresentation(ctx, admin, "school")
+	if err != nil || unchanged.Configured != nil {
+		t.Fatalf("rejected PUT wrote school override: %+v %v", unchanged, err)
+	}
 	savedAccess := f.service.Access
 	f.service.Access = nil
 	req := httptest.NewRequest("GET", "/api/v1/reviews/admin/presentation?school_id=school", nil)

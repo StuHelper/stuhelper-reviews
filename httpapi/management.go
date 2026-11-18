@@ -55,7 +55,7 @@ func (h Handler) managementRoutes(m *http.ServeMux) {
 			respond(w, nil, e)
 			return
 		}
-		if qSchool := req.URL.Query().Get("school_id"); qSchool != "" && qSchool != in.SchoolID {
+		if schools, present := req.URL.Query()["school_id"]; present && (len(schools) != 1 || schools[0] != in.SchoolID) {
 			respond(w, nil, r.ErrInput)
 			return
 		}
