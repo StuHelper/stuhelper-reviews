@@ -44,16 +44,19 @@ func (t *transaction) ParentSummaries(ids []string) (map[string]r.ParentSummary,
 }
 
 func (t *transaction) OwnComposerContext(owner, kind, parent string, targets, terms []string, now time.Time) (string, []string, error) {
+	if terms == nil {
+		terms = []string{}
+	}
 	var draftID sql.NullString
 	var err error
 	if kind == "reply" {
 		err = t.tx.QueryRowContext(t.ctx, `SELECT id FROM (
-  SELECT d.id,(d.data->>'updated_at')::timestamptz AS updated_at,1 AS priority
+  SELECT d.id,(d.data->>'updated_at')::timestamptz AS updated_at
   FROM reviews.drafts d WHERE d.owner=$1 AND d.data->'input'->>'kind'='reply' AND d.data->'input'->>'parent_id'=$2
   UNION ALL
-  SELECT e.id,(e.data->>'updated_at')::timestamptz AS updated_at,2 AS priority
+  SELECT e.id,(e.data->>'updated_at')::timestamptz AS updated_at
   FROM reviews.entries e WHERE e.owner=$1 AND e.kind='reply' AND e.state='withdrawn' AND e.expires_at>$3 AND e.data->>'parent_id'=$2
- ) candidates ORDER BY priority DESC,updated_at DESC,id ASC LIMIT 1`, owner, parent, now).Scan(&draftID)
+ ) candidates ORDER BY updated_at DESC,id ASC LIMIT 1`, owner, parent, now).Scan(&draftID)
 	} else {
 		err = t.tx.QueryRowContext(t.ctx, `SELECT id FROM (
   SELECT d.id,(d.data->>'updated_at')::timestamptz AS updated_at,
@@ -61,7 +64,7 @@ func (t *transaction) OwnComposerContext(owner, kind, parent string, targets, te
   FROM reviews.drafts d WHERE d.owner=$1 AND d.data->'input'->>'kind'=$2 AND (d.data->'input'->>'target_id')=ANY($3::text[])
    AND (cardinality($4::text[])=0 OR COALESCE(d.data->'input'->>'term_id','')='' OR (d.data->'input'->>'term_id')=ANY($4::text[]))
   UNION ALL
-  SELECT e.id,(e.data->>'updated_at')::timestamptz AS updated_at,3 AS term_match
+  SELECT e.id,(e.data->>'updated_at')::timestamptz AS updated_at,CASE WHEN cardinality($4::text[])>0 AND e.term_id=ANY($4::text[]) THEN 2 ELSE 1 END AS term_match
   FROM reviews.entries e WHERE e.owner=$1 AND e.kind=$2 AND e.state='withdrawn' AND e.expires_at>$5 AND e.target_id=ANY($3::text[])
    AND (cardinality($4::text[])=0 OR e.term_id=ANY($4::text[]))
  ) candidates ORDER BY term_match DESC,updated_at DESC,id ASC LIMIT 1`, owner, kind, targets, terms, now).Scan(&draftID)

@@ -10,20 +10,40 @@ import (
 )
 
 type pageCursor struct {
-	Scope string    `json:"scope"`
-	Time  time.Time `json:"time"`
-	ID    string    `json:"id"`
-	Votes *int      `json:"votes,omitempty"`
+	Scope    string    `json:"scope"`
+	Time     time.Time `json:"time"`
+	ID       string    `json:"id"`
+	Votes    *int      `json:"votes,omitempty"`
+	Featured *int      `json:"featured,omitempty"`
+	Score    *int      `json:"score,omitempty"`
+}
+
+func boolFilterKey(v *bool) string {
+	if v == nil {
+		return ""
+	}
+	if *v {
+		return "true"
+	}
+	return "false"
 }
 
 func cursorScope(f Filter) string {
-	return hash([]string{f.Kind, f.TargetID, f.TermID, f.RootID, f.Owner, f.TeacherID, f.Sort, f.SchoolID})
+	return hash([]string{f.Kind, f.TargetID, f.TermID, f.RootID, f.Owner, f.TeacherID, f.Sort, f.SchoolID, boolFilterKey(f.Featured), boolFilterKey(f.HasTeacherReply), f.RatingGroup})
 }
 func decodeCursor(f *Filter) error {
+	f.CursorTime = nil
+	f.CursorID = ""
+	f.CursorVotes = nil
+	f.CursorFeatured = nil
+	f.CursorScore = nil
 	if f.Sort == "" {
 		f.Sort = "id"
 	}
-	if !slices.Contains([]string{"id", "newest", "oldest", "upvotes"}, f.Sort) || len(f.After) > 512 {
+	if !slices.Contains([]string{"id", "newest", "oldest", "upvotes", "recommended"}, f.Sort) || len(f.After) > 512 {
+		return ErrInput
+	}
+	if f.RatingGroup != "" && !slices.Contains([]string{"low", "mid", "high"}, f.RatingGroup) {
 		return ErrInput
 	}
 	if f.After == "" {
@@ -51,6 +71,14 @@ func decodeCursor(f *Filter) error {
 		}
 		f.CursorVotes = cursor.Votes
 	}
+	if f.Sort == "recommended" {
+		if cursor.Featured == nil || (*cursor.Featured != 0 && *cursor.Featured != 1) || cursor.Score == nil || cursor.Votes == nil || *cursor.Votes < 0 {
+			return ErrInput
+		}
+		f.CursorFeatured = cursor.Featured
+		f.CursorScore = cursor.Score
+		f.CursorVotes = cursor.Votes
+	}
 	return nil
 }
 func encodeCursor(f Filter, entry Entry) string {
@@ -60,6 +88,17 @@ func encodeCursor(f Filter, entry Entry) string {
 	cursor := pageCursor{Scope: cursorScope(f), Time: entry.CreatedAt.Round(time.Microsecond), ID: entry.ID}
 	if f.Sort == "upvotes" && entry.Projection != nil {
 		cursor.Votes = &entry.Projection.Upvotes
+	}
+	if f.Sort == "recommended" && entry.Projection != nil {
+		feat := 0
+		if entry.Featured {
+			feat = 1
+		}
+		score := entry.Projection.Upvotes - entry.Projection.Downvotes
+		votes := entry.Projection.Upvotes
+		cursor.Featured = &feat
+		cursor.Score = &score
+		cursor.Votes = &votes
 	}
 	b, _ := json.Marshal(cursor)
 	return base64.RawURLEncoding.EncodeToString(b)
@@ -89,14 +128,14 @@ func project(t Transaction, p Principal, entry Entry) (Entry, error) {
 	entry.Projection = v
 	return entry, nil
 }
-func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own bool, school string) ([]View, error) {
+func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own bool, school string, options ViewOptions) ([]View, error) {
 	out := make([]View, 0, len(entries))
 	profiles := map[string]Profile{}
 	owners := make([]string, 0, len(entries))
 	parentIDs := make([]string, 0)
 	for _, entry := range entries {
 		owners = append(owners, entry.Owner)
-		if entry.Input.Kind == "reply" && entry.ParentID != "" {
+		if options.IncludeParentSummary && entry.Input.Kind == "reply" && entry.ParentID != "" {
 			parentIDs = append(parentIDs, entry.ParentID)
 		}
 	}
@@ -140,7 +179,13 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 			return nil, ErrUnavailable
 		}
 		v := View{Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
-		if entry.Input.Kind == "reply" && entry.ParentID != "" {
+		if own && entry.ModerationReasonCode != "" {
+			v.ModerationReasonCode = entry.ModerationReasonCode
+		}
+		if options.IncludeTeacherIDs && entry.Input.Kind == "course" && len(entry.TeacherIDs) > 0 {
+			v.TeacherIDs = slices.Clone(entry.TeacherIDs)
+		}
+		if options.IncludeParentSummary && entry.Input.Kind == "reply" && entry.ParentID != "" {
 			parent, found := parents[entry.ParentID]
 			if !found {
 				parentVisible := false
@@ -170,19 +215,26 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		}
 		v.Author = Author{Anonymous: !identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }), Handle: identity.Handle, Disclosures: labels}
 		if identity.Signed && !slices.ContainsFunc(labels, func(option DisclosureOption) bool { return option.Key == "real_name" }) {
-			if s.Profiles == nil {
-				return nil, ErrUnavailable
-			}
 			profile, ok := profiles[entry.Owner]
-			if !ok {
+			if !ok && s.Profiles != nil {
 				var err error
-				profile, err = s.Profiles.Lookup(ctx, entry.Owner)
-				if err != nil {
+				profile, err = s.lookupProfile(ctx, entry.Owner)
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				if err != nil && !own {
 					return nil, err
 				}
-				profiles[entry.Owner] = profile
+				if err == nil {
+					profiles[entry.Owner] = profile
+					ok = true
+				}
 			}
-			v.Author.Profile = &profile
+			if ok {
+				v.Author.Profile = &profile
+			} else if !own {
+				return nil, ErrUnavailable
+			}
 		}
 		v.Upvotes = entry.Projection.Upvotes
 		v.Downvotes = entry.Projection.Downvotes
@@ -192,15 +244,18 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 	return out, nil
 }
 func (s *Service) Get(ctx context.Context, p Principal, id string) (View, error) {
-	return s.get(ctx, p, id, false)
+	return s.GetWithOptions(ctx, p, id, ViewOptions{})
 }
 func (s *Service) GetOwn(ctx context.Context, p Principal, id string) (View, error) {
-	if p.Subject == "" {
+	return s.GetWithOptions(ctx, p, id, ViewOptions{Own: true})
+}
+
+// GetWithOptions reads a public or owner-scoped entry with the requested response fields.
+func (s *Service) GetWithOptions(ctx context.Context, p Principal, id string, options ViewOptions) (View, error) {
+	own := options.Own
+	if own && p.Subject == "" {
 		return View{}, ErrForbidden
 	}
-	return s.get(ctx, p, id, true)
-}
-func (s *Service) get(ctx context.Context, p Principal, id string, own bool) (View, error) {
 	school := ""
 	if !own {
 		var e error
@@ -240,7 +295,7 @@ func (s *Service) get(ctx context.Context, p Principal, id string, own bool) (Vi
 	if err != nil {
 		return View{}, err
 	}
-	views, err := s.render(ctx, p, []Entry{entry}, own, school)
+	views, err := s.render(ctx, p, []Entry{entry}, own, school, options)
 	if err != nil {
 		return View{}, err
 	}
@@ -270,37 +325,43 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 	if err := decodeCursor(&f); err != nil {
 		return out, err
 	}
-	if f.TargetID != "" {
+	// Personal filters refer only to this owner's locally stored IDs.
+	f.EquivalentTargets, f.EquivalentTeachers = nil, nil
+	if f.Owner == "" && f.TargetID != "" {
 		kind := "course"
 		if f.Kind == "mentor" {
 			kind = "teacher"
 		}
-		if f.Owner == "" {
-			object, err := s.Catalog.Target(ctx, kind, f.TargetID)
-			if err != nil {
-				return out, err
-			}
-			if object.SchoolID != f.SchoolID {
-				return out, ErrForbidden
-			}
+		object, err := s.catalogTarget(ctx, kind, f.TargetID)
+		if errors.Is(err, ErrNotFound) && (f.Kind == "reply" || f.Kind == "") {
+			kind = "teacher"
+			object, err = s.catalogTarget(ctx, kind, f.TargetID)
 		}
-		var err error
+		if err != nil {
+			return out, err
+		}
+		if object.SchoolID != f.SchoolID {
+			return out, ErrForbidden
+		}
+		if object.Inactive {
+			return out, ErrNotFound
+		}
 		f.EquivalentTargets, err = s.equivalentIDs(ctx, kind, f.TargetID)
 		if err != nil {
 			return out, err
 		}
 	}
-	if f.TeacherID != "" {
-		if f.Owner == "" {
-			object, err := s.Catalog.Target(ctx, "teacher", f.TeacherID)
-			if err != nil {
-				return out, err
-			}
-			if object.SchoolID != f.SchoolID {
-				return out, ErrForbidden
-			}
+	if f.Owner == "" && f.TeacherID != "" {
+		object, err := s.catalogTarget(ctx, "teacher", f.TeacherID)
+		if err != nil {
+			return out, err
 		}
-		var err error
+		if object.SchoolID != f.SchoolID {
+			return out, ErrForbidden
+		}
+		if object.Inactive {
+			return out, ErrNotFound
+		}
 		f.EquivalentTeachers, err = s.equivalentIDs(ctx, "teacher", f.TeacherID)
 		if err != nil {
 			return out, err
@@ -308,34 +369,95 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 	}
 	f.Viewer = p.Subject
 	f.Now = s.now()
-	var entries []Entry
-	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		if f.RootID != "" {
-			root, err := s.accessible(t, f.RootID)
-			if err != nil {
-				return err
-			}
-			if f.Owner == "" && root.SchoolID != f.SchoolID {
-				return ErrForbidden
+	const maxEmptyPageRefills = 3
+	stepFilter := f
+	for attempt := 0; attempt <= maxEmptyPageRefills; attempt++ {
+		if attempt > 0 {
+			stepFilter = f
+			stepFilter.After = out.Next
+			if err := decodeCursor(&stepFilter); err != nil {
+				return Page{Items: []View{}}, err
 			}
 		}
+		var entries []Entry
+		err := s.Repo.Transaction(ctx, func(t Transaction) error {
+			if stepFilter.RootID != "" && stepFilter.Owner == "" {
+				root, err := s.accessible(t, stepFilter.RootID)
+				if err != nil {
+					return err
+				}
+				if root.SchoolID != stepFilter.SchoolID {
+					return ErrForbidden
+				}
+			}
+			var err error
+			entries, err = t.List(stepFilter)
+			return err
+		})
+		if err != nil {
+			return Page{Items: []View{}}, err
+		}
+		nextCursor := ""
+		if len(entries) > f.Limit {
+			nextCursor = encodeCursor(f, entries[f.Limit-1])
+			entries = entries[:f.Limit]
+		}
+		if f.HasTeacherReply != nil && len(entries) > 0 {
+			entries, err = s.filterByTeacherReply(ctx, entries, *f.HasTeacherReply, stepFilter.Now)
+			if err != nil {
+				return Page{Items: []View{}}, err
+			}
+		}
+		items, err := s.render(ctx, p, entries, f.Owner != "", f.SchoolID, ViewOptions{IncludeTeacherIDs: f.IncludeTeacherIDs, IncludeParentSummary: f.IncludeParentSummary})
+		if err != nil {
+			return Page{Items: []View{}}, err
+		}
+		out.Items = items
+		out.Next = nextCursor
+		if len(out.Items) > 0 || out.Next == "" {
+			break
+		}
+	}
+	if f.IncludeReplyPreview {
+		if err := s.addReplyPreviews(ctx, p, &out, f.SchoolID, f.Owner != "", f.IncludeParentSummary); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
+func (s *Service) filterByTeacherReply(ctx context.Context, entries []Entry, want bool, now time.Time) ([]Entry, error) {
+	roots := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		roots = append(roots, entry.ID)
+	}
+	var candidates []Entry
+	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		port, ok := t.(ReplyPreviewTransaction)
+		if !ok {
+			return ErrUnavailable
+		}
 		var err error
-		entries, err = t.List(f)
+		candidates, err = port.ReplyDisclosureCandidates(roots, "", now)
 		return err
 	})
 	if err != nil {
-		return out, err
+		return nil, err
 	}
-	if len(entries) > f.Limit {
-		out.Next = encodeCursor(f, entries[f.Limit-1])
-		entries = entries[:f.Limit]
+	disclosedRoots := map[string]bool{}
+	for _, cand := range candidates {
+		if disclosedRoots[cand.RootID] {
+			continue
+		}
+		if _, public := s.disclosed(ctx, cand); public {
+			disclosedRoots[cand.RootID] = true
+		}
 	}
-	out.Items, err = s.render(ctx, p, entries, f.Owner != "", f.SchoolID)
-	if err != nil {
-		return out, err
+	filtered := make([]Entry, 0, len(entries))
+	for _, entry := range entries {
+		if disclosedRoots[entry.ID] == want {
+			filtered = append(filtered, entry)
+		}
 	}
-	if f.IncludeReplyPreview {
-		err = s.addReplyPreviews(ctx, p, &out, f.SchoolID, f.Owner != "")
-	}
-	return out, err
+	return filtered, nil
 }

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	r "github.com/StuHelper/stuhelper-reviews"
 	"github.com/StuHelper/stuhelper-reviews/httpapi"
@@ -164,6 +165,7 @@ func TestComposerOwnAssociationsReplyDraftsAndParentSummary(t *testing.T) {
 	pubBody := fmt.Sprintf(`{"revision":%d,"input":{"kind":"reply","target_id":"course","parent_id":%q,"title":"","body":"Teacher official response final","ratings":[0,0,0,0,0],"signed":true,"disclosures":["real_name","teacher"]}}`, replyDraftUpdated.Revision, publishedRoot.ID)
 	pubRec := httptest.NewRecorder()
 	pubReq := httptest.NewRequest("POST", "/api/v1/reviews/me/drafts/"+replyDraft.ID+"/publish", strings.NewReader(pubBody))
+	pubReq.Header.Set("Content-Type", "application/json")
 	pubReq.Header.Set("Idempotency-Key", "pub-reply-1")
 	h.ServeHTTP(pubRec, pubReq)
 	if pubRec.Code != 200 {
@@ -179,6 +181,7 @@ func TestComposerOwnAssociationsReplyDraftsAndParentSummary(t *testing.T) {
 	// Replay returns identical result.
 	replayRec := httptest.NewRecorder()
 	replayReq := httptest.NewRequest("POST", "/api/v1/reviews/me/drafts/"+replyDraft.ID+"/publish", strings.NewReader(pubBody))
+	replayReq.Header.Set("Content-Type", "application/json")
 	replayReq.Header.Set("Idempotency-Key", "pub-reply-1")
 	h.ServeHTTP(replayRec, replayReq)
 	if replayRec.Code != 200 || replayRec.Body.String() != pubRec.Body.String() {
@@ -192,7 +195,7 @@ func TestComposerOwnAssociationsReplyDraftsAndParentSummary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r1View, err := f.service.Get(ctx, student, r1.ID)
+	r1View, err := f.service.GetWithOptions(ctx, student, r1.ID, r.ViewOptions{IncludeParentSummary: true})
 	if err != nil || r1View.ParentVisible == nil || !*r1View.ParentVisible || r1View.ParentAuthorHandle != "author" {
 		t.Fatalf("expected direct reply parent_visible=true & handle=author, got %+v %v", r1View, err)
 	}
@@ -205,7 +208,7 @@ func TestComposerOwnAssociationsReplyDraftsAndParentSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r2Before, err := f.service.Get(ctx, student, r2.ID)
+	r2Before, err := f.service.GetWithOptions(ctx, student, r2.ID, r.ViewOptions{IncludeParentSummary: true})
 	if err != nil || r2Before.ParentVisible == nil || !*r2Before.ParentVisible || r2Before.ParentAuthorHandle != r1View.Author.Handle {
 		t.Fatalf("expected nested reply parent_visible=true & handle=%s, got %+v %v", r1View.Author.Handle, r2Before, err)
 	}
@@ -214,7 +217,7 @@ func TestComposerOwnAssociationsReplyDraftsAndParentSummary(t *testing.T) {
 	if _, err := f.service.Action(ctx, replierA, r1.ID, "del-r1", r.Action{Action: "delete", Revision: r1.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	r2AfterDelete, err := f.service.Get(ctx, student, r2.ID)
+	r2AfterDelete, err := f.service.GetWithOptions(ctx, student, r2.ID, r.ViewOptions{IncludeParentSummary: true})
 	if err != nil || r2AfterDelete.ParentVisible == nil || *r2AfterDelete.ParentVisible || r2AfterDelete.ParentAuthorHandle != r1View.Author.Handle {
 		t.Fatalf("expected nested reply parent_visible=false after parent delete, got %+v %v", r2AfterDelete, err)
 	}
@@ -227,7 +230,7 @@ func TestComposerOwnAssociationsReplyDraftsAndParentSummary(t *testing.T) {
 	revoked := facts.facts.Attributes["real_name"]
 	revoked.MayDisclose = false
 	facts.facts.Attributes["real_name"] = revoked
-	childAfterRevoke, err := f.service.Get(ctx, student, childToTeacher.ID)
+	childAfterRevoke, err := f.service.GetWithOptions(ctx, student, childToTeacher.ID, r.ViewOptions{IncludeParentSummary: true})
 	if err != nil || childAfterRevoke.ParentVisible == nil || *childAfterRevoke.ParentVisible {
 		t.Fatalf("expected parent_visible=false when teacher parent disclosure revoked, got %+v %v", childAfterRevoke, err)
 	}
@@ -243,4 +246,87 @@ func (d principalDisclosuresForDrafts) Facts(ctx context.Context, p r.Principal,
 		return d.teacher.Facts(ctx, p, school, course, term)
 	}
 	return ordinaryDisclosures{}.Facts(ctx, p, school, course, term)
+}
+
+func TestComposerDraftRecencyAndUnselectedTerm(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	in := input("course", "autumn", 4)
+	published := create(t, f, "published", in)
+	previous := create(t, f, "withdrawn", in)
+	if _, err := f.service.Action(ctx, student, previous.ID, "withdraw", r.Action{Action: "withdraw", Revision: previous.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	check := func(kind, target, term, parent, wantDraft string, wantEntries []string) {
+		t.Helper()
+		got, err := f.service.Composer(ctx, student, kind, target, term, parent)
+		if err != nil || got.OwnDraftID != wantDraft || !slices.Equal(got.OwnEntryIDs, wantEntries) {
+			t.Fatalf("%s %s: draft %q entries %v error %v", kind, term, got.OwnDraftID, got.OwnEntryIDs, err)
+		}
+	}
+	check("course", "course", "", "", previous.ID, []string{published.ID})
+	f.now = f.now.Add(time.Minute)
+	recent, err := f.service.SaveDraft(ctx, student, "", "recent", in, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("course", "course", "autumn", "", recent.ID, []string{published.ID})
+	check("course", "course", "", "", recent.ID, []string{published.ID})
+	replyInput := r.Input{Kind: "reply", TargetID: "course", ParentID: published.ID, Body: "my reply"}
+	reply, err := f.service.Reply(ctx, student, published.ID, "old-reply", replyInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.service.Action(ctx, student, reply.ID, "withdraw-reply", r.Action{Action: "withdraw", Revision: reply.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	check("reply", "course", "", published.ID, reply.ID, nil)
+	f.now = f.now.Add(time.Minute)
+	draft, err := f.service.SaveDraft(ctx, student, "", "recent-reply", replyInput, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("reply", "course", "", published.ID, draft.ID, nil)
+}
+
+// A restored mobile request can overlap the original publish while it is committing.
+func TestConcurrentReplyDraftPublicationReplaysOneReply(t *testing.T) {
+	f := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	root := create(t, f, "root", input("course", "autumn", 4))
+	in := r.Input{Kind: "reply", TargetID: "course", ParentID: root.ID, Body: "saved reply"}
+	draft, err := f.service.SaveDraft(ctx, student, "", "save-reply", in, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := r.PublishDraft{Input: in, Revision: draft.Revision}
+	start := make(chan struct{})
+	type attempt struct {
+		result r.Result
+		err    error
+	}
+	done := make(chan attempt, 8)
+	for range cap(done) {
+		go func() {
+			<-start
+			out, err := f.service.PublishDraft(ctx, student, draft.ID, "publish-once", request)
+			done <- attempt{out, err}
+		}()
+	}
+	close(start)
+	var replyID string
+	for range cap(done) {
+		v := <-done
+		if v.err != nil || v.result.State != "published" || v.result.Revision != 1 || (replyID != "" && v.result.ID != replyID) {
+			t.Errorf("publish: %+v %v", v.result, v.err)
+		}
+		if v.err == nil {
+			replyID = v.result.ID
+		}
+	}
+	comp, err := f.service.Composer(ctx, student, "reply", "course", "", root.ID)
+	if err != nil || replyID == "" || comp.OwnDraftID != "" || !slices.Equal(comp.OwnEntryIDs, []string{replyID}) {
+		t.Fatalf("after commit: %+v %v", comp, err)
+	}
 }

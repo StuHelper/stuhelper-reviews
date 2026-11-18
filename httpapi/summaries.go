@@ -32,10 +32,18 @@ func (h Handler) overview(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		return
 	}
-	if len(req.URL.Query()) != 0 {
+	q := req.URL.Query()
+	details, err := flagRequested(req, "include_own_context")
+	q.Del("include_own_context")
+	if err != nil || len(q) != 0 {
 		respond(w, nil, r.ErrInput)
 		return
 	}
 	v, err := h.Service.OwnOverview(req.Context(), p)
+	if !details {
+		for i := range v.PendingCourses.Items {
+			v.PendingCourses.Items[i].DraftID = ""
+		}
+	}
 	respond(w, v, err)
 }

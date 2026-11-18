@@ -18,34 +18,49 @@ type rootActivity struct {
 // Root visibility gates all child replies and votes. Changed buckets are applied
 // as deltas, so other discussions sharing a course/teacher are never overwritten.
 func (t *transaction) refreshActivity(rootID string, at time.Time) error {
+	changes, err := t.rootActivityChanges(rootID, at)
+	if err != nil {
+		return err
+	}
+	return t.applyActivityChanges(changes)
+}
+
+type activityChange struct {
+	rootID                  string
+	bucket, after           rootActivity
+	firstDelta, secondDelta int64
+	at                      time.Time
+}
+
+func (t *transaction) rootActivityChanges(rootID string, at time.Time) ([]activityChange, error) {
 	if e := t.Lock("activity-root:" + rootID); e != nil {
-		return e
+		return nil, e
 	}
 	old := map[string]rootActivity{}
 	rows, e := t.tx.QueryContext(t.ctx, `SELECT id,kind,target_id,school_id,day,reviews,interactions FROM reviews.activity_contributions WHERE root_id=$1 ORDER BY id LIMIT 10001`, rootID)
 	if e != nil {
-		return safe(e)
+		return nil, safe(e)
 	}
 	for rows.Next() {
 		var v rootActivity
 		if e = rows.Scan(&v.ID, &v.Kind, &v.Target, &v.School, &v.Day, &v.Reviews, &v.Interactions); e != nil {
 			rows.Close()
-			return safe(e)
+			return nil, safe(e)
 		}
 		old[v.ID] = v
 	}
 	e = rows.Err()
 	rows.Close()
 	if e != nil {
-		return safe(e)
+		return nil, safe(e)
 	}
 	if len(old) > 10000 {
-		return m.ErrUnavailable
+		return nil, m.ErrUnavailable
 	}
 	next := map[string]rootActivity{}
 	root, e := t.Entry(rootID)
 	if e != nil && !errors.Is(e, m.ErrNotFound) {
-		return e
+		return nil, e
 	}
 	if e == nil && root.State == "published" && (root.ExpiresAt == nil || at.Before(*root.ExpiresAt)) {
 		targets := map[string]string{}
@@ -66,14 +81,14 @@ func (t *transaction) refreshActivity(rootID string, at time.Time) error {
    WHERE e.root_id=$1 AND e.state='published' AND (e.expires_at IS NULL OR e.expires_at>$2)
   ) facts GROUP BY activity_day ORDER BY activity_day LIMIT 10001`, rootID, at)
 		if e != nil {
-			return safe(e)
+			return nil, safe(e)
 		}
 		for rows.Next() {
 			var day time.Time
 			var reviews, interactions int64
 			if e = rows.Scan(&day, &reviews, &interactions); e != nil {
 				rows.Close()
-				return safe(e)
+				return nil, safe(e)
 			}
 			if reviews == 0 && interactions == 0 {
 				continue
@@ -88,13 +103,13 @@ func (t *transaction) refreshActivity(rootID string, at time.Time) error {
 			}
 			if len(next) > 10000 {
 				rows.Close()
-				return m.ErrUnavailable
+				return nil, m.ErrUnavailable
 			}
 		}
 		e = rows.Err()
 		rows.Close()
 		if e != nil {
-			return safe(e)
+			return nil, safe(e)
 		}
 	}
 	keys := map[string]bool{}
@@ -104,12 +119,8 @@ func (t *transaction) refreshActivity(rootID string, at time.Time) error {
 	for key := range next {
 		keys[key] = true
 	}
-	ordered := make([]string, 0, len(keys))
-	for key := range keys {
-		ordered = append(ordered, key)
-	}
-	sort.Strings(ordered)
-	for _, id := range ordered {
+	var changes []activityChange
+	for id := range keys {
 		before, after := old[id], next[id]
 		dr, di := after.Reviews-before.Reviews, after.Interactions-before.Interactions
 		if dr == 0 && di == 0 {
@@ -119,7 +130,19 @@ func (t *transaction) refreshActivity(rootID string, at time.Time) error {
 		if bucket.ID == "" {
 			bucket = before
 		}
-		if e = t.changeActivity(bucket.Kind, bucket.Target, bucket.School, bucket.Day, dr, di, nil, at); e != nil {
+		changes = append(changes, activityChange{rootID, bucket, after, dr, di, at})
+	}
+	return changes, nil
+}
+
+func (t *transaction) applyActivityChanges(changes []activityChange) error {
+	// Stable sorting also preserves the order of roots for a shared bucket.
+	sort.SliceStable(changes, func(i, j int) bool { return changes[i].bucket.ID < changes[j].bucket.ID })
+	for _, change := range changes {
+		rootID, bucket, after := change.rootID, change.bucket, change.after
+		id := bucket.ID
+		var e error
+		if e = t.changeActivity(bucket.Kind, bucket.Target, bucket.School, bucket.Day, change.firstDelta, change.secondDelta, nil, change.at); e != nil {
 			return e
 		}
 		if after.ID == "" {

@@ -169,11 +169,11 @@ func TestTeacherCourseStatisticsPaginationPreservesOverallWeights(t *testing.T) 
 	ctx := context.Background()
 	create(t, f, "one", input("a-course", "autumn", 1))
 	create(t, f, "two", input("b-course", "autumn", 5))
-	first, err := f.service.StatsPage(ctx, "teacher", "teacher-a", nil, nil, "", 1)
+	first, err := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 1)
 	if err != nil || len(first.Courses) != 1 || first.Next != "a-course" || first.Dimensions[0].Level != 3 {
 		t.Fatal("incorrect first statistics page", err)
 	}
-	second, err := f.service.StatsPage(ctx, "teacher", "teacher-a", nil, nil, first.Next, 1)
+	second, err := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, first.Next, 1)
 	if err != nil || len(second.Courses) != 1 || second.Courses[0].CourseID != "b-course" || second.Courses[0].Dimensions[0].Level != 5 || second.Dimensions != first.Dimensions {
 		t.Fatal("pagination changed equal-course aggregate", err)
 	}
@@ -200,12 +200,12 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 	}
 	v := create(t, f, "all", input("course", "autumn", 4))
 	for _, teacher := range []string{"teacher-a", "teacher-b"} {
-		s, e := f.service.Stats(ctx, "teacher", teacher, nil, nil)
+		s, e := f.service.ReadStatsPage(ctx, student, "teacher", teacher, nil, nil, "", 20)
 		if e != nil || s.Dimensions[0].Samples != 1 {
 			t.Fatal("co-teacher missing", e)
 		}
 	}
-	s, e := f.service.Stats(ctx, "teacher", "teacher-c", nil, nil)
+	s, e := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-c", nil, nil, "", 20)
 	if e != nil || s.Dimensions[0].Samples != 0 {
 		t.Fatal("cross-term attribution")
 	}
@@ -229,7 +229,7 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 	if _, e = f.service.Create(ctx, student, "optional", input("course", "autumn", 3)); e != nil {
 		t.Fatal(e)
 	}
-	s, e = f.service.Stats(ctx, "teacher", "teacher-a", nil, nil)
+	s, e = f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 20)
 	if e != nil || s.Dimensions[0].Samples != 0 {
 		t.Fatal("optional missing evidence invented teachers")
 	}
@@ -315,7 +315,7 @@ func TestTeacherEqualCourseWeightsAndBandBoundaries(t *testing.T) {
 		create(t, f, fmt.Sprintf("many-%d", i), input("course-many", "autumn", 5))
 	}
 	create(t, f, "one", input("course-one", "spring", 1))
-	s, e := f.service.Stats(ctx, "teacher", "teacher-a", nil, nil)
+	s, e := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 20)
 	if e != nil || s.Dimensions[0].Level != 3 || s.Dimensions[0].Samples != 10 || s.Dimensions[0].Courses != 2 {
 		t.Fatalf("unequal course weighting: %+v %v", s, e)
 	}
@@ -323,13 +323,13 @@ func TestTeacherEqualCourseWeightsAndBandBoundaries(t *testing.T) {
 		course := fmt.Sprintf("boundary-%d", low)
 		create(t, f, course+"a", input(course, "autumn", low))
 		create(t, f, course+"b", input(course, "autumn", low+1))
-		v, e := f.service.Stats(ctx, "course", course, nil, nil)
+		v, e := f.service.ReadStatsPage(ctx, student, "course", course, nil, nil, "", 20)
 		if e != nil || v.Dimensions[0].Level != low+1 {
 			t.Fatal("boundary must round upward", v, e)
 		}
 	}
 	create(t, f, "mentor", r.Input{Kind: "mentor", TargetID: "teacher-a", Title: "Guide", Body: "Mentor text"})
-	same, e := f.service.Stats(ctx, "teacher", "teacher-a", nil, nil)
+	same, e := f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 20)
 	if e != nil || same.Dimensions[0].Samples != 18 {
 		t.Fatal("mentor affected score", same, e)
 	}
@@ -355,7 +355,7 @@ func TestWithdrawalWindowExpiryVotesAndPermanentDeletion(t *testing.T) {
 			t.Fatal("withdrawn discussion visible")
 		}
 	}
-	s, e := f.service.Stats(ctx, "course", "course", nil, nil)
+	s, e := f.service.ReadStatsPage(ctx, student, "course", "course", nil, nil, "", 20)
 	if e != nil || s.Dimensions[0].Samples != 0 {
 		t.Fatal("withdrawn entry counted")
 	}
@@ -496,10 +496,72 @@ func TestStrictHTTPInputsAndUnavailableModerationRollback(t *testing.T) {
 	for _, body := range []string{`{"kind":"course","target_id":"course","term_id":"autumn","title":"T","body":"B","ratings":[1]}`, `{"kind":"course","target_id":"course","term_id":"autumn","title":"T","body":"B","ratings":[1,2,3,4,5],"owner":"admin"}`} {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/api/v1/reviews", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Idempotency-Key", "test")
 		h.ServeHTTP(w, req)
 		if w.Code != 400 {
 			t.Fatalf("malformed input accepted: %d", w.Code)
 		}
+	}
+}
+
+func TestHTTPWriteOriginAndJSON(t *testing.T) {
+	f := fixture(t)
+	h := httpapi.Handler{Service: f.service, Authenticate: func(*http.Request) (r.Principal, error) { return student, nil }}.Routes()
+	payload, err := json.Marshal(input("course", "autumn", 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	success := 0
+	for i, tc := range []struct {
+		origin, site, media string
+		status              int
+	}{
+		{"http://example.test", "same-origin", "application/json", 403},
+		{"", "cross-site", "application/json", 403},
+		{"https://example.test", "same-origin", "text/plain", 400},
+		{"", "", "", 400},
+		{"https://example.test", "same-origin", "application/json; charset=utf-8", 200},
+		{"", "", "application/json", 200},
+	} {
+		req := httptest.NewRequest("POST", "https://example.test/api/v1/reviews", strings.NewReader(string(payload)))
+		req.Header.Set("Idempotency-Key", fmt.Sprint(i))
+		if tc.origin != "" {
+			req.Header.Set("Origin", tc.origin)
+		}
+		if tc.site != "" {
+			req.Header.Set("Sec-Fetch-Site", tc.site)
+		}
+		req.Header.Set("Content-Type", tc.media)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.status {
+			t.Errorf("case %d status %d, want %d", i, rec.Code, tc.status)
+		}
+		if tc.status == 200 {
+			success++
+		}
+		page, err := f.service.List(context.Background(), student, r.Filter{Owner: student.Subject, Limit: 20})
+		if err != nil || len(page.Items) != success {
+			t.Errorf("case %d rows=%d want %d err=%v", i, len(page.Items), success, err)
+		}
+	}
+}
+
+func TestTrustedBrowserOriginBehindProxy(t *testing.T) {
+	f := fixture(t)
+	h := httpapi.Handler{Service: f.service, PublicOrigin: "https://example.test", Authenticate: func(*http.Request) (r.Principal, error) { return student, nil }}.Routes()
+	raw, err := json.Marshal(input("course", "autumn", 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "http://internal.test/api/v1/reviews", strings.NewReader(string(raw)))
+	req.Header.Set("Origin", "https://example.test")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "proxy")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatal(rec.Code)
 	}
 }

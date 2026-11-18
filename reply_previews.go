@@ -22,7 +22,7 @@ type ReplyPreviewTransaction interface {
 	ReplyPreviews([]string, string, time.Time, []DiscussionAuthor) (ReplyBatch, error)
 }
 
-func (s *Service) addReplyPreviews(ctx context.Context, p Principal, out *Page, school string, own bool) error {
+func (s *Service) addReplyPreviews(ctx context.Context, p Principal, out *Page, school string, own, includeParentSummary bool) error {
 	if own {
 		scope, err := s.contentScope(ctx, p, "")
 		if errors.Is(err, ErrForbidden) || errors.Is(err, ErrUnauthenticated) {
@@ -77,7 +77,7 @@ func (s *Service) addReplyPreviews(ctx context.Context, p Principal, out *Page, 
 	if err != nil {
 		return err
 	}
-	views, err := s.render(ctx, p, batch.Entries, false, school)
+	views, err := s.render(ctx, p, batch.Entries, false, school, ViewOptions{IncludeParentSummary: includeParentSummary})
 	if err != nil {
 		return err
 	}

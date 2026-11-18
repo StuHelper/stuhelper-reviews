@@ -73,7 +73,9 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 		out.TeacherReply = disclosure.ownCourse
 		if !disclosure.canDiscloseRequired() {
 			out.State = "disclosure_required"
-			_ = s.attachOwnComposerContext(ctx, p, kind, target, term, parent, &out)
+			if err := s.attachOwnComposerContext(ctx, p, kind, target, term, parent, &out); err != nil {
+				return Composer{}, err
+			}
 			return out, nil
 		}
 		grant, checkErr = s.replyGrant(ctx, p, root, disclosure)
@@ -84,7 +86,7 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 		} else {
 			course = target
 		}
-		object, err := s.Catalog.Target(ctx, targetKind, target)
+		object, err := s.catalogTarget(ctx, targetKind, target)
 		if err != nil {
 			return out, err
 		}
@@ -93,7 +95,9 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 		if school != scope {
 			return Composer{}, ErrForbidden
 		}
-		if kind == "course" && term == "" {
+		if object.Inactive {
+			checkErr = ErrForbidden
+		} else if kind == "course" && term == "" {
 			grant, checkErr = s.authorize(ctx, p, "publish_course", school)
 			if checkErr == nil {
 				out.State = "choose_term"
@@ -104,8 +108,16 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 				out.TeacherIDs = []string{}
 			}
 		}
-		if disclosure, err := s.disclosureContext(ctx, p, school, course, term, false); err == nil {
-			out.Disclosures = disclosure.options
+		if checkErr == nil {
+			disclosure, err := s.disclosureContext(ctx, p, school, course, term, false)
+			if ctx.Err() != nil {
+				return out, ctx.Err()
+			}
+			if err != nil {
+				checkErr = err
+			} else {
+				out.Disclosures = disclosure.options
+			}
 		}
 	}
 	out.RuleVersion = grant.RuleVersion
