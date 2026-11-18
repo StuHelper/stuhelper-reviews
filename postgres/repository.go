@@ -17,10 +17,14 @@ import (
 //go:embed schema.sql
 var Schema string
 
-type Repository struct{ DB *sql.DB }
+type Repository struct {
+	DB           *sql.DB
+	OnDiagnostic reviews.DiagnosticHook
+}
 type transaction struct {
-	tx  *sql.Tx
-	ctx context.Context
+	tx   *sql.Tx
+	ctx  context.Context
+	repo *Repository
 }
 
 func safe(e error) error {
@@ -39,48 +43,88 @@ func safe(e error) error {
 	}
 	return reviews.ErrUnavailable
 }
+
+func (r *Repository) safeOp(op string, start time.Time, raw error) error {
+	mapped := safe(raw)
+	if raw != nil && r != nil && r.OnDiagnostic != nil && !errors.Is(raw, sql.ErrNoRows) {
+		var pg *pgconn.PgError
+		sqlState := ""
+		if errors.As(raw, &pg) {
+			sqlState = reviews.SanitizeSQLState(pg.Code)
+		}
+		r.OnDiagnostic(reviews.DiagnosticEvent{
+			Operation:  op,
+			Dependency: "postgres",
+			Category:   reviews.ClassifyDiagnosticCategory(mapped),
+			SQLState:   sqlState,
+			Duration:   time.Since(start),
+		})
+	}
+	return mapped
+}
+
+func (r *Repository) emitCorruptJSON(op string, start time.Time) error {
+	if r != nil && r.OnDiagnostic != nil {
+		r.OnDiagnostic(reviews.DiagnosticEvent{
+			Operation:  op,
+			Dependency: "postgres",
+			Category:   "json_corrupt",
+			Duration:   time.Since(start),
+		})
+	}
+	return reviews.ErrUnavailable
+}
+
 func (r *Repository) Transaction(ctx context.Context, run func(reviews.Transaction) error) error {
+	start := time.Now()
 	tx, e := r.DB.BeginTx(ctx, nil)
 	if e != nil {
-		return safe(e)
+		return r.safeOp("begin_tx", start, e)
 	}
 	defer tx.Rollback()
-	if e = run(&transaction{tx, ctx}); e != nil {
+	if e = run(&transaction{tx, ctx, r}); e != nil {
 		return e
 	}
-	return safe(tx.Commit())
+	commitStart := time.Now()
+	return r.safeOp("commit_tx", commitStart, tx.Commit())
 }
 func (t *transaction) Lock(key string) error {
+	start := time.Now()
 	_, e := t.tx.ExecContext(t.ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "reviews:"+key)
-	return safe(e)
+	return t.repo.safeOp("lock", start, e)
 }
 func read[T any](t *transaction, q string, args ...any) (T, error) {
 	var v T
 	var b []byte
+	start := time.Now()
 	if e := t.tx.QueryRowContext(t.ctx, q, args...).Scan(&b); e != nil {
-		return v, safe(e)
+		return v, t.repo.safeOp("read", start, e)
 	}
 	if json.Unmarshal(b, &v) != nil {
-		return v, reviews.ErrUnavailable
+		return v, t.repo.emitCorruptJSON("read_decode", start)
 	}
 	return v, nil
 }
 func list[T any](t *transaction, q string, args ...any) ([]T, error) {
+	start := time.Now()
 	rows, e := t.tx.QueryContext(t.ctx, q, args...)
 	if e != nil {
-		return nil, safe(e)
+		return nil, t.repo.safeOp("list", start, e)
 	}
 	defer rows.Close()
 	out := []T{}
 	for rows.Next() {
 		var b []byte
 		var v T
-		if rows.Scan(&b) != nil || json.Unmarshal(b, &v) != nil {
-			return nil, reviews.ErrUnavailable
+		if err := rows.Scan(&b); err != nil {
+			return nil, t.repo.safeOp("list_scan", start, err)
+		}
+		if json.Unmarshal(b, &v) != nil {
+			return nil, t.repo.emitCorruptJSON("list_decode", start)
 		}
 		out = append(out, v)
 	}
-	return out, safe(rows.Err())
+	return out, t.repo.safeOp("list_rows", start, rows.Err())
 }
 func (t *transaction) save(q string, v any, args ...any) error {
 	b, e := json.Marshal(v)
@@ -88,8 +132,9 @@ func (t *transaction) save(q string, v any, args ...any) error {
 		return reviews.ErrInput
 	}
 	args = append(args, string(b))
+	start := time.Now()
 	_, e = t.tx.ExecContext(t.ctx, q, args...)
-	return safe(e)
+	return t.repo.safeOp("save", start, e)
 }
 func (t *transaction) Entry(id string) (reviews.Entry, error) {
 	return read[reviews.Entry](t, `SELECT data FROM reviews.entries WHERE id=$1`, id)

@@ -30,23 +30,11 @@ func wrapExternalErr(parent context.Context, err error) error {
 }
 
 func (s *Service) catalogTarget(ctx context.Context, kind, id string) (Target, error) {
-	if s.Catalog == nil {
-		return Target{}, ErrUnavailable
-	}
-	callCtx, cancel := s.externalCtx(ctx)
-	defer cancel()
-	v, err := s.Catalog.Target(callCtx, kind, id)
-	return v, wrapExternalErr(ctx, err)
+	return s.catalogTargetFor(ctx, "catalog_target", kind, id)
 }
 
 func (s *Service) catalogEvidence(ctx context.Context, p Principal, course, term string) ([]Evidence, error) {
-	if s.Catalog == nil {
-		return nil, ErrUnavailable
-	}
-	callCtx, cancel := s.externalCtx(ctx)
-	defer cancel()
-	v, err := s.Catalog.Evidence(callCtx, p, course, term)
-	return v, wrapExternalErr(ctx, err)
+	return s.catalogEvidenceFor(ctx, "catalog_evidence", p, course, term)
 }
 
 func (s *Service) catalogHasTaught(ctx context.Context, port TeachingCatalog, teachers []string, course string) (bool, error) {
@@ -97,16 +85,21 @@ func (s *Service) disclosureFacts(ctx context.Context, p Principal, school, cour
 	}
 	callCtx, cancel := s.externalCtx(ctx)
 	defer cancel()
+	start := time.Now()
 	v, err := s.Disclosures.Facts(callCtx, p, school, course, term)
+	s.emitDiagnostic("disclosure_facts", "disclosures", start, err)
 	return v, wrapExternalErr(ctx, err)
 }
 
 func (s *Service) lookupProfile(ctx context.Context, owner string) (Profile, error) {
 	if s.Profiles == nil {
+		s.emitDiagnostic("profile_lookup", "profiles", time.Now(), ErrUnavailable)
 		return Profile{}, ErrUnavailable
 	}
 	callCtx, cancel := s.externalCtx(ctx)
 	defer cancel()
+	start := time.Now()
 	v, err := s.Profiles.Lookup(callCtx, owner)
+	s.emitDiagnostic("profile_lookup", "profiles", start, err)
 	return v, wrapExternalErr(ctx, err)
 }

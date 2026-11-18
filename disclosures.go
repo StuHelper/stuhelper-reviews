@@ -59,6 +59,7 @@ func (s *Service) disclosureContext(ctx context.Context, p Principal, school, co
 		return out, nil
 	}
 	if s.Disclosures == nil {
+		s.emitDiagnostic("disclosure_facts", "disclosures", time.Now(), ErrUnavailable)
 		return out, ErrUnavailable
 	}
 	facts, err := s.disclosureFacts(ctx, p, school, course, term)

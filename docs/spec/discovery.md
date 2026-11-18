@@ -22,6 +22,8 @@ outbox 只用 sent_at 表示确认状态，未发送部分索引支持空闲与�
 
 运行身份负责读取和确认 outbox。已确认事件由具备 outbox 表 SELECT、DELETE 权限的独立维护身份清理。
 
+postgres.Repository.OutboxMetrics(ctx) 与 Service.OutboxMetrics(ctx) 返回未确认积压量 PendingCount 与最老未发送时间 OldestPendingAt。
+
 backend relay 负责 LISTEN、启动和重连补读，以及每 60 秒的未发送索引兜底。失败按 5 秒起的指数退避重试，最长一小时，累计 24 小时转待处理。excludeSubjects 接收退避和待处理主题，消费者按事件 ID 去重。
 
 Service.DiscoveryCurrent(ctx, principal, ids) 接收 1 至 100 个 ID，每次检查当前内容准入和学校，只返回当前发布且未过期的课程评价文档。撤销准入返回空集合，依赖故障返回错误。
