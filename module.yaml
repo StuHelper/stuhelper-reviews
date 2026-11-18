@@ -112,6 +112,7 @@ scenario_tests:
     - tx_timeout_test.go#TestAdminPresentationBoundsAuthorization
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
     - presentation_test.go#TestPresentationHTTPPreservesRatingTexts
+    - presentation_test.go#TestDecisionContractAndPresentationReplay
   CM-09:
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
   CM-14:

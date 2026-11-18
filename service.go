@@ -58,7 +58,9 @@ func hash(v any) string {
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
 }
-func validKey(v string) bool {
+
+// ValidIdempotencyKey reports whether a write key can be stored as a review receipt.
+func ValidIdempotencyKey(v string) bool {
 	if len(v) < 1 || len(v) > 128 {
 		return false
 	}
@@ -248,7 +250,7 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validKey(key) || in.Kind == "reply" || validate(in, false) != nil {
+	if !ValidIdempotencyKey(key) || in.Kind == "reply" || validate(in, false) != nil {
 		return out, ErrInput
 	}
 	target, evidence, ids, g, err := s.prepare(ctx, p, in)
@@ -395,7 +397,7 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(parent) || !validKey(key) || in.Kind != "reply" || validate(in, false) != nil {
+	if !validID(parent) || !ValidIdempotencyKey(key) || in.Kind != "reply" || validate(in, false) != nil {
 		return out, ErrInput
 	}
 	rk := hash([]string{p.Subject, "reply", parent, key})
@@ -527,7 +529,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(id) || !validKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
+	if !validID(id) || !ValidIdempotencyKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
 		return out, ErrInput
 	}
 	if in.Action == "republish" && (in.Input == nil || validate(*in.Input, false) != nil) {
