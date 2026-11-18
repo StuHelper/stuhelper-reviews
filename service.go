@@ -14,13 +14,13 @@ import (
 )
 
 type Config struct {
-	EditWindow, DraftLifetime time.Duration
-	MinSamples                int
-	Recommendations           RecommendationPolicy
+	EditWindow, DraftLifetime, ExternalTimeout time.Duration
+	MinSamples                                 int
+	Recommendations                            RecommendationPolicy
 }
 
 func DefaultConfig() Config {
-	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, MinSamples: 1, Recommendations: DefaultRecommendationPolicy()}
+	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, ExternalTimeout: defaultExternalTimeout, MinSamples: 1, Recommendations: DefaultRecommendationPolicy()}
 }
 
 type Service struct {
@@ -117,7 +117,10 @@ func (s *Service) authorize(ctx context.Context, p Principal, action, school str
 	if s.Access == nil {
 		return Grant{}, ErrUnavailable
 	}
-	return s.Access.Authorize(ctx, p, action, school)
+	callCtx, cancel := s.externalCtx(ctx)
+	defer cancel()
+	g, err := s.Access.Authorize(callCtx, p, action, school)
+	return g, wrapExternalErr(ctx, err)
 }
 func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, []Evidence, []string, Grant, error) {
 	kind := "course"
@@ -126,7 +129,7 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 		kind = "teacher"
 		action = "publish_mentor"
 	}
-	target, e := s.Catalog.Target(ctx, kind, in.TargetID)
+	target, e := s.catalogTarget(ctx, kind, in.TargetID)
 	if e != nil {
 		return target, nil, nil, Grant{}, e
 	}
@@ -140,14 +143,14 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	if in.Kind == "mentor" {
 		return target, nil, nil, g, nil
 	}
-	term, e := s.Catalog.Target(ctx, "term", in.TermID)
+	term, e := s.catalogTarget(ctx, "term", in.TermID)
 	if e != nil {
 		return target, nil, nil, g, e
 	}
 	if term.SchoolID != target.SchoolID {
 		return target, nil, nil, g, ErrInput
 	}
-	evidence, e := s.Catalog.Evidence(ctx, p, in.TargetID, in.TermID)
+	evidence, e := s.catalogEvidence(ctx, p, in.TargetID, in.TermID)
 	if e != nil {
 		return target, nil, nil, g, e
 	}
@@ -187,7 +190,13 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	return target, evidence, ids, g, nil
 }
 func (s *Service) check(ctx context.Context, e Entry) (string, error) {
-	out, err := s.Moderation.Check(ctx, Candidate{e.ID, e.Input.Kind, e.SchoolID, e.Owner, e.Input.Title, e.Input.Body, e.Revision})
+	if s.Moderation == nil {
+		return "", ErrUnavailable
+	}
+	callCtx, cancel := s.externalCtx(ctx)
+	defer cancel()
+	out, err := s.Moderation.Check(callCtx, Candidate{e.ID, e.Input.Kind, e.SchoolID, e.Owner, e.Input.Title, e.Input.Body, e.Revision})
+	err = wrapExternalErr(ctx, err)
 	if err != nil {
 		return "", err
 	}
@@ -217,13 +226,15 @@ func replay(t Transaction, key, digest string, now time.Time) (Result, bool, err
 }
 func (s *Service) record(t Transaction, key, digest, action string, p Principal, e Entry) error {
 	reason := ""
+	actor := "anonymous"
 	if action == "moderated" {
 		reason = e.ChangeReason
+		actor = p.Subject
 	}
-	if err := t.Event(Event{ID: key, Type: "reviews." + action + ".v1", Reason: reason, Subject: "entry/" + e.ID, SchoolID: e.SchoolID, Actor: p.Subject, Revision: e.Revision, At: s.now()}); err != nil {
+	if err := t.Event(Event{ID: key, Type: "reviews." + action + ".v1", Reason: reason, Subject: "entry/" + e.ID, SchoolID: e.SchoolID, Actor: actor, Revision: e.Revision, At: s.now()}); err != nil {
 		return err
 	}
-	return t.SaveReplay(key, Replay{Digest: digest, Result: result(e), Until: s.now().Add(24 * time.Hour), ObjectID: e.ID})
+	return t.SaveReplay(key, Replay{Owner: p.Subject, Digest: digest, Result: result(e), Until: s.now().Add(24 * time.Hour), ObjectID: e.ID})
 }
 func (s *Service) Create(ctx context.Context, p Principal, key string, in Input) (Result, error) {
 	return s.create(ctx, p, key, in, "", 0)
@@ -297,6 +308,16 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 		}
 		if e := t.Lock(rk); e != nil {
 			return e
+		}
+		if e := t.Lock("closure-owner:" + p.Subject); e != nil {
+			return e
+		}
+		closed, e := t.ClosedOwners([]string{p.Subject})
+		if e != nil {
+			return e
+		}
+		if closed[p.Subject] {
+			return ErrForbidden
 		}
 		cached, ok, e := replay(t, rk, h, now)
 		if e != nil {
@@ -379,19 +400,37 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 	if !validID(parent) || !ValidIdempotencyKey(key) || in.Kind != "reply" || validate(in, false) != nil {
 		return out, ErrInput
 	}
-	if err := s.requirePublicDisclosure(ctx, parent); err != nil {
-		return out, err
-	}
-	var root Entry
+	rk := hash([]string{p.Subject, "reply", parent, key})
+	h := hash(in)
+	var base, root Entry
+	replayed := false
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
-		base, e := s.accessible(t, parent)
+		cached, ok, e := replay(t, rk, h, s.now())
+		if e != nil {
+			return e
+		}
+		if ok {
+			out = cached
+			replayed = true
+			return nil
+		}
+		base, e = s.accessible(t, parent)
 		if e != nil {
 			return e
 		}
 		root, e = s.accessible(t, base.RootID)
-		return e
+		if e != nil {
+			return e
+		}
+		if in.TargetID != base.Input.TargetID {
+			return ErrInput
+		}
+		return nil
 	})
-	if err != nil {
+	if err != nil || replayed {
+		return out, err
+	}
+	if err := s.requirePublicDisclosure(ctx, parent); err != nil {
 		return out, err
 	}
 	course, term := "", ""
@@ -407,9 +446,27 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 	if err != nil {
 		return out, err
 	}
-	rk := hash([]string{p.Subject, "reply", parent, key})
-	h := hash(in)
+	candidate := Entry{ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, RuleVersion: g.RuleVersion}
+	state, err := s.check(ctx, candidate)
+	if err != nil {
+		return out, err
+	}
+	reviewRequested := state == "review" || state == "pending"
+	if state == "review" {
+		state = "published"
+	}
 	err = s.Repo.Transaction(ctx, func(t Transaction) error {
+		if e := t.Lock(rk); e != nil {
+			return e
+		}
+		cached, ok, e := replay(t, rk, h, s.now())
+		if e != nil {
+			return e
+		}
+		if ok {
+			out = cached
+			return nil
+		}
 		base, e := s.accessible(t, parent)
 		if e != nil {
 			return e
@@ -425,16 +482,18 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		if e != nil {
 			return e
 		}
-		if current.Revision != root.Revision {
+		if current.Revision != root.Revision || base.SchoolID != root.SchoolID {
 			return ErrConflict
 		}
-		cached, ok, e := replay(t, rk, h, s.now())
+		if e = t.Lock("closure-owner:" + p.Subject); e != nil {
+			return e
+		}
+		closed, e := t.ClosedOwners([]string{p.Subject})
 		if e != nil {
 			return e
 		}
-		if ok {
-			out = cached
-			return nil
+		if closed[p.Subject] {
+			return ErrForbidden
 		}
 		if in.TargetID != base.Input.TargetID {
 			return ErrInput
@@ -450,16 +509,7 @@ func (s *Service) Reply(ctx context.Context, p Principal, parent, key string, in
 		}
 		in.Signed = identity.Signed
 		now := s.now()
-		entry := Entry{ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
-		state, e := s.check(ctx, entry)
-		if e != nil {
-			return e
-		}
-		entry.ReviewRequested = state == "review" || state == "pending"
-		if state == "review" {
-			state = "published"
-		}
-		entry.State = state
+		entry := Entry{ChangeOrigin: "author", TeacherReply: disclosure.ownCourse, DisclosureCourse: course, DisclosureTerm: term, ID: rk, RootID: base.RootID, ParentID: parent, Owner: p.Subject, SchoolID: base.SchoolID, Input: in, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion, State: state, ReviewRequested: reviewRequested}
 		if state == "published" {
 			entry.FirstPublishedAt = &now
 		}
@@ -482,11 +532,6 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	if !validID(id) || !ValidIdempotencyKey(key) || !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
 		return out, ErrInput
 	}
-	if in.Action == "vote" && in.Vote != 0 {
-		if err := s.requirePublicDisclosure(ctx, id); err != nil {
-			return out, err
-		}
-	}
 	if in.Action == "republish" && (in.Input == nil || validate(*in.Input, false) != nil) {
 		return out, ErrInput
 	}
@@ -498,10 +543,126 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	}
 	rk := hash([]string{p.Subject, in.Action, id, key})
 	h := hash(in)
+	var preEntry Entry
+	var preIdentity Identity
+	replayed := false
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		cached, ok, e := replay(t, rk, h, s.now())
+		if e != nil {
+			return e
+		}
+		if ok {
+			out = cached
+			replayed = true
+			return nil
+		}
+		preEntry, e = t.Entry(id)
+		if e != nil {
+			return e
+		}
+		if in.Action == "vote" {
+			return nil
+		}
+		if preEntry.Owner != p.Subject {
+			return ErrNotFound
+		}
+		if preEntry.ExpiresAt != nil && !s.now().Before(*preEntry.ExpiresAt) {
+			return ErrNotFound
+		}
+		if in.Revision != preEntry.Revision {
+			return ErrConflict
+		}
+		if in.Action == "save_withdrawn" || in.Action == "republish" {
+			if preEntry.State != "withdrawn" {
+				return ErrConflict
+			}
+			next := *in.Input
+			if next.Kind != preEntry.Input.Kind || next.TargetID != preEntry.Input.TargetID || next.TermID != preEntry.Input.TermID || next.TeacherID != preEntry.Input.TeacherID {
+				return ErrInput
+			}
+			if in.Action == "republish" {
+				if preEntry.RootID != preEntry.ID {
+					if _, e = s.accessible(t, preEntry.RootID); e != nil {
+						return e
+					}
+				}
+				preIdentity, e = t.Identity(preEntry.RootID, p.Subject)
+				if e != nil {
+					return e
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil || replayed {
+		return out, err
+	}
+	if in.Action == "vote" && in.Vote != 0 {
+		if err := s.requirePublicDisclosure(ctx, id); err != nil {
+			return out, err
+		}
+		if _, err := s.authorize(ctx, p, "vote", preEntry.SchoolID); err != nil {
+			return out, err
+		}
+	}
+	var repubGrant Grant
+	var repubState string
+	var repubTeacherReply bool
+	if in.Action == "save_withdrawn" || in.Action == "republish" {
+		course, term := preEntry.DisclosureCourse, preEntry.DisclosureTerm
+		if preEntry.Input.Kind == "course" {
+			course = preEntry.Input.TargetID
+			term = preEntry.Input.TermID
+		}
+		disclosure, err := s.validateDisclosures(ctx, p, preEntry.SchoolID, course, term, *in.Input)
+		if err != nil {
+			return out, err
+		}
+		if in.Action == "republish" {
+			if preEntry.Input.Kind == "reply" {
+				repubGrant, err = s.replyGrant(ctx, p, preEntry, disclosure)
+				if preEntry.TeacherReply && !disclosure.ownCourse {
+					return out, ErrForbidden
+				}
+				if err != nil {
+					return out, err
+				}
+				repubTeacherReply = disclosure.ownCourse
+			} else {
+				target, _, _, grant, err := s.prepare(ctx, p, *in.Input)
+				if err == nil && target.TeacherRequired && in.Input.TeacherID == "" {
+					return out, ErrInput
+				}
+				if err != nil {
+					return out, err
+				}
+				repubGrant = grant
+			}
+			cand := preEntry
+			nextIn := *in.Input
+			nextIn.Signed = preIdentity.Signed
+			cand.Input = nextIn
+			cand.Revision = preEntry.Revision + 1
+			repubState, err = s.check(ctx, cand)
+			if err != nil {
+				return out, err
+			}
+		}
+	}
+	err = s.Repo.Transaction(ctx, func(t Transaction) error {
 		// Serialize replay, including a retry after permanent deletion.
 		if e := t.Lock(rk); e != nil {
 			return e
+		}
+		if e := t.Lock("closure-owner:" + p.Subject); e != nil {
+			return e
+		}
+		closed, e := t.ClosedOwners([]string{p.Subject})
+		if e != nil {
+			return e
+		}
+		if closed[p.Subject] {
+			return ErrForbidden
 		}
 		cached, ok, e := replay(t, rk, h, s.now())
 		if e != nil {
@@ -526,8 +687,8 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			// Removal only affects this caller's row and must survive qualification
 			// expiry, hidden content and unavailable external facts.
 			if in.Vote != 0 {
-				if _, e = s.authorize(ctx, p, "vote", entry.SchoolID); e != nil {
-					return e
+				if entry.SchoolID != preEntry.SchoolID {
+					return ErrConflict
 				}
 				if _, e = s.accessible(t, id); e != nil {
 					return e
@@ -559,14 +720,6 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			if next.Kind != entry.Input.Kind || next.TargetID != entry.Input.TargetID || next.TermID != entry.Input.TermID || next.TeacherID != entry.Input.TeacherID {
 				return ErrInput
 			}
-			course, term := entry.DisclosureCourse, entry.DisclosureTerm
-			if entry.Input.Kind == "course" {
-				course = entry.Input.TargetID
-				term = entry.Input.TermID
-			}
-			if _, err := s.validateDisclosures(ctx, p, entry.SchoolID, course, term, next); err != nil {
-				return err
-			}
 			next.Signed = entry.Input.Signed
 			entry.ChangeOrigin = "author"
 			entry.ChangeReason = ""
@@ -586,7 +739,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			if entry.State != "withdrawn" {
 				return ErrConflict
 			}
-			return s.republish(ctx, t, p, entry, rk, h, *in.Input, &out)
+			return s.commitRepublish(t, p, entry, rk, h, *in.Input, repubGrant, repubState, repubTeacherReply, &out)
 		}
 		if _, e = s.accessible(t, id); e != nil {
 			return e
@@ -594,6 +747,8 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 		if entry.FirstPublishedAt == nil || !s.now().Before(entry.FirstPublishedAt.Add(s.Config.EditWindow)) {
 			return ErrWindow
 		}
+		entry.ChangeOrigin = "author"
+		entry.ChangeReason = ""
 		entry.Revision++
 		entry.UpdatedAt = s.now()
 		if in.Action == "delete" {
@@ -617,7 +772,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	})
 	return out, err
 }
-func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e Entry, key, digest string, in Input, out *Result) error {
+func (s *Service) commitRepublish(t Transaction, p Principal, e Entry, key, digest string, in Input, g Grant, state string, teacherReply bool, out *Result) error {
 	// Editing text cannot change attribution, the term, or the discussion identity.
 	if in.Kind != e.Input.Kind || in.TargetID != e.Input.TargetID || in.TermID != e.Input.TermID || in.TeacherID != e.Input.TeacherID {
 		return ErrInput
@@ -627,35 +782,8 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 			return err
 		}
 	}
-	course, term := e.DisclosureCourse, e.DisclosureTerm
-	if e.Input.Kind == "course" {
-		course = e.Input.TargetID
-		term = e.Input.TermID
-	}
-	disclosure, checkErr := s.validateDisclosures(ctx, p, e.SchoolID, course, term, in)
-	if checkErr != nil {
-		return checkErr
-	}
-	var g Grant
 	if e.Input.Kind == "reply" {
-		var err error
-		g, err = s.replyGrant(ctx, p, e, disclosure)
-		if e.TeacherReply && !disclosure.ownCourse {
-			return ErrForbidden
-		}
-		e.TeacherReply = disclosure.ownCourse
-		if err != nil {
-			return err
-		}
-	} else {
-		target, _, _, grant, err := s.prepare(ctx, p, in)
-		if err == nil && target.TeacherRequired && in.TeacherID == "" {
-			return ErrInput
-		}
-		if err != nil {
-			return err
-		}
-		g = grant
+		e.TeacherReply = teacherReply
 	}
 	identity, err := t.Identity(e.RootID, p.Subject)
 	if err != nil {
@@ -668,10 +796,6 @@ func (s *Service) republish(ctx context.Context, t Transaction, p Principal, e E
 	e.Revision++
 	e.UpdatedAt = s.now()
 	e.RuleVersion = g.RuleVersion
-	state, err := s.check(ctx, e)
-	if err != nil {
-		return err
-	}
 	e.ReviewRequested = state == "review" || state == "pending"
 	if state == "review" {
 		state = "published"

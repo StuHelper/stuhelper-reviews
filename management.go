@@ -128,7 +128,7 @@ func (s *Service) SavePresentation(ctx context.Context, p Principal, key string,
 		if e = t.Event(Event{ID: rk, Type: "reviews.presentation.v1", Subject: in.SchoolID, SchoolID: in.SchoolID, Actor: p.Subject, Revision: saved.Revision, At: s.now()}); e != nil {
 			return e
 		}
-		return t.SaveReplay(rk, Replay{Digest: h, ObjectID: in.SchoolID, Until: s.now().Add(24 * time.Hour)})
+		return t.SaveReplay(rk, Replay{Owner: p.Subject, Digest: h, ObjectID: in.SchoolID, Until: s.now().Add(24 * time.Hour)})
 	})
 	if err != nil {
 		return PresentationView{}, err
@@ -159,7 +159,7 @@ func (s *Service) attribution(ctx context.Context, p Principal, id, teacher stri
 	if entry.Input.Kind != "course" || entry.State == "withdrawn" {
 		return out, nil, ErrConflict
 	}
-	evidence, err := s.Catalog.Evidence(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
+	evidence, err := s.catalogEvidence(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
 	if err != nil {
 		return out, nil, err
 	}
