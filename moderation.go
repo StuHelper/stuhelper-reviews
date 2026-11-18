@@ -39,6 +39,17 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 	}
 	var attribution AttributionPreview
 	var evidence []Evidence
+	var preEntry Entry
+	if err := s.Repo.Transaction(ctx, func(t Transaction) error {
+		var e error
+		preEntry, e = t.Entry(d.ObjectID)
+		return e
+	}); err != nil {
+		return out, err
+	}
+	if _, err := s.authorize(ctx, p, "moderate", preEntry.SchoolID); err != nil {
+		return out, err
+	}
 	if d.Action == "reassign" {
 		var err error
 		attribution, evidence, err = s.attribution(ctx, p, d.ObjectID, d.TeacherID)
@@ -56,8 +67,8 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 		if e != nil {
 			return e
 		}
-		if _, e = s.authorize(ctx, p, "moderate", entry.SchoolID); e != nil {
-			return e
+		if entry.SchoolID != preEntry.SchoolID {
+			return ErrConflict
 		}
 		if e = t.Lock(entry.RootID); e != nil {
 			return e
@@ -65,6 +76,9 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 		entry, e = t.Entry(d.ObjectID)
 		if e != nil {
 			return e
+		}
+		if entry.SchoolID != preEntry.SchoolID {
+			return ErrConflict
 		}
 		cached, ok, e := replay(t, rk, h, s.now())
 		if e != nil {
@@ -75,7 +89,7 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			return nil
 		}
 		if entry.Revision != d.Revision {
-			return ErrConflict
+			return revisionConflictErr(entry.Revision)
 		}
 		if entry.ExpiresAt != nil && !s.now().Before(*entry.ExpiresAt) {
 			return ErrNotFound
@@ -88,6 +102,9 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			entry.Featured = d.Action == "feature"
 		case "reassign":
 			if entry.Input.Kind != "course" || entry.State == "withdrawn" {
+				return ErrConflict
+			}
+			if attribution.Revision != entry.Revision {
 				return ErrConflict
 			}
 			entry.Input.TeacherID = d.TeacherID
@@ -120,6 +137,7 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			} else {
 				entry.ModerationReasonCode = "policy_violation"
 			}
+			entry.ExpiresAt = nil
 		case "restore":
 			if entry.State != "hidden" && entry.State != "deleted" {
 				return ErrConflict
@@ -143,6 +161,7 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			} else {
 				entry.ModerationReasonCode = "policy_violation"
 			}
+			entry.ExpiresAt = nil
 		case "edit":
 			if d.Body == nil || !textOK(*d.Body, 16000) || strings.TrimSpace(*d.Body) == "" {
 				return ErrInput
@@ -198,7 +217,7 @@ func (s *Service) BatchApprove(ctx context.Context, p Principal, key string, req
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validKey(key) || !validID(req.SchoolID) || strings.TrimSpace(req.Reason) == "" || !textOK(req.Reason, 2000) || len(req.Items) < 1 || len(req.Items) > 20 {
+	if !ValidIdempotencyKey(key) || !validID(req.SchoolID) || strings.TrimSpace(req.Reason) == "" || !textOK(req.Reason, 2000) || len(req.Items) < 1 || len(req.Items) > 20 {
 		return out, ErrInput
 	}
 	seen := make(map[string]bool, len(req.Items))
@@ -208,9 +227,7 @@ func (s *Service) BatchApprove(ctx context.Context, p Principal, key string, req
 		}
 		seen[item.ObjectID] = true
 	}
-	authCtx, cancelAuth := context.WithTimeout(ctx, 3*time.Second)
-	_, err := s.authorize(authCtx, p, "moderate", req.SchoolID)
-	cancelAuth()
+	_, err := s.authorize(ctx, p, "moderate", req.SchoolID)
 	if err != nil {
 		return out, err
 	}
@@ -248,6 +265,7 @@ func (s *Service) BatchApprove(ctx context.Context, p Principal, key string, req
 				return err
 			}
 		}
+		approved := make([]Entry, 0, len(req.Items))
 		results := make([]AdminBatchItemResult, 0, len(req.Items))
 		for _, item := range req.Items {
 			entry, err := t.Entry(item.ObjectID)
@@ -262,6 +280,7 @@ func (s *Service) BatchApprove(ctx context.Context, p Principal, key string, req
 				results = append(results, AdminBatchItemResult{ObjectID: item.ObjectID, Status: "forbidden"})
 				continue
 			}
+			now := s.now()
 			if entry.State == "withdrawn" || (entry.ExpiresAt != nil && !now.Before(*entry.ExpiresAt)) {
 				results = append(results, AdminBatchItemResult{ObjectID: item.ObjectID, Status: "not_found"})
 				continue
@@ -296,17 +315,24 @@ func (s *Service) BatchApprove(ctx context.Context, p Principal, key string, req
 			entry.ChangeReason = req.Reason
 			entry.Revision++
 			entry.UpdatedAt = now
-			if err := t.SaveEntry(entry); err != nil {
-				return err
-			}
+			approved = append(approved, entry)
 			eventID := hash([]string{rk, entry.ID})
 			if err := t.Event(Event{ID: eventID, Type: "reviews.moderated.v1", Reason: req.Reason, Subject: "entry/" + entry.ID, SchoolID: entry.SchoolID, Actor: p.Subject, Revision: entry.Revision, At: now}); err != nil {
 				return err
 			}
 			results = append(results, AdminBatchItemResult{ObjectID: item.ObjectID, Status: "approved", State: entry.State, Revision: entry.Revision})
 		}
+		if len(approved) > 0 {
+			writer, ok := t.(interface{ SaveEntryBatch([]Entry) error })
+			if !ok {
+				return ErrUnavailable
+			}
+			if err := writer.SaveEntryBatch(approved); err != nil {
+				return err
+			}
+		}
 		out = AdminBatchApproveResponse{Items: results}
-		return t.SaveReplay(rk, Replay{Digest: h, Batch: &out, Until: now.Add(24 * time.Hour), ObjectID: req.SchoolID})
+		return t.SaveReplay(rk, Replay{Owner: p.Subject, Digest: h, Batch: &out, Until: s.now().Add(24 * time.Hour), ObjectID: req.SchoolID})
 	})
 	return out, err
 }

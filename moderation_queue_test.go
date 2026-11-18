@@ -126,7 +126,7 @@ func TestAuthorModerationReasonCodesAdminFiltersAndBatchApprove(t *testing.T) {
 	getAdmin := func(query string) r.AdminPage {
 		t.Helper()
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/reviews/admin/entries?school_id=school&"+query, nil))
+		h.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/reviews/admin/entries?school_id=school&include_moderation_details=true&"+query, nil))
 		if rec.Code != 200 {
 			t.Fatalf("admin query %s failed: %d %s", query, rec.Code, rec.Body.String())
 		}
@@ -173,6 +173,7 @@ func TestAuthorModerationReasonCodesAdminFiltersAndBatchApprove(t *testing.T) {
 	currentCaller = student
 	unauthRec := httptest.NewRecorder()
 	unauthReq := httptest.NewRequest("POST", "/api/v1/reviews/admin/entries/batch-approve", strings.NewReader(`{"school_id":"school","reason":"batch","items":[{"object_id":"x","revision":1}]}`))
+	unauthReq.Header.Set("Content-Type", "application/json")
 	unauthReq.Header.Set("Idempotency-Key", "unauth-batch")
 	h.ServeHTTP(unauthRec, unauthReq)
 	if unauthRec.Code != 403 {
@@ -186,6 +187,7 @@ func TestAuthorModerationReasonCodesAdminFiltersAndBatchApprove(t *testing.T) {
 	}
 	overLimitRec := httptest.NewRecorder()
 	overLimitReq := httptest.NewRequest("POST", "/api/v1/reviews/admin/entries/batch-approve", strings.NewReader(`{"school_id":"school","reason":"batch","items":[`+strings.Join(tooMany, ",")+`]}`))
+	overLimitReq.Header.Set("Content-Type", "application/json")
 	overLimitReq.Header.Set("Idempotency-Key", "over-limit")
 	h.ServeHTTP(overLimitRec, overLimitReq)
 	if overLimitRec.Code != 400 {
@@ -202,6 +204,7 @@ func TestAuthorModerationReasonCodesAdminFiltersAndBatchApprove(t *testing.T) {
 
 	batchRec := httptest.NewRecorder()
 	batchReq := httptest.NewRequest("POST", "/api/v1/reviews/admin/entries/batch-approve", strings.NewReader(batchPayload))
+	batchReq.Header.Set("Content-Type", "application/json")
 	batchReq.Header.Set("Idempotency-Key", "batch-1")
 	h.ServeHTTP(batchRec, batchReq)
 	if batchRec.Code != 200 {
@@ -220,6 +223,7 @@ func TestAuthorModerationReasonCodesAdminFiltersAndBatchApprove(t *testing.T) {
 	// Idempotent replay returns exact same response; modified payload conflicts.
 	replayRec := httptest.NewRecorder()
 	replayReq := httptest.NewRequest("POST", "/api/v1/reviews/admin/entries/batch-approve", strings.NewReader(batchPayload))
+	replayReq.Header.Set("Content-Type", "application/json")
 	replayReq.Header.Set("Idempotency-Key", "batch-1")
 	h.ServeHTTP(replayRec, replayReq)
 	if replayRec.Code != 200 || replayRec.Body.String() != batchRec.Body.String() {
@@ -227,6 +231,7 @@ func TestAuthorModerationReasonCodesAdminFiltersAndBatchApprove(t *testing.T) {
 	}
 	conflictRec := httptest.NewRecorder()
 	conflictReq := httptest.NewRequest("POST", "/api/v1/reviews/admin/entries/batch-approve", strings.NewReader(`{"school_id":"school","reason":"different","items":[{"object_id":"missing-entry","revision":1}]}`))
+	conflictReq.Header.Set("Content-Type", "application/json")
 	conflictReq.Header.Set("Idempotency-Key", "batch-1")
 	h.ServeHTTP(conflictRec, conflictReq)
 	if conflictRec.Code != 409 {
@@ -245,5 +250,177 @@ func TestAuthorModerationReasonCodesAdminFiltersAndBatchApprove(t *testing.T) {
 	ownNowPublic, err := f.service.GetOwn(ctx, student, pending.ID)
 	if err != nil || ownNowPublic.ModerationReasonCode != "" {
 		t.Fatalf("approved entry kept moderation_reason_code: %+v %v", ownNowPublic, err)
+	}
+}
+
+type clockOnDiscussionLock struct {
+	r.Repository
+	root    string
+	advance func()
+}
+
+func (repo clockOnDiscussionLock) Transaction(ctx context.Context, fn func(r.Transaction) error) error {
+	return repo.Repository.Transaction(ctx, func(tx r.Transaction) error {
+		return fn(clockOnLockTx{tx, repo.root, repo.advance})
+	})
+}
+
+type clockOnLockTx struct {
+	r.Transaction
+	root    string
+	advance func()
+}
+
+func (tx clockOnLockTx) Lock(key string) error {
+	if err := tx.Transaction.Lock(key); err != nil {
+		return err
+	}
+	if key == tx.root {
+		tx.advance()
+	}
+	return nil
+}
+
+func TestBatchApproveChecksExpiryAfterDiscussionLock(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	root := create(t, f, "batch-expiry", input("course", "autumn", 4))
+	f.moderation.outcome = "pending"
+	reply, err := f.service.Reply(ctx, r.Principal{Subject: "reader"}, root.ID, "pending-reply", r.Input{Kind: "reply", TargetID: "course", Body: "reply"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withdrawn, err := f.service.Action(ctx, student, root.ID, "withdraw", r.Action{Action: "withdraw", Revision: root.Revision})
+	if err != nil || withdrawn.ExpiresAt == nil {
+		t.Fatalf("withdraw: %+v %v", withdrawn, err)
+	}
+	in := input("course", "autumn", 4)
+	pending, err := f.service.Action(ctx, student, root.ID, "republish", r.Action{Action: "republish", Revision: withdrawn.Revision, Input: &in})
+	if err != nil || pending.State != "pending" {
+		t.Fatalf("republish: %+v %v", pending, err)
+	}
+	f.now = withdrawn.ExpiresAt.Add(-time.Second)
+	repo := f.service.Repo
+	f.service.Repo = clockOnDiscussionLock{repo, root.ID, func() { f.now = *withdrawn.ExpiresAt }}
+	req := r.AdminBatchApproveRequest{SchoolID: "school", Reason: "eligible", Items: []r.AdminBatchItem{{ObjectID: root.ID, Revision: pending.Revision}, {ObjectID: reply.ID, Revision: reply.Revision}}}
+	result, err := f.service.BatchApprove(ctx, r.Principal{Subject: "admin"}, "expires-on-lock", req)
+	if err != nil || len(result.Items) != 2 {
+		t.Fatalf("batch: %+v %v", result, err)
+	}
+	for _, item := range result.Items {
+		if item.Status != "not_found" {
+			t.Fatalf("expired result: %+v", item)
+		}
+	}
+	err = repo.Transaction(ctx, func(tx r.Transaction) error {
+		for _, item := range req.Items {
+			entry, err := tx.Entry(item.ObjectID)
+			if err != nil {
+				return err
+			}
+			if entry.State != "pending" || entry.Revision != item.Revision {
+				t.Fatalf("changed expired entry: %s rev %d", entry.State, entry.Revision)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConcurrentBatchApprovalsShareOwnersAndActivity(t *testing.T) {
+	f := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	f.moderation.outcome = "pending"
+	batches := make([]r.AdminBatchApproveRequest, 2)
+	for batch := range batches {
+		req := r.AdminBatchApproveRequest{SchoolID: "school", Reason: "approved"}
+		for i := range 4 {
+			n := i
+			if batch == 1 {
+				n = 3 - i
+			}
+			owner := r.Principal{Subject: fmt.Sprintf("author-%d", n%2)}
+			entry, err := f.service.Create(ctx, owner, fmt.Sprintf("batch-%d-item-%d", batch, i), input(fmt.Sprintf("course-%d", n), "autumn", 4))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Items = append(req.Items, r.AdminBatchItem{ObjectID: entry.ID, Revision: entry.Revision})
+		}
+		batches[batch] = req
+	}
+	start := make(chan struct{})
+	finished := make(chan error, len(batches))
+	for i, req := range batches {
+		go func() {
+			<-start
+			out, err := f.service.BatchApprove(ctx, r.Principal{Subject: "admin"}, fmt.Sprintf("approve-%d", i), req)
+			if err == nil && len(out.Items) != len(req.Items) {
+				err = fmt.Errorf("batch %d returned %d items", i, len(out.Items))
+			}
+			for _, item := range out.Items {
+				if item.Status != "approved" {
+					err = fmt.Errorf("batch %d: %+v", i, item)
+				}
+			}
+			finished <- err
+		}()
+	}
+	close(start)
+	for range batches {
+		if err := <-finished; err != nil {
+			t.Error(err)
+		}
+	}
+	for _, req := range batches {
+		for _, item := range req.Items {
+			view, err := f.service.Get(ctx, student, item.ObjectID)
+			if err != nil || view.State != "published" || view.Revision != item.Revision+1 {
+				t.Fatalf("entry after batch: %+v %v", view, err)
+			}
+		}
+	}
+}
+
+func TestHTTPModerationDetailsRequireExplicitSelection(t *testing.T) {
+	f := fixture(t)
+	f.moderation.outcome = "pending"
+	entry := create(t, f, "explicit-details", input("course", "autumn", 4))
+	actor := student
+	h := httpapi.Handler{Service: f.service, Authenticate: func(*http.Request) (r.Principal, error) { return actor, nil }}.Routes()
+	for _, tc := range []struct {
+		path  string
+		admin bool
+	}{
+		{"/api/v1/reviews/me/entries/" + entry.ID, false},
+		{"/api/v1/reviews/me/entries?limit=5", false},
+		{"/api/v1/reviews/admin/entries/" + entry.ID, true},
+		{"/api/v1/reviews/admin/entries?school_id=school", true},
+		{"/api/v1/reviews/admin/entries/" + entry.ID + "/history", true},
+	} {
+		if tc.admin {
+			actor = r.Principal{Subject: "admin"}
+		}
+		for _, selected := range []bool{false, true} {
+			req := httptest.NewRequest("GET", tc.path, nil)
+			if selected {
+				q := req.URL.Query()
+				q.Set("include_moderation_details", "true")
+				req.URL.RawQuery = q.Encode()
+			}
+			res := httptest.NewRecorder()
+			h.ServeHTTP(res, req)
+			if res.Code != 200 {
+				t.Fatalf("%s: %d %s", tc.path, res.Code, res.Body.String())
+			}
+			if has := strings.Contains(res.Body.String(), `"moderation_reason_code":"pending_review"`); has != selected {
+				t.Fatalf("%s selection %v returned reason %v", tc.path, selected, has)
+			}
+			if tc.admin && strings.Contains(res.Body.String(), `"updated_at"`) != selected {
+				t.Fatalf("%s selection %v unexpected update time", tc.path, selected)
+			}
+		}
 	}
 }

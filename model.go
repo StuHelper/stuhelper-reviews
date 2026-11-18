@@ -153,6 +153,7 @@ type View struct {
 	TargetID             string     `json:"target_id"`
 	TermID               string     `json:"term_id,omitempty"`
 	TeacherID            string     `json:"teacher_id,omitempty"`
+	TeacherIDs           []string   `json:"teacher_ids,omitempty"`
 	Title                string     `json:"title"`
 	Body                 string     `json:"body"`
 	Ratings              [5]int     `json:"ratings"`
@@ -196,14 +197,25 @@ type DraftView struct {
 	RootID         string     `json:"root_id,omitempty"`
 	ParentID       string     `json:"parent_id,omitempty"`
 }
+
+// ViewOptions controls detail visibility and optional fields.
+type ViewOptions struct {
+	// Own restricts the result to an entry belonging to the requester.
+	Own               bool
+	IncludeTeacherIDs bool
+}
+
 type Filter struct {
+	IncludeTeacherIDs                                    bool
 	IncludeReplyPreview                                  bool
+	Featured, HasTeacherReply                            *bool
+	RatingGroup                                          string
 	SchoolID                                             string
 	EquivalentTargets, EquivalentTeachers                []string
 	Kind, TargetID, TermID, RootID, Owner, Viewer, After string
 	TeacherID, Sort, CursorID                            string
 	CursorTime                                           *time.Time
-	CursorVotes                                          *int
+	CursorVotes, CursorFeatured, CursorScore             *int
 	Now                                                  time.Time
 	Limit                                                int
 }
@@ -282,11 +294,13 @@ type Aggregate struct {
 	Counts   [5]int
 }
 type Replay struct {
-	Digest   string
-	Result   Result
-	Batch    *AdminBatchApproveResponse `json:"batch,omitempty"`
-	Until    time.Time
-	ObjectID string
+	InheritedRatingTexts map[string][][]string `json:",omitempty"`
+	Owner                string
+	Digest               string
+	Result               Result
+	Until                time.Time
+	ObjectID             string
+	Batch                *AdminBatchApproveResponse `json:"batch,omitempty"`
 }
 type Event struct {
 	Reason                             string `json:"-"`
@@ -318,7 +332,9 @@ type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error
 }
 type Transaction interface {
+	DiscoveryVotes(subject, school, after string, limit int, now time.Time) ([]DiscoveryVote, error)
 	DiscoveryCurrent(string, []string, time.Time) ([]DiscoveryDocument, error)
+	ActivityDisclosureCandidates([]string) ([]Entry, error)
 	ClosedOwners([]string) (map[string]bool, error)
 	CloseOwner(string, string) error
 	OwnedReferences(string, []string, time.Time) ([]string, error)
@@ -342,10 +358,10 @@ type Transaction interface {
 	SaveDraft(Draft) error
 	DeleteDraft(string) error
 	Drafts(subject, after string, limit int) ([]Draft, error)
-	Withdrawals(subject, after string, limit int) ([]Entry, error)
+	Withdrawals(subject, after string, limit int, now time.Time) ([]Entry, error)
 	Replay(string) (Replay, error)
 	SaveReplay(string, Replay) error
-	Aggregates(kind string, targets []string, school string, from, until *time.Time) ([]Aggregate, error)
+	Aggregates(kind string, targets []string, school string, from, until *time.Time, now time.Time) ([]Aggregate, error)
 	Event(Event) error
 	AuditRead(Event) error
 	AdminEntries(school, kind, state, after string, limit int, now time.Time) ([]Entry, error)

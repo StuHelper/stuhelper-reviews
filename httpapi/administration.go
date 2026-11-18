@@ -23,7 +23,15 @@ func (h Handler) adminGet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	includeDetails, e := flagRequested(r, "include_moderation_details")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	v, e := h.Service.AdminGet(r.Context(), p, r.PathValue("id"))
+	if !includeDetails {
+		omitModerationDetails(&v)
+	}
 	respond(w, v, e)
 }
 func (h Handler) adminList(w http.ResponseWriter, r *http.Request) {
@@ -47,6 +55,11 @@ func (h Handler) adminList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
+	includeDetails, e := flagRequested(r, "include_moderation_details")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	v, e := h.Service.AdminListFiltered(r.Context(), p, reviews.AdminFilter{
 		SchoolID:        q.Get("school_id"),
 		Kind:            q.Get("kind"),
@@ -59,6 +72,11 @@ func (h Handler) adminList(w http.ResponseWriter, r *http.Request) {
 		After:           q.Get("after"),
 		Limit:           n,
 	})
+	if !includeDetails {
+		for i := range v.Items {
+			omitModerationDetails(&v.Items[i])
+		}
+	}
 	respond(w, v, e)
 }
 func (h Handler) adminBatchApprove(w http.ResponseWriter, r *http.Request) {
@@ -73,4 +91,12 @@ func (h Handler) adminBatchApprove(w http.ResponseWriter, r *http.Request) {
 	}
 	v, e := h.Service.BatchApprove(r.Context(), p, r.Header.Get("Idempotency-Key"), in)
 	respond(w, v, e)
+}
+
+// Older clients validate AdminEntry against a closed response schema.
+func omitModerationDetails(v *reviews.AdminEntry) {
+	v.ModerationReasonCode = ""
+	v.ReviewRequested = false
+	v.ParentID = ""
+	v.UpdatedAt = nil
 }

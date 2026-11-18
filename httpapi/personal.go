@@ -6,7 +6,7 @@ import (
 )
 
 func (h Handler) compose(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.principal(w, r, false)
+	p, ok := h.principal(w, r, true)
 	if !ok {
 		return
 	}
@@ -19,7 +19,20 @@ func (h Handler) ownEntry(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v, e := h.Service.GetOwn(r.Context(), p, r.PathValue("id"))
+	teachers, e := flagRequested(r, "include_teacher_ids")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	includeDetails, e := flagRequested(r, "include_moderation_details")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{Own: true, IncludeTeacherIDs: teachers})
+	if !includeDetails {
+		v.ModerationReasonCode = ""
+	}
 	respond(w, v, e)
 }
 func (h Handler) getDraft(w http.ResponseWriter, r *http.Request) {
