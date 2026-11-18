@@ -42,12 +42,7 @@ func (h Handler) managementRoutes(m *http.ServeMux) {
 		if !ok {
 			return
 		}
-		school := req.URL.Query().Get("school_id")
-		if _, e := h.Service.Access.Authorize(req.Context(), p, "configure", school); e != nil {
-			respond(w, nil, e)
-			return
-		}
-		v, e := h.Service.Presentation(req.Context(), school)
+		v, e := h.Service.AdminPresentation(req.Context(), p, req.URL.Query().Get("school_id"))
 		respond(w, v, e)
 	})
 	m.HandleFunc("PUT /api/v1/reviews/admin/presentation", func(w http.ResponseWriter, req *http.Request) {
@@ -60,6 +55,10 @@ func (h Handler) managementRoutes(m *http.ServeMux) {
 			respond(w, nil, e)
 			return
 		}
+		if schools, present := req.URL.Query()["school_id"]; present && (len(schools) != 1 || schools[0] != in.SchoolID) {
+			respond(w, nil, r.ErrInput)
+			return
+		}
 		v, e := h.Service.SavePresentation(req.Context(), p, req.Header.Get("Idempotency-Key"), in)
 		respond(w, v, e)
 	})
@@ -68,14 +67,22 @@ func (h Handler) managementRoutes(m *http.ServeMux) {
 		if !ok {
 			return
 		}
+		if !r.ValidIdempotencyKey(req.Header.Get("Idempotency-Key")) {
+			respond(w, nil, r.ErrInput)
+			return
+		}
 		var in struct {
-			TeacherID string `json:"teacher_id"`
+			TeacherID *string `json:"teacher_id"`
 		}
 		if e := decode(w, req, &in); e != nil {
 			respond(w, nil, e)
 			return
 		}
-		v, e := h.Service.PreviewAttribution(req.Context(), p, req.PathValue("id"), in.TeacherID)
+		if in.TeacherID == nil {
+			respond(w, nil, r.ErrInput)
+			return
+		}
+		v, e := h.Service.PreviewAttribution(req.Context(), p, req.PathValue("id"), *in.TeacherID)
 		respond(w, v, e)
 	})
 }

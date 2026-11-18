@@ -68,3 +68,34 @@ func TestModerationReadIsScopedAuditedAndUsesDiscussionHandles(t *testing.T) {
 		t.Fatal("private withdrawn draft exposed", err)
 	}
 }
+
+func TestAdministrativeReadsAuditEverySuccessfulCall(t *testing.T) {
+	f := fixture(t)
+	repo, db := database(t)
+	f.service.Repo = repo
+	ctx := context.Background()
+	entry := create(t, f, "root", input("course", "autumn", 4))
+	admin := r.Principal{Subject: "admin"}
+	count := func(subject string) int {
+		var n int
+		err := db.QueryRow(`SELECT count(*) FROM reviews.audit WHERE data->>'Type'='reviews.inspected.v1' AND data->>'Subject'=$1`, subject+"/"+entry.ID).Scan(&n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if _, err := f.service.History(ctx, admin, entry.ID, 0, 10); err != nil {
+		t.Fatal(err)
+	}
+	if count("history") != 1 || count("entry") != 0 {
+		t.Error("history must have one purpose-specific audit")
+	}
+	for range 2 {
+		if _, err := f.service.AdminGet(ctx, admin, entry.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := count("entry"); n != 2 {
+		t.Fatalf("two same-clock reads produced %d audits", n)
+	}
+}

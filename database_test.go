@@ -57,9 +57,8 @@ func database(t *testing.T) (*postgres.Repository, *sql.DB) {
 		GRANT USAGE ON SCHEMA reviews TO ` + role + `;
 		GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA reviews TO ` + role + `;
 		GRANT SELECT,INSERT,UPDATE,DELETE ON reviews.entries,reviews.votes,reviews.drafts,reviews.replays,reviews.activity_contributions TO ` + role + `;
-		GRANT SELECT,INSERT,DELETE ON reviews.activity_history TO ` + role + `;
-		GRANT SELECT,INSERT,UPDATE ON reviews.identities,reviews.presentations,reviews.activity_buckets,reviews.outbox,reviews.audit TO ` + role + `;
-		GRANT SELECT,INSERT ON reviews.history,reviews.presentation_history,reviews.discovery_history,reviews.closed_owners TO ` + role + `;
+		GRANT SELECT,INSERT,UPDATE ON reviews.identities,reviews.presentations,reviews.activity_buckets,reviews.outbox TO ` + role + `;
+		GRANT SELECT,INSERT ON reviews.audit,reviews.history,reviews.presentation_history,reviews.discovery_history,reviews.activity_history,reviews.closed_owners TO ` + role + `;
 		GRANT SELECT ON reviews.audit_retention,reviews.discovery_retention,reviews.activity_retention TO ` + role + `;
 		CREATE SCHEMA unrelated;
 		CREATE TABLE unrelated.private_data(id integer);
@@ -79,7 +78,7 @@ func database(t *testing.T) (*postgres.Repository, *sql.DB) {
 	t.Cleanup(func() { db.Close() })
 	repo := &postgres.Repository{DB: db}
 	if err := repo.CheckRuntime(context.Background()); err != nil {
-		t.Fatalf("CheckRuntime rejected least-privilege runtime role: %v", err)
+		t.Fatalf("CheckRuntime rejected runtime role: %v", err)
 	}
 	for _, forbiddenSQL := range []string{
 		`SELECT * FROM unrelated.private_data`,
@@ -98,4 +97,33 @@ func database(t *testing.T) (*postgres.Repository, *sql.DB) {
 		}
 	}
 	return repo, migration
+}
+
+// Confirmed outbox events are removed by a dedicated maintenance role.
+func outboxPruner(t *testing.T, migration *sql.DB) *postgres.Repository {
+	t.Helper()
+	cfg, err := pgx.ParseConfig(os.Getenv("STUHELPER_REVIEWS_TEST_DSN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = migration.QueryRow("SELECT current_database()").Scan(&cfg.Database); err != nil {
+		t.Fatal(err)
+	}
+	cfg.User = cfg.Database + "_outbox_pruner"
+	cfg.Password = ""
+	role := pgx.Identifier{cfg.User}.Sanitize()
+	if _, err = migration.Exec("CREATE ROLE " + role + " LOGIN"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := migration.Exec("DROP OWNED BY " + role + "; DROP ROLE " + role); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err = migration.Exec("GRANT USAGE ON SCHEMA reviews TO " + role + "; GRANT SELECT,DELETE ON reviews.outbox TO " + role); err != nil {
+		t.Fatal(err)
+	}
+	db := stdlib.OpenDB(*cfg)
+	t.Cleanup(func() { db.Close() })
+	return &postgres.Repository{DB: db}
 }

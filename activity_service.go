@@ -19,7 +19,7 @@ func (s *Service) CurrentActivity(ctx context.Context, p Principal, id string) (
 	if e != nil {
 		return empty, false, e
 	}
-	object, e := s.Catalog.Target(ctx, target.Kind, target.ID)
+	object, e := s.catalogTarget(ctx, target.Kind, target.ID)
 	if errors.Is(e, ErrNotFound) || errors.Is(e, ErrForbidden) {
 		return empty, false, nil
 	}
@@ -44,46 +44,50 @@ func (s *Service) CurrentActivity(ctx context.Context, p Principal, id string) (
 	if !ok {
 		return empty, false, ErrUnavailable
 	}
-	ids, e := disclosures.ActivityDisclosureEntries(ctx, id, 100)
-	if e != nil {
-		return empty, false, e
-	}
-
-	for _, entryID := range ids {
-		var entry Entry
-		closed := false
-		e = s.Repo.Transaction(ctx, func(t Transaction) error {
-			var e error
-			entry, e = t.Entry(entryID)
-			if e != nil {
-				return e
+	for attempt := 0; attempt < 2; attempt++ {
+		ids, err := disclosures.ActivityDisclosureEntries(ctx, id, 100)
+		if err != nil {
+			return empty, false, err
+		}
+		var candidates []Entry
+		if len(ids) > 0 {
+			err = s.Repo.Transaction(ctx, func(t Transaction) error {
+				var err error
+				candidates, err = t.ActivityDisclosureCandidates(ids)
+				return err
+			})
+			if err != nil {
+				return empty, false, err
 			}
-			owners, e := t.ClosedOwners([]string{entry.Owner})
-			closed = owners[entry.Owner]
-			return e
-		})
-		if errors.Is(e, ErrNotFound) {
+		}
+		reader := s.withReadCache()
+		visible := true
+		for _, entry := range candidates {
+			_, visible, err = reader.disclosedFacts(ctx, entry)
+			if err != nil {
+				return empty, false, err
+			}
+			if !visible {
+				break
+			}
+		}
+		latest, err := repo.ReadActivity(ctx, id)
+		if errors.Is(err, ErrNotFound) {
 			return empty, false, nil
 		}
-		if e != nil {
-			return empty, false, e
+		if err != nil {
+			return empty, false, err
 		}
-		if !closed {
-			_, visible, e := s.disclosedFacts(ctx, entry)
-			if e != nil {
-				return empty, false, e
-			}
+		if latest.Revision == d.Revision {
 			if !visible {
 				return empty, false, nil
 			}
+			return latest, true, nil
 		}
+		// Recheck the candidates belonging to the newer counts.
+		d = latest
 	}
-	// External disclosure checks may overlap a withdrawal; return its latest revision.
-	d, e = repo.ReadActivity(ctx, id)
-	if errors.Is(e, ErrNotFound) {
-		return empty, false, nil
-	}
-	return d, e == nil, e
+	return empty, false, ErrUnavailable
 }
 
 func (s *Service) activityTeacherIDs(ctx context.Context, school string, ids []string) ([]string, error) {
@@ -92,7 +96,7 @@ func (s *Service) activityTeacherIDs(ctx context.Context, school string, ids []s
 	}
 	out := []string{}
 	for _, id := range ids {
-		target, e := s.Catalog.Target(ctx, "teacher", id)
+		target, e := s.catalogTarget(ctx, "teacher", id)
 		if e != nil {
 			return nil, e
 		}

@@ -500,8 +500,11 @@ export interface components {
         };
         Composer: {
             allowed: boolean;
-            /** @enum {string} */
-            state: "ready" | "choose_term" | "unauthenticated" | "forbidden" | "enrollment_required" | "unavailable" | "disclosure_required";
+            /**
+             * @description Requests without an authenticated session return HTTP 401.
+             * @enum {string}
+             */
+            state: "ready" | "choose_term" | "forbidden" | "enrollment_required" | "unavailable" | "disclosure_required";
             requirements: components["schemas"]["Requirement"][];
             teacher_ids: string[];
             /** @enum {string} */

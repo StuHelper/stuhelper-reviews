@@ -313,7 +313,7 @@ func TestOpenAPISchemasHTTPContractAndDecisionParity(t *testing.T) {
 	_ = callAndValidate(admin, "GET", "/api/v1/reviews/admin/entries/{id}", "/api/v1/reviews/admin/entries/"+created.ID, "", nil, http.StatusOK)
 	_ = callAndValidate(admin, "GET", "/api/v1/reviews/admin/entries/{id}/history", "/api/v1/reviews/admin/entries/"+created.ID+"/history", "", nil, http.StatusOK)
 	_ = callAndValidate(
-		admin, "POST", "/api/v1/reviews/admin/entries/{id}/attribution", "/api/v1/reviews/admin/entries/"+created.ID+"/attribution", "",
+		admin, "POST", "/api/v1/reviews/admin/entries/{id}/attribution", "/api/v1/reviews/admin/entries/"+created.ID+"/attribution", "http-attribution-preview",
 		map[string]any{"teacher_id": "teacher-b"}, http.StatusOK,
 	)
 	_ = callAndValidate(student, "GET", "/api/v1/reviews/presentation", "/api/v1/reviews/presentation?school_id=school", "", nil, http.StatusOK)

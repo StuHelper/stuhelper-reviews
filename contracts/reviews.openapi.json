@@ -3334,10 +3334,10 @@
           },
           "state": {
             "type": "string",
+            "description": "Requests without an authenticated session return HTTP 401.",
             "enum": [
               "ready",
               "choose_term",
-              "unauthenticated",
               "forbidden",
               "enrollment_required",
               "unavailable",
