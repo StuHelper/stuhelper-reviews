@@ -45,5 +45,13 @@ func (s *Service) Inspect(ctx context.Context, p Principal, id string) (Inspecti
 			return out, ErrNotFound
 		}
 	}
-	return Inspection{ID: entry.ID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, Owner: entry.Owner, Revision: entry.Revision, Visible: isVisible, ReviewRequested: entry.ReviewRequested && (entry.State == "published" || entry.State == "pending") && (entry.ExpiresAt == nil || s.now().Before(*entry.ExpiresAt))}, nil
+	var pendingAppends []string
+	if entry.State == "published" && (entry.ExpiresAt == nil || s.now().Before(*entry.ExpiresAt)) {
+		for _, item := range entry.Appends {
+			if item.ReviewRequested {
+				pendingAppends = append(pendingAppends, item.ID)
+			}
+		}
+	}
+	return Inspection{PendingAppendIDs: pendingAppends, ID: entry.ID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, Owner: entry.Owner, Revision: entry.Revision, Visible: isVisible, ReviewRequested: entry.ReviewRequested && (entry.State == "published" || entry.State == "pending") && (entry.ExpiresAt == nil || s.now().Before(*entry.ExpiresAt))}, nil
 }

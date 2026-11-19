@@ -130,12 +130,9 @@ func (s *Service) appendEntry(ctx context.Context, p Principal, id, key string, 
 		if outcome == "pending" {
 			appendState = "pending"
 		}
-		if outcome == "review" || outcome == "pending" {
-			entry.ReviewRequested = true
-		}
 		appendID := hash([]string{"append-item", entry.ID, rk})[:24]
 		entry.Appends = append(slices.Clone(entry.Appends), Append{
-			ID:        appendID,
+			ID: appendID, ReviewRequested: outcome == "review" || outcome == "pending",
 			Body:      in.Body,
 			State:     appendState,
 			CreatedAt: now.Round(time.Microsecond),

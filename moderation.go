@@ -31,7 +31,11 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 	if p.Subject == "" {
 		return out, ErrForbidden
 	}
-	if !validID(d.ID) || !validID(d.ObjectID) || d.Revision < 1 || !textOK(d.Reason, 2000) || strings.TrimSpace(d.Reason) == "" || !slices.Contains([]string{"publish", "hide", "restore", "delete", "edit", "identity", "feature", "unfeature", "reassign"}, d.Action) {
+	if !validID(d.ID) || !validID(d.ObjectID) || d.Revision < 1 || !textOK(d.Reason, 2000) || strings.TrimSpace(d.Reason) == "" || !slices.Contains([]string{"approve_append", "reject_append", "publish", "hide", "restore", "delete", "edit", "identity", "feature", "unfeature", "reassign"}, d.Action) {
+		return out, ErrInput
+	}
+	isAppend := d.Action == "approve_append" || d.Action == "reject_append"
+	if isAppend != (d.AppendID != "") || (isAppend && !validID(d.AppendID)) {
 		return out, ErrInput
 	}
 	if d.ReasonCode != "" && !validModerationReasonCode(d.ReasonCode) {
@@ -95,6 +99,21 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			return ErrNotFound
 		}
 		switch d.Action {
+		case "approve_append", "reject_append":
+			idx := slices.IndexFunc(entry.Appends, func(a Append) bool { return a.ID == d.AppendID })
+			if idx < 0 {
+				return ErrNotFound
+			}
+			item := &entry.Appends[idx]
+			if entry.State != "published" || (!item.ReviewRequested && ((item.State == "published" && d.Action == "approve_append") || (item.State == "rejected" && d.Action == "reject_append"))) {
+				return ErrConflict
+			}
+			item.ReviewRequested = false
+			if d.Action == "approve_append" {
+				item.State = "published"
+			} else {
+				item.State = "rejected"
+			}
 		case "feature", "unfeature":
 			if entry.State != "published" {
 				return ErrConflict
@@ -115,17 +134,12 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			}
 
 		case "publish":
-			if entry.State != "pending" && !(entry.State == "published" && (entry.ReviewRequested || slices.ContainsFunc(entry.Appends, func(a Append) bool { return a.State == "pending" }))) {
+			if entry.State != "pending" && !(entry.State == "published" && entry.ReviewRequested) {
 				return ErrConflict
 			}
 			entry.State = "published"
 			entry.ExpiresAt = nil
 			entry.ReviewRequested = false
-			for i := range entry.Appends {
-				if entry.Appends[i].State == "pending" {
-					entry.Appends[i].State = "published"
-				}
-			}
 			entry.ModerationReasonCode = ""
 			if entry.FirstPublishedAt == nil {
 				now := s.now()

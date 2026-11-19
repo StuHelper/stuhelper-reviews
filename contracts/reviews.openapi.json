@@ -3620,12 +3620,17 @@
             "type": "string",
             "enum": [
               "published",
-              "pending"
+              "pending",
+              "rejected"
             ]
           },
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "review_requested": {
+            "type": "boolean",
+            "description": "本人或管理端可见。此条追评等待人工裁决。"
           }
         },
         "required": [

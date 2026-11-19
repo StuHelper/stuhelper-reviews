@@ -185,6 +185,7 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 			published := make([]Append, 0, len(entry.Appends))
 			for _, item := range entry.Appends {
 				if item.State == "published" {
+					item.ReviewRequested = false
 					published = append(published, item)
 				}
 			}

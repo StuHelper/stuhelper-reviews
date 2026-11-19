@@ -488,9 +488,11 @@ export interface components {
             id: string;
             body: string;
             /** @enum {string} */
-            state: "published" | "pending";
+            state: "published" | "pending" | "rejected";
             /** Format: date-time */
             created_at: string;
+            /** @description 本人或管理端可见。此条追评等待人工裁决。 */
+            review_requested?: boolean;
         };
         Action: {
             /** @enum {string} */

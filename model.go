@@ -101,10 +101,11 @@ type Input struct {
 
 // Entry is a private persistence model. Public responses always use View.
 type Append struct {
-	ID        string    `json:"id"`
-	Body      string    `json:"body"`
-	State     string    `json:"state"`
-	CreatedAt time.Time `json:"created_at"`
+	ReviewRequested bool      `json:"review_requested,omitempty"`
+	ID              string    `json:"id"`
+	Body            string    `json:"body"`
+	State           string    `json:"state"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 type Entry struct {
 	Appends              []Append    `json:"appends,omitempty"`
@@ -330,12 +331,14 @@ type Event struct {
 	At                                 time.Time
 }
 type Inspection struct {
+	PendingAppendIDs          []string
 	ReviewRequested           bool
 	ID, Kind, SchoolID, Owner string
 	Revision                  int64
 	Visible                   bool
 }
 type Decision struct {
+	AppendID         string  `json:"append_id,omitempty"`
 	TeacherID        string  `json:"teacher_id,omitempty"`
 	EvidenceRevision string  `json:"evidence_revision,omitempty"`
 	ReasonCode       string  `json:"reason_code,omitempty"`

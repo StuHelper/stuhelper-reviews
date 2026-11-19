@@ -129,7 +129,7 @@ func TestPostWindowAppendPreservesAttributionSamplesAndModeration(t *testing.T) 
 	}
 	admin := r.Principal{Subject: "admin"}
 	inspect, err := f.service.Inspect(ctx, admin, root.ID)
-	if err != nil || !inspect.ReviewRequested {
+	if err != nil || inspect.ReviewRequested || len(inspect.PendingAppendIDs) != 1 {
 		t.Fatalf("expected ReviewRequested=true on pending append, got %+v %v", inspect, err)
 	}
 	adminView, err := f.service.AdminGet(ctx, admin, root.ID)
@@ -149,8 +149,8 @@ func TestPostWindowAppendPreservesAttributionSamplesAndModeration(t *testing.T) 
 		ID:       "approve-append",
 		ObjectID: root.ID,
 		Revision: secondRes.Revision,
-		Action:   "publish",
-		Reason:   "approved follow-up",
+		Action:   "approve_append", AppendID: adminView.Appends[1].ID,
+		Reason: "approved follow-up",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -225,5 +225,67 @@ func TestAppendRechecksAccountAfterModeration(t *testing.T) {
 	view, err := f.service.GetWithOptions(ctx, r.Principal{Subject: "reader"}, root.ID, r.ViewOptions{IncludeAppends: true})
 	if err != nil || view.Revision != root.Revision || len(view.Appends) != 0 {
 		t.Fatalf("entry changed after closure: %+v %v", view, err)
+	}
+}
+
+func TestAppendsAreModeratedIndependentlyUnderSchoolPolicy(t *testing.T) {
+	f, _ := uiReviewFixture(t)
+	f.service.Config.AppendCooldown = 0
+	f.service.Config.MaxAppends = 10
+	f.moderation.outcome = "review"
+	ctx := context.Background()
+	root := create(t, f, "root-review", input("course", "autumn", 4))
+	rev := root.Revision
+	for i, mode := range []string{"review", "pending", "published"} {
+		f.moderation.outcome = mode
+		f.now = f.now.Add(25 * time.Hour)
+		item, err := f.service.Action(ctx, student, root.ID, fmt.Sprintf("item-%d", i), r.Action{Action: "append", Revision: rev, Body: mode})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rev = item.Revision
+	}
+	admin := r.Principal{Subject: "admin"}
+	visibleBodies := func() []string {
+		t.Helper()
+		v, err := f.service.GetWithOptions(ctx, r.Principal{Subject: "reader"}, root.ID, r.ViewOptions{IncludeAppends: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var bodies []string
+		for _, a := range v.Appends {
+			bodies = append(bodies, a.Body)
+			if a.ReviewRequested {
+				t.Fatal("private queue flag in public view")
+			}
+		}
+		return bodies
+	}
+	if !slices.Equal(visibleBodies(), []string{"review", "published"}) {
+		t.Fatal("prepublication visibility")
+	}
+	decided, err := f.service.Apply(ctx, admin, r.Decision{ID: "parent", ObjectID: root.ID, Revision: rev, Action: "publish", Reason: "parent only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err := f.service.Inspect(ctx, admin, root.ID)
+	if err != nil || len(pending.PendingAppendIDs) != 2 || pending.ReviewRequested {
+		t.Fatalf("independent queue: %+v %v", pending, err)
+	}
+	reject := r.Decision{ID: "reject", ObjectID: root.ID, AppendID: pending.PendingAppendIDs[0], Revision: decided.Revision, Action: "reject_append", Reason: "reject one"}
+	decided, err = f.service.Apply(ctx, admin, reject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, err := f.service.Apply(ctx, admin, reject)
+	if err != nil || replay.Revision != decided.Revision {
+		t.Fatal("replayed decision", err)
+	}
+	if !slices.Equal(visibleBodies(), []string{"published"}) {
+		t.Fatal("rejected append is still public")
+	}
+	_, err = f.service.Apply(ctx, admin, r.Decision{ID: "accept", ObjectID: root.ID, AppendID: pending.PendingAppendIDs[1], Revision: decided.Revision, Action: "approve_append", Reason: "accept another"})
+	if err != nil || !slices.Equal(visibleBodies(), []string{"pending", "published"}) {
+		t.Fatal("individual approval", err)
 	}
 }

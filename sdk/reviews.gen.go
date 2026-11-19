@@ -75,6 +75,7 @@ func (e AdminBatchItemResultStatus) Valid() bool {
 const (
 	Pending   AppendState = "pending"
 	Published AppendState = "published"
+	Rejected  AppendState = "rejected"
 )
 
 // Valid indicates whether the value is a known member of the AppendState enum.
@@ -83,6 +84,8 @@ func (e AppendState) Valid() bool {
 	case Pending:
 		return true
 	case Published:
+		return true
+	case Rejected:
 		return true
 	default:
 		return false
@@ -605,10 +608,13 @@ type AdminPage struct {
 
 // Append defines model for Append.
 type Append struct {
-	Body      string      `json:"body"`
-	CreatedAt time.Time   `json:"created_at"`
-	Id        string      `json:"id"`
-	State     AppendState `json:"state"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+	Id        string    `json:"id"`
+
+	// ReviewRequested 本人或管理端可见。此条追评等待人工裁决。
+	ReviewRequested *bool       `json:"review_requested,omitempty"`
+	State           AppendState `json:"state"`
 }
 
 // AppendState defines model for Append.State.
