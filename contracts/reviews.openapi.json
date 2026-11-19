@@ -3788,7 +3788,9 @@
               "identity",
               "feature",
               "unfeature",
-              "reassign"
+              "reassign",
+              "approve_append",
+              "reject_append"
             ]
           },
           "body": {
@@ -3814,6 +3816,12 @@
           },
           "reason_code": {
             "$ref": "#/components/schemas/ModerationReasonCode"
+          },
+          "append_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "单条追评 ID，approve_append 和 reject_append 必须提供。"
           }
         },
         "required": [
