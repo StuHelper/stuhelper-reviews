@@ -536,7 +536,7 @@ export interface components {
             object_id: string;
             revision: number;
             /** @enum {string} */
-            action: "publish" | "hide" | "restore" | "delete" | "edit" | "identity" | "feature" | "unfeature" | "reassign";
+            action: "publish" | "hide" | "restore" | "delete" | "edit" | "identity" | "feature" | "unfeature" | "reassign" | "approve_append" | "reject_append";
             body?: string;
             subject?: string;
             author_handle?: string;
@@ -545,6 +545,8 @@ export interface components {
             signed?: boolean;
             reason: string;
             reason_code?: components["schemas"]["ModerationReasonCode"];
+            /** @description 单条追评 ID，approve_append 和 reject_append 必须提供。 */
+            append_id?: string;
         };
         PublishDraft: {
             revision: number;

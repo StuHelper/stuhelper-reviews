@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -359,4 +360,30 @@ func TestOpenAPISchemasHTTPContractAndDecisionParity(t *testing.T) {
 
 func ptrInput(v r.Input) *r.Input {
 	return &v
+}
+
+func TestAppendDecisionSchemaAcceptsIndividualVerdicts(t *testing.T) {
+	raw, err := os.ReadFile("contracts/reviews.openapi.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var contract struct {
+		Components struct {
+			Schemas struct {
+				Decision struct {
+					Properties map[string]struct {
+						Enum []string
+						Type string
+					}
+				}
+			}
+		}
+	}
+	if err = json.Unmarshal(raw, &contract); err != nil {
+		t.Fatal(err)
+	}
+	props := contract.Components.Schemas.Decision.Properties
+	if props["append_id"].Type != "string" || !slices.Contains(props["action"].Enum, "approve_append") || !slices.Contains(props["action"].Enum, "reject_append") {
+		t.Fatal("missing individual decision schema")
+	}
 }
