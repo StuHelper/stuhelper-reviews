@@ -23,12 +23,20 @@ func (h Handler) adminGet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	appends, e := flagRequested(r, "include_appends")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	includeDetails, e := flagRequested(r, "include_moderation_details")
 	if e != nil {
 		respond(w, nil, e)
 		return
 	}
 	v, e := h.Service.AdminGet(r.Context(), p, r.PathValue("id"))
+	if !appends {
+		v.Appends = nil
+	}
 	if !includeDetails {
 		omitModerationDetails(&v)
 	}
@@ -55,6 +63,11 @@ func (h Handler) adminList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
+	appends, e := flagRequested(r, "include_appends")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	includeDetails, e := flagRequested(r, "include_moderation_details")
 	if e != nil {
 		respond(w, nil, e)
@@ -72,6 +85,11 @@ func (h Handler) adminList(w http.ResponseWriter, r *http.Request) {
 		After:           q.Get("after"),
 		Limit:           n,
 	})
+	if !appends {
+		for i := range v.Items {
+			v.Items[i].Appends = nil
+		}
+	}
 	if !includeDetails {
 		for i := range v.Items {
 			omitModerationDetails(&v.Items[i])

@@ -97,6 +97,10 @@ scenario_tests:
   ACAD-08:
     - community_test.go#TestDraftPublicationIsAtomicAndRecoverable
     - community_test.go#TestChronologicalPaginationTeacherFilterAndPrivateDetails
+    - append_test.go#TestPostWindowAppendPreservesAttributionSamplesAndModeration
+    - append_test.go#TestAppendsAreModeratedIndependentlyUnderSchoolPolicy
+    - append_test.go#TestAppendLimitMatchesContract
+    - append_test.go#TestAppendRechecksAccountAfterModeration
   ACAD-21:
     - management_test.go#TestWithdrawnContentCannotExposeEarlierBodiesThroughHistory
     - community_test.go#TestPrivateReplyListRespectsWithdrawnRoot

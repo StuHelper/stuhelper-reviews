@@ -19,25 +19,28 @@ import (
 
 // Defines values for ActionAction.
 const (
-	Delete        ActionAction = "delete"
-	Republish     ActionAction = "republish"
-	SaveWithdrawn ActionAction = "save_withdrawn"
-	Vote          ActionAction = "vote"
-	Withdraw      ActionAction = "withdraw"
+	ActionActionAppend        ActionAction = "append"
+	ActionActionDelete        ActionAction = "delete"
+	ActionActionRepublish     ActionAction = "republish"
+	ActionActionSaveWithdrawn ActionAction = "save_withdrawn"
+	ActionActionVote          ActionAction = "vote"
+	ActionActionWithdraw      ActionAction = "withdraw"
 )
 
 // Valid indicates whether the value is a known member of the ActionAction enum.
 func (e ActionAction) Valid() bool {
 	switch e {
-	case Delete:
+	case ActionActionAppend:
 		return true
-	case Republish:
+	case ActionActionDelete:
 		return true
-	case SaveWithdrawn:
+	case ActionActionRepublish:
 		return true
-	case Vote:
+	case ActionActionSaveWithdrawn:
 		return true
-	case Withdraw:
+	case ActionActionVote:
+		return true
+	case ActionActionWithdraw:
 		return true
 	default:
 		return false
@@ -62,6 +65,27 @@ func (e AdminBatchItemResultStatus) Valid() bool {
 	case AdminBatchItemResultStatusForbidden:
 		return true
 	case AdminBatchItemResultStatusNotFound:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AppendState.
+const (
+	Pending   AppendState = "pending"
+	Published AppendState = "published"
+	Rejected  AppendState = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the AppendState enum.
+func (e AppendState) Valid() bool {
+	switch e {
+	case Pending:
+		return true
+	case Published:
+		return true
+	case Rejected:
 		return true
 	default:
 		return false
@@ -511,10 +535,13 @@ func (e GetReviewSummariesParamsKind) Valid() bool {
 
 // Action defines model for Action.
 type Action struct {
-	Action   ActionAction `json:"action"`
-	Input    *Input       `json:"input,omitempty"`
-	Revision *int         `json:"revision,omitempty"`
-	Vote     *int         `json:"vote,omitempty"`
+	Action ActionAction `json:"action"`
+
+	// Body 当 action=append 时提供的追评正文，不修改原帖正文、评分或教师归属。
+	Body     *string `json:"body,omitempty"`
+	Input    *Input  `json:"input,omitempty"`
+	Revision *int    `json:"revision,omitempty"`
+	Vote     *int    `json:"vote,omitempty"`
 }
 
 // ActionAction defines model for Action.Action.
@@ -552,6 +579,7 @@ type AdminBatchItemResultStatus string
 // AdminEntry defines model for AdminEntry.
 type AdminEntry struct {
 	Anonymous    bool      `json:"anonymous"`
+	Appends      *[]Append `json:"appends,omitempty"`
 	AuthorHandle string    `json:"author_handle"`
 	ChangeOrigin *string   `json:"change_origin,omitempty"`
 	ChangeReason *string   `json:"change_reason,omitempty"`
@@ -577,6 +605,20 @@ type AdminPage struct {
 	Items []AdminEntry `json:"items"`
 	Next  string       `json:"next"`
 }
+
+// Append defines model for Append.
+type Append struct {
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+	Id        string    `json:"id"`
+
+	// ReviewRequested 本人或管理端可见。此条追评等待人工裁决。
+	ReviewRequested *bool       `json:"review_requested,omitempty"`
+	State           AppendState `json:"state"`
+}
+
+// AppendState defines model for Append.State.
+type AppendState string
 
 // AttributionInput defines model for AttributionInput.
 type AttributionInput struct {
@@ -919,14 +961,16 @@ type TermSummary struct {
 
 // View defines model for View.
 type View struct {
-	Author    Author `json:"author"`
-	Body      string `json:"body"`
-	CanEdit   bool   `json:"can_edit"`
-	Downvotes int    `json:"downvotes"`
-	Featured  *bool  `json:"featured,omitempty"`
-	Id        string `json:"id"`
-	Kind      string `json:"kind"`
-	Mine      bool   `json:"mine"`
+	// Appends 作者在主帖发布的追加追评（按追加时间升序），保留首次正文、评分与教师归属不变。公开视图仅包含已发布追评，无可见追评时省略。
+	Appends   *[]Append `json:"appends,omitempty"`
+	Author    Author    `json:"author"`
+	Body      string    `json:"body"`
+	CanEdit   bool      `json:"can_edit"`
+	Downvotes int       `json:"downvotes"`
+	Featured  *bool     `json:"featured,omitempty"`
+	Id        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	Mine      bool      `json:"mine"`
 
 	// ModerationReasonCode 面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。
 	ModerationReasonCode *ModerationReasonCode `json:"moderation_reason_code,omitempty"`
@@ -998,6 +1042,9 @@ type ListReviewsParams struct {
 
 	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
 	IncludeParentSummary *bool `form:"include_parent_summary,omitempty" json:"include_parent_summary,omitempty"`
+
+	// IncludeAppends 传入 true 时返回当前请求人可见的追评。
+	IncludeAppends *bool `form:"include_appends,omitempty" json:"include_appends,omitempty"`
 }
 
 // ListReviewsParamsSort defines parameters for ListReviews.
@@ -1030,6 +1077,9 @@ type ListAdminEntriesParams struct {
 
 	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
 	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
+
+	// IncludeAppends 传入 true 时返回当前请求人可见的追评。
+	IncludeAppends *bool `form:"include_appends,omitempty" json:"include_appends,omitempty"`
 }
 
 // ListAdminEntriesParamsSort defines parameters for ListAdminEntries.
@@ -1044,6 +1094,9 @@ type BatchApproveAdminEntriesParams struct {
 type GetAdminEntryParams struct {
 	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
 	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
+
+	// IncludeAppends 传入 true 时返回当前请求人可见的追评。
+	IncludeAppends *bool `form:"include_appends,omitempty" json:"include_appends,omitempty"`
 }
 
 // PreviewAttributionParams defines parameters for PreviewAttribution.
@@ -1058,6 +1111,9 @@ type EntryHistoryParams struct {
 
 	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
 	IncludeModerationDetails *bool `form:"include_moderation_details,omitempty" json:"include_moderation_details,omitempty"`
+
+	// IncludeAppends 传入 true 时返回当前请求人可见的追评。
+	IncludeAppends *bool `form:"include_appends,omitempty" json:"include_appends,omitempty"`
 }
 
 // AdminPresentationParams defines parameters for AdminPresentation.
@@ -1142,6 +1198,9 @@ type MyReviewsParams struct {
 
 	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
 	IncludeParentSummary *bool `form:"include_parent_summary,omitempty" json:"include_parent_summary,omitempty"`
+
+	// IncludeAppends 传入 true 时返回当前请求人可见的追评。
+	IncludeAppends *bool `form:"include_appends,omitempty" json:"include_appends,omitempty"`
 }
 
 // MyReviewsParamsSort defines parameters for MyReviews.
@@ -1160,6 +1219,9 @@ type GetOwnEntryParams struct {
 
 	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
 	IncludeParentSummary *bool `form:"include_parent_summary,omitempty" json:"include_parent_summary,omitempty"`
+
+	// IncludeAppends 传入 true 时返回当前请求人可见的追评。
+	IncludeAppends *bool `form:"include_appends,omitempty" json:"include_appends,omitempty"`
 }
 
 // GetOwnReviewOverviewParams defines parameters for GetOwnReviewOverview.
@@ -1212,6 +1274,9 @@ type GetReviewParams struct {
 
 	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
 	IncludeParentSummary *bool `form:"include_parent_summary,omitempty" json:"include_parent_summary,omitempty"`
+
+	// IncludeAppends 传入 true 时返回当前请求人可见的追评。
+	IncludeAppends *bool `form:"include_appends,omitempty" json:"include_appends,omitempty"`
 }
 
 // ReviewActionParams defines parameters for ReviewAction.
@@ -2194,6 +2259,18 @@ func NewListReviewsRequest(server string, params *ListReviewsParams) (*http.Requ
 
 		}
 
+		if params.IncludeAppends != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_appends", *params.IncludeAppends, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -2417,6 +2494,18 @@ func NewListAdminEntriesRequest(server string, params *ListAdminEntriesParams) (
 
 		}
 
+		if params.IncludeAppends != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_appends", *params.IncludeAppends, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -2522,6 +2611,18 @@ func NewGetAdminEntryRequest(server string, id string, params *GetAdminEntryPara
 		if params.IncludeModerationDetails != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_moderation_details", *params.IncludeModerationDetails, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeAppends != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_appends", *params.IncludeAppends, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2667,6 +2768,18 @@ func NewEntryHistoryRequest(server string, id string, params *EntryHistoryParams
 		if params.IncludeModerationDetails != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_moderation_details", *params.IncludeModerationDetails, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeAppends != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_appends", *params.IncludeAppends, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3383,6 +3496,18 @@ func NewMyReviewsRequest(server string, params *MyReviewsParams) (*http.Request,
 
 		}
 
+		if params.IncludeAppends != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_appends", *params.IncludeAppends, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -3459,6 +3584,18 @@ func NewGetOwnEntryRequest(server string, id string, params *GetOwnEntryParams) 
 		if params.IncludeParentSummary != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_parent_summary", *params.IncludeParentSummary, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeAppends != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_appends", *params.IncludeAppends, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3936,6 +4073,18 @@ func NewGetReviewRequest(server string, id string, params *GetReviewParams) (*ht
 		if params.IncludeParentSummary != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_parent_summary", *params.IncludeParentSummary, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeAppends != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_appends", *params.IncludeAppends, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

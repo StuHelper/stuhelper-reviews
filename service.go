@@ -14,13 +14,13 @@ import (
 )
 
 type Config struct {
-	EditWindow, DraftLifetime, ExternalTimeout time.Duration
-	MinSamples, MaxDrafts                      int
-	Recommendations                            RecommendationPolicy
+	EditWindow, DraftLifetime, AppendCooldown, ExternalTimeout time.Duration
+	MinSamples, MaxAppends, MaxDrafts                          int
+	Recommendations                                            RecommendationPolicy
 }
 
 func DefaultConfig() Config {
-	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, ExternalTimeout: defaultExternalTimeout, MaxDrafts: DefaultMaxDrafts, MinSamples: 1, Recommendations: DefaultRecommendationPolicy()}
+	return Config{EditWindow: 5 * time.Minute, DraftLifetime: 24 * time.Hour, ExternalTimeout: defaultExternalTimeout, MaxAppends: 10, MaxDrafts: DefaultMaxDrafts, MinSamples: 1, Recommendations: DefaultRecommendationPolicy()}
 }
 
 type Service struct {
@@ -43,13 +43,22 @@ func New(repo Repository, catalog Catalog, access Access, moderation Moderation,
 	if !c.Recommendations.valid() {
 		return nil, ErrInput
 	}
-	if repo == nil || catalog == nil || access == nil || moderation == nil || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 {
+	if repo == nil || catalog == nil || access == nil || moderation == nil || c.EditWindow <= 0 || c.DraftLifetime <= 0 || c.MinSamples < 1 || c.AppendCooldown < 0 || c.MaxAppends > 10 {
 		return nil, ErrInput
+	}
+	if c.MaxAppends <= 0 {
+		c.MaxAppends = 10
 	}
 	if c.MaxDrafts <= 0 {
 		c.MaxDrafts = DefaultMaxDrafts
 	}
 	return &Service{Repo: repo, Catalog: catalog, Access: access, Moderation: moderation, Profiles: profiles, Config: c}, nil
+}
+func (s *Service) maxAppends() int {
+	if s.Config.MaxAppends <= 0 {
+		return 10
+	}
+	return min(s.Config.MaxAppends, 10)
 }
 func (s *Service) now() time.Time {
 	if s.Clock != nil {
@@ -624,8 +633,14 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 	if !ValidIdempotencyKey(key) {
 		return out, inputFieldErr("invalid_idempotency_key", "idempotency_key")
 	}
-	if !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote"}, in.Action) {
+	if !slices.Contains([]string{"withdraw", "delete", "republish", "save_withdrawn", "vote", "append"}, in.Action) {
 		return out, inputFieldErr("invalid_action", "action")
+	}
+	if in.Action != "append" && in.Body != "" {
+		return out, ErrInput
+	}
+	if in.Action == "append" {
+		return s.appendEntry(ctx, p, id, key, in)
 	}
 	if in.Action == "republish" {
 		if in.Input == nil {

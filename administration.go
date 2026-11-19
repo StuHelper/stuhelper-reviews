@@ -25,7 +25,7 @@ func adminView(e Entry, closed bool) AdminEntry {
 		updatedAt = &u
 	}
 	reviewRequested := e.ReviewRequested && (e.State == "pending" || e.State == "published")
-	return AdminEntry{
+	return AdminEntry{Appends: slices.Clone(e.Appends),
 		ChangeOrigin:         e.ChangeOrigin,
 		ChangeReason:         e.ChangeReason,
 		ModerationReasonCode: e.ModerationReasonCode,

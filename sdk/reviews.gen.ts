@@ -460,6 +460,8 @@ export interface components {
             readonly reply_count?: number;
             /** @description 与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 仅 include_reply_preview=true 时返回。 */
             readonly reply_preview?: components["schemas"]["View"][];
+            /** @description 作者在主帖发布的追加追评（按追加时间升序），保留首次正文、评分与教师归属不变。公开视图仅包含已发布追评，无可见追评时省略。 */
+            readonly appends?: components["schemas"]["Append"][];
             /** @description 仅在本人专属视图（GetOwn 与 /reviews/me/entries）返回的脱敏结构化审核原因码，与管理员内部备注严格隔离。 */
             readonly moderation_reason_code?: components["schemas"]["ModerationReasonCode"];
         };
@@ -482,11 +484,23 @@ export interface components {
             /** Format: date-time */
             until: string | null;
         };
+        Append: {
+            id: string;
+            body: string;
+            /** @enum {string} */
+            state: "published" | "pending" | "rejected";
+            /** Format: date-time */
+            created_at: string;
+            /** @description 本人或管理端可见。此条追评等待人工裁决。 */
+            review_requested?: boolean;
+        };
         Action: {
             /** @enum {string} */
-            action: "withdraw" | "delete" | "republish" | "vote" | "save_withdrawn";
+            action: "withdraw" | "delete" | "republish" | "vote" | "save_withdrawn" | "append";
             revision?: number;
             input?: components["schemas"]["Input"];
+            /** @description 当 action=append 时提供的追评正文，不修改原帖正文、评分或教师归属。 */
+            body?: string;
             vote?: number;
         };
         DraftWrite: {
@@ -584,6 +598,7 @@ export interface components {
             moderation_reason_code?: components["schemas"]["ModerationReasonCode"];
             change_reason?: string;
             change_origin?: string;
+            appends?: components["schemas"]["Append"][];
         };
         AdminPage: {
             items: components["schemas"]["AdminEntry"][];
@@ -763,6 +778,8 @@ export interface operations {
                 include_teacher_ids?: boolean;
                 /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
                 include_parent_summary?: boolean;
+                /** @description 传入 true 时返回当前请求人可见的追评。 */
+                include_appends?: boolean;
             };
             header?: never;
             path?: never;
@@ -922,6 +939,8 @@ export interface operations {
                 include_teacher_ids?: boolean;
                 /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
                 include_parent_summary?: boolean;
+                /** @description 传入 true 时返回当前请求人可见的追评。 */
+                include_appends?: boolean;
             };
             header?: never;
             path: {
@@ -1267,6 +1286,8 @@ export interface operations {
                 include_moderation_details?: boolean;
                 /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
                 include_parent_summary?: boolean;
+                /** @description 传入 true 时返回当前请求人可见的追评。 */
+                include_appends?: boolean;
             };
             header?: never;
             path?: never;
@@ -1824,6 +1845,8 @@ export interface operations {
                 include_moderation_details?: boolean;
                 /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
                 include_parent_summary?: boolean;
+                /** @description 传入 true 时返回当前请求人可见的追评。 */
+                include_appends?: boolean;
             };
             header?: never;
             path: {
@@ -1996,6 +2019,8 @@ export interface operations {
                 featured?: boolean;
                 /** @description 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。 */
                 include_moderation_details?: boolean;
+                /** @description 传入 true 时返回当前请求人可见的追评。 */
+                include_appends?: boolean;
             };
             header?: never;
             path?: never;
@@ -2144,6 +2169,8 @@ export interface operations {
             query?: {
                 /** @description 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。 */
                 include_moderation_details?: boolean;
+                /** @description 传入 true 时返回当前请求人可见的追评。 */
+                include_appends?: boolean;
             };
             header?: never;
             path: {
@@ -2541,6 +2568,8 @@ export interface operations {
                 limit?: number;
                 /** @description 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。 */
                 include_moderation_details?: boolean;
+                /** @description 传入 true 时返回当前请求人可见的追评。 */
+                include_appends?: boolean;
             };
             header?: never;
             path: {

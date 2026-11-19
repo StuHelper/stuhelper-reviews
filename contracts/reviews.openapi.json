@@ -221,6 +221,16 @@
               "default": false
             },
             "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ],
         "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
@@ -437,6 +447,16 @@
               "default": false
             },
             "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ],
         "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
@@ -1011,6 +1031,16 @@
               "default": false
             },
             "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ]
       }
@@ -1695,6 +1725,16 @@
               "default": false
             },
             "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ],
         "responses": {
@@ -2084,6 +2124,16 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ]
       }
@@ -2281,6 +2331,16 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ]
       }
@@ -2806,6 +2866,16 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ]
       }
@@ -3418,6 +3488,15 @@
             },
             "description": "与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 仅 include_reply_preview=true 时返回。"
           },
+          "appends": {
+            "type": "array",
+            "maxItems": 10,
+            "readOnly": true,
+            "items": {
+              "$ref": "#/components/schemas/Append"
+            },
+            "description": "作者在主帖发布的追加追评（按追加时间升序），保留首次正文、评分与教师归属不变。公开视图仅包含已发布追评，无可见追评时省略。"
+          },
           "moderation_reason_code": {
             "$ref": "#/components/schemas/ModerationReasonCode",
             "readOnly": true,
@@ -3526,6 +3605,41 @@
           "until"
         ]
       },
+      "Append": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "published",
+              "pending",
+              "rejected"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "review_requested": {
+            "type": "boolean",
+            "description": "本人或管理端可见。此条追评等待人工裁决。"
+          }
+        },
+        "required": [
+          "id",
+          "body",
+          "state",
+          "created_at"
+        ]
+      },
       "Action": {
         "type": "object",
         "additionalProperties": false,
@@ -3537,7 +3651,8 @@
               "delete",
               "republish",
               "vote",
-              "save_withdrawn"
+              "save_withdrawn",
+              "append"
             ]
           },
           "revision": {
@@ -3545,6 +3660,12 @@
           },
           "input": {
             "$ref": "#/components/schemas/Input"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "当 action=append 时提供的追评正文，不修改原帖正文、评分或教师归属。"
           },
           "vote": {
             "type": "integer",
@@ -3883,6 +4004,13 @@
           },
           "change_origin": {
             "type": "string"
+          },
+          "appends": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/Append"
+            }
           }
         },
         "required": [

@@ -28,6 +28,11 @@ func (h Handler) ownEntry(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	appends, e := flagRequested(r, "include_appends")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
 	parentSummary, e := flagRequested(r, "include_parent_summary")
 	if e != nil {
 		respond(w, nil, e)
@@ -43,7 +48,7 @@ func (h Handler) ownEntry(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{Own: true, IncludeParentSummary: parentSummary, IncludeTeacherIDs: teachers})
+	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{Own: true, IncludeAppends: appends, IncludeParentSummary: parentSummary, IncludeTeacherIDs: teachers})
 	if !includeDetails {
 		v.ModerationReasonCode = ""
 	}

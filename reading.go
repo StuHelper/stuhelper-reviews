@@ -179,6 +179,20 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 			return nil, ErrUnavailable
 		}
 		v := View{Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
+		if options.IncludeAppends && own && len(entry.Appends) > 0 {
+			v.Appends = slices.Clone(entry.Appends)
+		} else if options.IncludeAppends && !own && len(entry.Appends) > 0 {
+			published := make([]Append, 0, len(entry.Appends))
+			for _, item := range entry.Appends {
+				if item.State == "published" {
+					item.ReviewRequested = false
+					published = append(published, item)
+				}
+			}
+			if len(published) > 0 {
+				v.Appends = published
+			}
+		}
 		if own && entry.ModerationReasonCode != "" {
 			v.ModerationReasonCode = entry.ModerationReasonCode
 		}
@@ -408,7 +422,7 @@ func (s *Service) List(ctx context.Context, p Principal, f Filter) (Page, error)
 				return Page{Items: []View{}}, err
 			}
 		}
-		items, err := s.render(ctx, p, entries, f.Owner != "", f.SchoolID, ViewOptions{IncludeTeacherIDs: f.IncludeTeacherIDs, IncludeParentSummary: f.IncludeParentSummary})
+		items, err := s.render(ctx, p, entries, f.Owner != "", f.SchoolID, ViewOptions{IncludeAppends: f.IncludeAppends, IncludeTeacherIDs: f.IncludeTeacherIDs, IncludeParentSummary: f.IncludeParentSummary})
 		if err != nil {
 			return Page{Items: []View{}}, err
 		}

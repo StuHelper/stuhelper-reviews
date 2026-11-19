@@ -100,7 +100,15 @@ type Input struct {
 }
 
 // Entry is a private persistence model. Public responses always use View.
+type Append struct {
+	ReviewRequested bool      `json:"review_requested,omitempty"`
+	ID              string    `json:"id"`
+	Body            string    `json:"body"`
+	State           string    `json:"state"`
+	CreatedAt       time.Time `json:"created_at"`
+}
 type Entry struct {
+	Appends              []Append    `json:"appends,omitempty"`
 	ActivityTargetID     string      `json:"activity_target_id"`
 	ChangeReason         string      `json:"change_reason,omitempty"`
 	ChangeOrigin         string      `json:"change_origin,omitempty"`
@@ -143,6 +151,7 @@ type Author struct {
 	Profile     *Profile           `json:"profile,omitempty"`
 }
 type View struct {
+	Appends              []Append   `json:"appends,omitempty"`
 	ModerationReasonCode string     `json:"moderation_reason_code,omitempty"`
 	ReplyCount           *int       `json:"reply_count,omitempty"`
 	ReplyPreview         *[]View    `json:"reply_preview,omitempty"`
@@ -181,6 +190,7 @@ type Action struct {
 	Action   string `json:"action"`
 	Revision int64  `json:"revision"`
 	Input    *Input `json:"input,omitempty"`
+	Body     string `json:"body,omitempty"`
 	Vote     int    `json:"vote,omitempty"`
 }
 type Draft struct {
@@ -207,6 +217,7 @@ type DraftView struct {
 
 // ViewOptions controls detail visibility and optional fields.
 type ViewOptions struct {
+	IncludeAppends bool
 	// Own restricts the result to an entry belonging to the requester.
 	Own                  bool
 	IncludeTeacherIDs    bool
@@ -214,6 +225,7 @@ type ViewOptions struct {
 }
 
 type Filter struct {
+	IncludeAppends                                       bool
 	IncludeParentSummary                                 bool
 	IncludeTeacherIDs                                    bool
 	IncludeReplyPreview                                  bool
@@ -233,6 +245,7 @@ type Page struct {
 	Next  string `json:"next"`
 }
 type AdminEntry struct {
+	Appends              []Append   `json:"appends,omitempty"`
 	ChangeReason         string     `json:"change_reason,omitempty"`
 	ChangeOrigin         string     `json:"change_origin,omitempty"`
 	ModerationReasonCode string     `json:"moderation_reason_code,omitempty"`
@@ -318,12 +331,14 @@ type Event struct {
 	At                                 time.Time
 }
 type Inspection struct {
+	PendingAppendIDs          []string
 	ReviewRequested           bool
 	ID, Kind, SchoolID, Owner string
 	Revision                  int64
 	Visible                   bool
 }
 type Decision struct {
+	AppendID         string  `json:"append_id,omitempty"`
 	TeacherID        string  `json:"teacher_id,omitempty"`
 	EvidenceRevision string  `json:"evidence_revision,omitempty"`
 	ReasonCode       string  `json:"reason_code,omitempty"`
