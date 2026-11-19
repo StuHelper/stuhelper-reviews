@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"time"
 )
 
 // FavoriteReferences verifies current ownership through the favorites module.
@@ -62,9 +61,10 @@ func (s *Service) MyReferences(ctx context.Context, p Principal, ids []string) (
 				remaining = append(remaining, id)
 			}
 		}
-		call, cancel := context.WithTimeout(ctx, 3*time.Second)
+		call, cancel := s.externalCtx(ctx)
 		extra, e := s.Favorites.CourseReferences(call, p.Subject, remaining)
 		cancel()
+		e = wrapExternalErr(ctx, e)
 		if e != nil {
 			return References{}, e
 		}
@@ -84,9 +84,10 @@ func (s *Service) MyReferences(ctx context.Context, p Principal, ids []string) (
 	if !ok {
 		return References{}, ErrUnavailable
 	}
-	call, cancel := context.WithTimeout(ctx, 3*time.Second)
+	call, cancel := s.externalCtx(ctx)
 	defer cancel()
 	out, err := port.ReferenceNames(call, ids)
+	err = wrapExternalErr(ctx, err)
 	if err != nil {
 		return References{}, err
 	}
@@ -123,9 +124,7 @@ func draftReferenceIDs(in Input) []string {
 // Failure to validate a new association does not discard private draft text.
 // Previously proved IDs are retained only while they remain in this draft.
 func (s *Service) verifyDraftReferences(ctx context.Context, p Principal, in Input) ([]string, string) {
-	call, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	school, err := s.contentScope(call, p, "")
+	school, err := s.contentScope(ctx, p, "")
 	if err != nil {
 		if errors.Is(err, ErrForbidden) {
 			return nil, "unverified"
@@ -138,6 +137,29 @@ func (s *Service) verifyDraftReferences(ctx context.Context, p Principal, in Inp
 	kind := "course"
 	if in.Kind == "mentor" {
 		kind = "teacher"
+	} else if in.Kind == "reply" && in.ParentID != "" {
+		var rootKind string
+		err := s.Repo.Transaction(ctx, func(t Transaction) error {
+			base, err := t.Entry(in.ParentID)
+			if err != nil {
+				return err
+			}
+			root, err := t.Entry(base.RootID)
+			if err != nil {
+				return err
+			}
+			rootKind = root.Input.Kind
+			return nil
+		})
+		if errors.Is(err, ErrNotFound) {
+			return nil, "unverified"
+		}
+		if err != nil {
+			return nil, "unavailable"
+		}
+		if rootKind == "mentor" {
+			kind = "teacher"
+		}
 	}
 	pairs := []struct{ kind, id string }{{kind, in.TargetID}, {"term", in.TermID}, {"teacher", in.TeacherID}}
 	ids := []string{}
@@ -146,7 +168,7 @@ func (s *Service) verifyDraftReferences(ctx context.Context, p Principal, in Inp
 		if pair.id == "" {
 			continue
 		}
-		target, e := s.Catalog.Target(call, pair.kind, pair.id)
+		target, e := s.catalogTarget(ctx, pair.kind, pair.id)
 		if e != nil {
 			if !errors.Is(e, ErrNotFound) && !errors.Is(e, ErrInput) && !errors.Is(e, ErrForbidden) {
 				state = "unavailable"
@@ -183,5 +205,5 @@ func draftView(d Draft) DraftView {
 	if state == "" {
 		state = "unverified"
 	}
-	return DraftView{ID: d.ID, Revision: d.Revision, Input: d.Input, ReferenceIDs: ids, ReferenceState: state}
+	return DraftView{ID: d.ID, Revision: d.Revision, Input: d.Input, ReferenceIDs: ids, ReferenceState: state, RootID: d.RootID, ParentID: d.Input.ParentID}
 }

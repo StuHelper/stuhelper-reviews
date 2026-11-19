@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
-	"net/url"
+
 	"strconv"
 	"strings"
 	"time"
@@ -15,10 +16,37 @@ import (
 	reviews "github.com/StuHelper/stuhelper-reviews"
 )
 
+const StatusClientClosedRequest = 499
+
 type Authenticate func(*http.Request) (reviews.Principal, error)
 type Handler struct {
 	Service      *reviews.Service
 	Authenticate Authenticate
+	// PublicOrigin is the trusted browser origin when a reverse proxy terminates TLS.
+	PublicOrigin string
+	OnDiagnostic reviews.DiagnosticHook
+}
+
+type responseTracker struct {
+	http.ResponseWriter
+	req       *http.Request
+	clientCtx context.Context
+	start     time.Time
+	hook      reviews.DiagnosticHook
+}
+
+func (t *responseTracker) Unwrap() http.ResponseWriter {
+	return t.ResponseWriter
+}
+
+func (t *responseTracker) operationName() string {
+	if t.req == nil {
+		return "http_request"
+	}
+	if t.req.Pattern != "" {
+		return t.req.Pattern
+	}
+	return t.req.Method
 }
 
 func (h Handler) Routes() http.Handler {
@@ -34,6 +62,7 @@ func (h Handler) Routes() http.Handler {
 	m.HandleFunc("GET /api/v1/reviews/statistics", h.statistics)
 	m.HandleFunc("GET /api/v1/reviews/compose", h.compose)
 	m.HandleFunc("GET /api/v1/reviews/admin/entries", h.adminList)
+	m.HandleFunc("POST /api/v1/reviews/admin/entries/batch-approve", h.adminBatchApprove)
 	m.HandleFunc("GET /api/v1/reviews/admin/entries/{id}", h.adminGet)
 	m.HandleFunc("GET /api/v1/reviews/me/references", h.references)
 	m.HandleFunc("GET /api/v1/reviews/me/entries", h.mine)
@@ -45,23 +74,77 @@ func (h Handler) Routes() http.Handler {
 	m.HandleFunc("DELETE /api/v1/reviews/me/drafts/{id}", h.deleteDraft)
 	m.HandleFunc("GET /api/v1/reviews/me/votes", h.votes)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if r.Method != "GET" && r.Header.Get("Origin") != "" {
-			u, e := url.Parse(r.Header.Get("Origin"))
-			if e != nil || u.Host != r.Host {
-				respond(w, nil, reviews.ErrForbidden)
-				return
-			}
+		tracker := &responseTracker{
+			ResponseWriter: w,
+			req:            r,
+			clientCtx:      r.Context(),
+			start:          time.Now(),
+			hook:           h.OnDiagnostic,
+		}
+		tracker.Header().Set("Cache-Control", "no-store")
+		tracker.Header().Set("X-Content-Type-Options", "nosniff")
+		if h.Service == nil {
+			respond(tracker, nil, reviews.ErrUnavailable)
+			return
+		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !h.sameOriginWrite(r) {
+			respond(tracker, nil, reviews.NewErrorDetail(reviews.ErrForbidden, "origin_mismatch", "origin", nil))
+			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
-		m.ServeHTTP(w, r.WithContext(ctx))
+		tracker.req = r.WithContext(ctx)
+		m.ServeHTTP(tracker, tracker.req)
 	})
 }
+func (h Handler) sameOriginWrite(r *http.Request) bool {
+	for _, site := range r.Header.Values("Sec-Fetch-Site") {
+		if site != "same-origin" && site != "none" {
+			return false
+		}
+	}
+	origins := r.Header.Values("Origin")
+	if len(origins) == 0 || len(origins) == 1 && origins[0] == "" {
+		return true
+	}
+	if len(origins) != 1 {
+		return false
+	}
+	expected := h.PublicOrigin
+	if expected == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		expected = scheme + "://" + r.Host
+	}
+	return strings.EqualFold(origins[0], expected)
+}
+
+type errorResponse struct {
+	Code            string `json:"code"`
+	Subcode         string `json:"subcode,omitempty"`
+	Field           string `json:"field,omitempty"`
+	CurrentRevision *int64 `json:"current_revision,omitempty"`
+}
+
 func respond(w http.ResponseWriter, v any, e error) {
 	w.Header().Set("Content-Type", "application/json")
 	if e != nil {
+		tracker, tracked := w.(*responseTracker)
+		if tracked && errors.Is(e, context.Canceled) && errors.Is(tracker.clientCtx.Err(), context.Canceled) {
+			if tracker.hook != nil {
+				tracker.hook(reviews.DiagnosticEvent{
+					Operation:  tracker.operationName(),
+					Dependency: "http",
+					Category:   "canceled",
+					Duration:   time.Since(tracker.start),
+				})
+			}
+			w.WriteHeader(StatusClientClosedRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"code": "canceled"})
+			return
+		}
 		status := 503
 		code := "unavailable"
 		for _, x := range []struct {
@@ -73,22 +156,41 @@ func respond(w http.ResponseWriter, v any, e error) {
 				code = x.e.Error()
 			}
 		}
+		if tracked && tracker.hook != nil {
+			tracker.hook(reviews.DiagnosticEvent{
+				Operation:  tracker.operationName(),
+				Dependency: "http",
+				Category:   reviews.ClassifyDiagnosticCategory(e),
+				Duration:   time.Since(tracker.start),
+			})
+		}
+		payload := errorResponse{Code: code}
+		var detail reviews.ErrorDetail
+		if errors.As(e, &detail) {
+			payload.Subcode = detail.Subcode
+			payload.Field = detail.Field
+			payload.CurrentRevision = detail.CurrentRevision
+		}
 		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(map[string]string{"code": code})
+		_ = json.NewEncoder(w).Encode(payload)
 		return
 	}
 	_ = json.NewEncoder(w).Encode(v)
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) error {
+	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || media != "application/json" || len(r.Header.Values("Content-Type")) != 1 {
+		return reviews.ErrInput
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 128<<10)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if d.Decode(v) != nil {
-		return reviews.ErrInput
+		return reviews.NewErrorDetail(reviews.ErrInput, "malformed_json", "", nil)
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return reviews.ErrInput
+		return reviews.NewErrorDetail(reviews.ErrInput, "malformed_json", "", nil)
 	}
 	return nil
 }
@@ -120,7 +222,7 @@ func limit(r *http.Request) (int, error) {
 	}
 	n, e := strconv.Atoi(v)
 	if e != nil || n < 1 || n > 100 {
-		return 0, reviews.ErrInput
+		return 0, reviews.NewErrorDetail(reviews.ErrInput, "invalid_pagination", "limit", nil)
 	}
 	return n, nil
 }
@@ -135,12 +237,37 @@ func (h Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	preview, e := previewRequested(r)
+	preview, e := flagRequested(r, "include_reply_preview")
 	if e != nil {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeReplyPreview: preview, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
+	featured, e := optionalBool(r, "featured")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	hasTeacherReply, e := optionalBool(r, "has_teacher_reply")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	appends, e := flagRequested(r, "include_appends")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	parentSummary, e := flagRequested(r, "include_parent_summary")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	teachers, e := flagRequested(r, "include_teacher_ids")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeAppends: appends, IncludeParentSummary: parentSummary, IncludeTeacherIDs: teachers, IncludeReplyPreview: preview, Featured: featured, HasTeacherReply: hasTeacherReply, RatingGroup: q.Get("rating_group"), Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), RootID: q.Get("root_id"), After: q.Get("after"), Limit: n})
 	respond(w, v, e)
 }
 func (h Handler) get(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +275,22 @@ func (h Handler) get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v, e := h.Service.Get(r.Context(), p, r.PathValue("id"))
+	appends, e := flagRequested(r, "include_appends")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	parentSummary, e := flagRequested(r, "include_parent_summary")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	teachers, e := flagRequested(r, "include_teacher_ids")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	v, e := h.Service.GetWithOptions(r.Context(), p, r.PathValue("id"), reviews.ViewOptions{IncludeAppends: appends, IncludeParentSummary: parentSummary, IncludeTeacherIDs: teachers})
 	respond(w, v, e)
 }
 func (h Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -226,12 +368,47 @@ func (h Handler) mine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	preview, e := previewRequested(r)
+	preview, e := flagRequested(r, "include_reply_preview")
 	if e != nil {
 		respond(w, nil, e)
 		return
 	}
-	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeReplyPreview: preview, Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
+	featured, e := optionalBool(r, "featured")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	hasTeacherReply, e := optionalBool(r, "has_teacher_reply")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	appends, e := flagRequested(r, "include_appends")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	parentSummary, e := flagRequested(r, "include_parent_summary")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	teachers, e := flagRequested(r, "include_teacher_ids")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	includeDetails, e := flagRequested(r, "include_moderation_details")
+	if e != nil {
+		respond(w, nil, e)
+		return
+	}
+	v, e := h.Service.List(r.Context(), p, reviews.Filter{IncludeAppends: appends, IncludeParentSummary: parentSummary, IncludeTeacherIDs: teachers, IncludeReplyPreview: preview, Featured: featured, HasTeacherReply: hasTeacherReply, RatingGroup: q.Get("rating_group"), Owner: p.Subject, Kind: q.Get("kind"), TargetID: q.Get("target_id"), TermID: q.Get("term_id"), TeacherID: q.Get("teacher_id"), Sort: q.Get("sort"), After: q.Get("after"), Limit: n})
+	if !includeDetails {
+		for i := range v.Items {
+			v.Items[i].ModerationReasonCode = ""
+		}
+	}
 	respond(w, v, e)
 }
 func (h Handler) drafts(w http.ResponseWriter, r *http.Request) {
@@ -302,13 +479,22 @@ func (h Handler) references(w http.ResponseWriter, r *http.Request) {
 	respond(w, out, err)
 }
 
-func previewRequested(r *http.Request) (bool, error) {
-	values, ok := r.URL.Query()["include_reply_preview"]
+func optionalBool(r *http.Request, name string) (*bool, error) {
+	values, ok := r.URL.Query()[name]
 	if !ok {
-		return false, nil
+		return nil, nil
 	}
 	if len(values) != 1 || values[0] != "true" && values[0] != "false" {
-		return false, reviews.ErrInput
+		return nil, reviews.ErrInput
 	}
-	return values[0] == "true", nil
+	v := values[0] == "true"
+	return &v, nil
+}
+
+func flagRequested(r *http.Request, name string) (bool, error) {
+	v, err := optionalBool(r, name)
+	if err != nil || v == nil {
+		return false, err
+	}
+	return *v, nil
 }

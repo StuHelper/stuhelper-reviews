@@ -145,11 +145,12 @@
                 "id",
                 "newest",
                 "oldest",
-                "upvotes"
+                "upvotes",
+                "recommended"
               ],
               "default": "id"
             },
-            "description": "Stable ID order by default; newest/oldest use creation time with an opaque cursor."
+            "description": "Stable ID order by default; newest/oldest use creation time; recommended orders featured entries first, then net helpfulness (upvotes minus downvotes), upvotes, creation time and ID descending."
           },
           {
             "name": "teacher_id",
@@ -160,6 +161,38 @@
             "description": "Course reviews attributed to this teacher at publication."
           },
           {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选管理员认定的精选优质内容（true）或普通内容（false）。"
+          },
+          {
+            "name": "has_teacher_reply",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选是否存在当前公开有效认证教师回复的根讨论（true/false），实时核验必需实名与教师授权。"
+          },
+          {
+            "name": "rating_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "low",
+                "mid",
+                "high"
+              ]
+            },
+            "description": "按课程评价推荐度维度档位筛选：low 为 1-2 分，mid 为 3 分，high 为 4-5 分。"
+          },
+          {
             "name": "include_reply_preview",
             "in": "query",
             "required": false,
@@ -168,6 +201,36 @@
               "default": false
             },
             "description": "为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。"
+          },
+          {
+            "name": "include_teacher_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+          },
+          {
+            "name": "include_parent_summary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ],
         "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
@@ -364,6 +427,36 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_teacher_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+          },
+          {
+            "name": "include_parent_summary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ],
         "description": "Requires current content admission in the served school: valid campus eligibility or verified teacher status. Missing admission returns 403; unavailable required facts return 503. No preview, content, counts or statistics are returned on rejection."
@@ -831,11 +924,12 @@
                 "id",
                 "newest",
                 "oldest",
-                "upvotes"
+                "upvotes",
+                "recommended"
               ],
               "default": "id"
             },
-            "description": "Stable ID order by default; newest/oldest use creation time with an opaque cursor."
+            "description": "Stable ID order by default; newest/oldest use creation time; recommended orders featured entries first, then net helpfulness (upvotes minus downvotes), upvotes, creation time and ID descending."
           },
           {
             "name": "teacher_id",
@@ -844,6 +938,38 @@
               "type": "string"
             },
             "description": "Course reviews attributed to this teacher at publication."
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选管理员认定的精选优质内容（true）或普通内容（false）。"
+          },
+          {
+            "name": "has_teacher_reply",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选是否存在当前公开有效认证教师回复的根讨论（true/false），实时核验必需实名与教师授权。"
+          },
+          {
+            "name": "rating_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "low",
+                "mid",
+                "high"
+              ]
+            },
+            "description": "按课程评价推荐度维度档位筛选：low 为 1-2 分，mid 为 3 分，high 为 4-5 分。"
           },
           {
             "name": "kind",
@@ -875,6 +1001,46 @@
               "default": false
             },
             "description": "为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。"
+          },
+          {
+            "name": "include_teacher_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+          },
+          {
+            "name": "include_moderation_details",
+            "in": "query",
+            "required": false,
+            "description": "传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include_parent_summary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ]
       }
@@ -1529,6 +1695,46 @@
               "type": "string",
               "maxLength": 128
             }
+          },
+          {
+            "name": "include_teacher_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+          },
+          {
+            "name": "include_moderation_details",
+            "in": "query",
+            "required": false,
+            "description": "传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include_parent_summary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回回复的父楼层可见状态和讨论内作者标识。"
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ],
         "responses": {
@@ -1645,6 +1851,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_own_context",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回本人的草稿或评价关联。"
           }
         ],
         "responses": {
@@ -1850,8 +2066,171 @@
               "maximum": 100,
               "default": 20
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "id",
+                "newest",
+                "oldest"
+              ],
+              "default": "id"
+            },
+            "description": "默认按稳定 ID 升序分页；newest/oldest 按创建时间及绑定筛选条件的游标分页。"
+          },
+          {
+            "name": "review_requested",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "筛选待人工审核或先发后审复核队列条目（true/false）。"
+          },
+          {
+            "name": "target_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "root_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "include_moderation_details",
+            "in": "query",
+            "required": false,
+            "description": "传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ]
+      }
+    },
+    "/api/v1/reviews/admin/entries/batch-approve": {
+      "post": {
+        "operationId": "batchApproveAdminEntries",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminBatchApproveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminBatchApproveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "按学校范围批量审核通过待审或事后复核条目（每次 1 至 20 项），逐项返回处置状态并支持幂等重放。"
       }
     },
     "/api/v1/reviews/admin/entries/{id}": {
@@ -1942,6 +2321,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_moderation_details",
+            "in": "query",
+            "required": false,
+            "description": "传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ]
       }
@@ -2457,6 +2856,26 @@
               "minimum": 1,
               "maximum": 100
             }
+          },
+          {
+            "name": "include_moderation_details",
+            "in": "query",
+            "required": false,
+            "description": "传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include_appends",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回当前请求人可见的追评。"
           }
         ]
       }
@@ -2753,7 +3172,18 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "include_own_context",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "传入 true 时返回本人的草稿或评价关联。"
+          }
+        ],
         "description": "Authenticated owner only. review_count counts current published root course/mentor entries, excluding replies; draft_count matches the owned draft box including unexpired withdrawals. pending_courses requires the existing authorized enrollment source and never treats a missing source as zero. Up to 20 pending course/term pairs are returned, with the complete bounded count."
       }
     }
@@ -2772,6 +3202,19 @@
         "properties": {
           "code": {
             "type": "string"
+          },
+          "subcode": {
+            "type": "string",
+            "description": "稳定的机器可读细分子错误码，直接映射前端八种语言（含阿拉伯语 RTL）翻译键。"
+          },
+          "field": {
+            "type": "string",
+            "description": "出错的请求字段或参数名称，用于表单焦点定位与 aria-invalid/aria-describedby 无障碍播报。"
+          },
+          "current_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "409 修订号冲突且调用方已通过归属或管理授权校验时返回的服务端当前修订号。"
           }
         },
         "required": [
@@ -2793,6 +3236,10 @@
           "target_id": {
             "type": "string",
             "description": " 体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。"
+          },
+          "parent_id": {
+            "type": "string",
+            "description": "当 kind=reply 保存或发布草稿时绑定的父评价或父回复 ID；课程与导师评价禁止传入。"
           },
           "term_id": {
             "type": "string"
@@ -2817,7 +3264,8 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 5
-            }
+            },
+            "description": "固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。"
           },
           "signed": {
             "type": "boolean"
@@ -2912,7 +3360,8 @@
           "level": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 5
+            "maximum": 5,
+            "description": "五级展示等级：0=样本不足（对应 rating_texts[locale][dim][0]），1..5=第一级至第五级（对应 rating_texts[locale][dim][1..5]）。"
           },
           "samples": {
             "type": "integer"
@@ -2946,6 +3395,16 @@
           "parent_id": {
             "type": "string"
           },
+          "parent_author_handle": {
+            "type": "string",
+            "readOnly": true,
+            "description": "回复所指向父楼层作者的讨论内脱敏标识（如 author 或匿名讨论句柄），根评价或撤回父帖省略。"
+          },
+          "parent_visible": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "回复所指向父楼层当前是否对外公开可见（含认证教师回复实名授权核验），不返回不可见父楼层正文；根评价省略。"
+          },
           "kind": {
             "type": "string"
           },
@@ -2963,6 +3422,14 @@
             "type": "string",
             "description": " 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。"
           },
+          "teacher_ids": {
+            "type": "array",
+            "readOnly": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "课程评价发布时记录的任课教师归属快照（单选教师时为该教师，未单选教师时为该学期本人选课任课教师并集）；非课程评价或无教师归属时省略。 仅在 include_teacher_ids=true 时返回。"
+          },
           "title": {
             "type": "string"
           },
@@ -2977,7 +3444,8 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 5
-            }
+            },
+            "description": "固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。"
           },
           "author": {
             "$ref": "#/components/schemas/Author"
@@ -3019,6 +3487,20 @@
               "$ref": "#/components/schemas/View"
             },
             "description": "与 reply_count 一起提供，按创建时间升序、ID 升序的最早 3 条可见回复。无回复时为空数组。预览回复不再嵌套预览，使用与回复列表相同的当前匿名、署名与公开标签规则。 仅 include_reply_preview=true 时返回。"
+          },
+          "appends": {
+            "type": "array",
+            "maxItems": 10,
+            "readOnly": true,
+            "items": {
+              "$ref": "#/components/schemas/Append"
+            },
+            "description": "作者在主帖发布的追加追评（按追加时间升序），保留首次正文、评分与教师归属不变。公开视图仅包含已发布追评，无可见追评时省略。"
+          },
+          "moderation_reason_code": {
+            "$ref": "#/components/schemas/ModerationReasonCode",
+            "readOnly": true,
+            "description": "仅在本人专属视图（GetOwn 与 /reviews/me/entries）返回的脱敏结构化审核原因码，与管理员内部备注严格隔离。"
           }
         },
         "required": [
@@ -3073,7 +3555,8 @@
             "maxItems": 5,
             "items": {
               "$ref": "#/components/schemas/Band"
-            }
+            },
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           }
         },
         "required": [
@@ -3100,7 +3583,8 @@
             "maxItems": 5,
             "items": {
               "$ref": "#/components/schemas/Band"
-            }
+            },
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           },
           "from": {
             "type": "string",
@@ -3121,6 +3605,41 @@
           "until"
         ]
       },
+      "Append": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "published",
+              "pending",
+              "rejected"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "review_requested": {
+            "type": "boolean",
+            "description": "本人或管理端可见。此条追评等待人工裁决。"
+          }
+        },
+        "required": [
+          "id",
+          "body",
+          "state",
+          "created_at"
+        ]
+      },
       "Action": {
         "type": "object",
         "additionalProperties": false,
@@ -3132,7 +3651,8 @@
               "delete",
               "republish",
               "vote",
-              "save_withdrawn"
+              "save_withdrawn",
+              "append"
             ]
           },
           "revision": {
@@ -3140,6 +3660,12 @@
           },
           "input": {
             "$ref": "#/components/schemas/Input"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "当 action=append 时提供的追评正文，不修改原帖正文、评分或教师归属。"
           },
           "vote": {
             "type": "integer",
@@ -3223,6 +3749,21 @@
         ],
         "description": "A private draft owned by the requester. Withdrawn drafts retain their original expiry. Saving a draft does not publish it."
       },
+      "ModerationReasonCode": {
+        "type": "string",
+        "enum": [
+          "pending_review",
+          "spam",
+          "personal_attack",
+          "privacy_leak",
+          "wrong_teacher",
+          "academic_integrity",
+          "low_quality",
+          "policy_violation",
+          "other"
+        ],
+        "description": "面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。"
+      },
       "Decision": {
         "type": "object",
         "additionalProperties": false,
@@ -3244,7 +3785,12 @@
               "restore",
               "delete",
               "edit",
-              "identity"
+              "identity",
+              "feature",
+              "unfeature",
+              "reassign",
+              "approve_append",
+              "reject_append"
             ]
           },
           "body": {
@@ -3253,11 +3799,29 @@
           "subject": {
             "type": "string"
           },
+          "author_handle": {
+            "type": "string"
+          },
+          "teacher_id": {
+            "type": "string"
+          },
+          "evidence_revision": {
+            "type": "string"
+          },
           "signed": {
             "type": "boolean"
           },
           "reason": {
             "type": "string"
+          },
+          "reason_code": {
+            "$ref": "#/components/schemas/ModerationReasonCode"
+          },
+          "append_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "单条追评 ID，approve_append 和 reject_append 必须提供。"
           }
         },
         "required": [
@@ -3322,10 +3886,10 @@
           },
           "state": {
             "type": "string",
+            "description": "Requests without an authenticated session return HTTP 401.",
             "enum": [
               "ready",
               "choose_term",
-              "unauthenticated",
               "forbidden",
               "enrollment_required",
               "unavailable",
@@ -3367,6 +3931,18 @@
           "teacher_required": {
             "type": "boolean",
             "description": "true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。"
+          },
+          "own_draft_id": {
+            "type": "string",
+            "description": "请求人在当前目标（及所选学期或父回复）下最近保存的既有草稿或未过期撤回草稿 ID，供移动端断点续写。"
+          },
+          "own_entry_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string"
+            },
+            "description": "请求人在当前目标（及所选学期或父回复）下已保存的非删除、未过期评价或回复 ID 列表。"
           }
         },
         "required": [
@@ -3386,6 +3962,9 @@
             "type": "string"
           },
           "root_id": {
+            "type": "string"
+          },
+          "parent_id": {
             "type": "string"
           },
           "school_id": {
@@ -3410,6 +3989,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "published_at": {
             "type": "string",
             "format": "date-time",
@@ -3418,11 +4001,24 @@
           "featured": {
             "type": "boolean"
           },
+          "review_requested": {
+            "type": "boolean"
+          },
+          "moderation_reason_code": {
+            "$ref": "#/components/schemas/ModerationReasonCode"
+          },
           "change_reason": {
             "type": "string"
           },
           "change_origin": {
             "type": "string"
+          },
+          "appends": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/Append"
+            }
           }
         },
         "required": [
@@ -3455,6 +4051,93 @@
         "required": [
           "items",
           "next"
+        ]
+      },
+      "AdminBatchItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "object_id",
+          "revision"
+        ]
+      },
+      "AdminBatchApproveRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "school_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/AdminBatchItem"
+            }
+          }
+        },
+        "required": [
+          "school_id",
+          "reason",
+          "items"
+        ]
+      },
+      "AdminBatchItemResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "conflict",
+              "not_found",
+              "forbidden"
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "object_id",
+          "status"
+        ]
+      },
+      "AdminBatchApproveResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminBatchItemResult"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "DisclosureKey": {
@@ -3491,6 +4174,7 @@
       },
       "RatingTexts": {
         "type": "object",
+        "description": "按八种支持语言（zh-CN、en-US、ja-JP、ko-KR、fr-FR、es-ES、ru-RU、ar-EG，其中 ar-EG 为 RTL 文案）组织的五维评分提示文案字典。rating_texts[locale][dim][score] 中 dim 固定为 0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；score 固定为 0=暂无足够数据/未选择，1..5=第一级至第五级展示与无障碍 aria-valuetext 文案（难度与工作量使用程度描述而非质量好坏）。",
         "additionalProperties": {
           "type": "array",
           "minItems": 5,
@@ -3783,7 +4467,8 @@
               "$ref": "#/components/schemas/Band"
             },
             "minItems": 5,
-            "maxItems": 5
+            "maxItems": 5,
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           },
           "recommendation": {
             "$ref": "#/components/schemas/Recommendation"
@@ -3829,7 +4514,8 @@
               "$ref": "#/components/schemas/Band"
             },
             "minItems": 5,
-            "maxItems": 5
+            "maxItems": 5,
+            "description": "五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。"
           },
           "recommendation": {
             "$ref": "#/components/schemas/Recommendation"
@@ -3840,7 +4526,8 @@
               "$ref": "#/components/schemas/RatingDistribution"
             },
             "minItems": 5,
-            "maxItems": 5
+            "maxItems": 5,
+            "description": "五维评分分布柱状比例，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分；weights 下标 0..4 依次对应 1..5 分档。"
           },
           "terms": {
             "type": "array",
@@ -3898,6 +4585,10 @@
           },
           "term_name": {
             "type": "string"
+          },
+          "draft_id": {
+            "type": "string",
+            "description": "本人在该待评价课程及学期下已保存的普通草稿 ID，无匹配草稿时省略。"
           }
         },
         "required": [

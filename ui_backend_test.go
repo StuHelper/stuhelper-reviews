@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/StuHelper/stuhelper-reviews/postgres"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	r "github.com/StuHelper/stuhelper-reviews"
+	"github.com/StuHelper/stuhelper-reviews/auditquery"
 	"github.com/StuHelper/stuhelper-reviews/httpapi"
 )
 
@@ -258,4 +260,314 @@ func TestSummaryTermsUseCatalogOrderInsteadOfDisplayNames(t *testing.T) {
 	if len(terms) != 3 || terms[0].TermID != "a-new" || terms[0].TermOrderKey != 20243 || terms[1].TermID != "z-old" || terms[2].TermOrderKey != 0 {
 		t.Fatal("structured summary order", terms)
 	}
+}
+
+func TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan(t *testing.T) {
+	f, port := uiReviewFixture(t)
+	repo, migration := database(t)
+	f.service.Repo = repo
+	ctx := context.Background()
+
+	// Seed 80 reviews across distinct courses so planner prefers indexes whenever sargable.
+	port.aliases["course"] = map[string]string{"c-0-legacy": "c-0"}
+	port.aliases["teacher"] = map[string]string{"teacher-b": "teacher-special"}
+	var firstID string
+	for i := range 80 {
+		cid := fmt.Sprintf("c-%d", i)
+		in := input(cid, "autumn", (i%5)+1)
+		if i == 0 {
+			in.TargetID = "c-0-legacy"
+			in.TeacherID = "teacher-b"
+		} else {
+			in.TeacherID = "teacher-a"
+		}
+		p := r.Principal{Subject: fmt.Sprintf("author-%d", i)}
+		res, err := f.service.Create(ctx, p, fmt.Sprintf("seed-%d", i), in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			firstID = res.ID
+		}
+	}
+
+	// Verify sync_entry_upvotes trigger across upvote (+1), flip to downvote (-1), flip back (+1), cancel (0), and account closure.
+	voter1 := r.Principal{Subject: "v-1"}
+	voter2 := r.Principal{Subject: "v-2"}
+	if _, err := f.service.Action(ctx, voter1, firstID, "v1-up", r.Action{Action: "vote", Vote: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.Action(ctx, voter2, firstID, "v2-up", r.Action{Action: "vote", Vote: 1}); err != nil {
+		t.Fatal(err)
+	}
+	gotView, err := f.service.Get(ctx, student, firstID)
+	if err != nil || gotView.Upvotes != 2 {
+		t.Fatalf("expected 2 upvotes, got %+v err=%v", gotView, err)
+	}
+	if _, err := f.service.Action(ctx, voter1, firstID, "v1-down", r.Action{Action: "vote", Vote: -1}); err != nil {
+		t.Fatal(err)
+	}
+	gotView, err = f.service.Get(ctx, student, firstID)
+	if err != nil || gotView.Upvotes != 1 || gotView.Downvotes != 1 {
+		t.Fatalf("expected 1 upvote and 1 downvote after flip, got %+v err=%v", gotView, err)
+	}
+	if _, err := f.service.Action(ctx, voter1, firstID, "v1-cancel", r.Action{Action: "vote", Vote: 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service.AnonymizeOwner(ctx, voter2.Subject, "55555555-5555-4555-8555-555555555555"); err != nil {
+		t.Fatal(err)
+	}
+
+	admin := r.Principal{Subject: "admin"}
+	if _, err := f.service.AdminGet(ctx, admin, firstID); err != nil {
+		t.Fatal(err)
+	}
+
+	repo.DB.SetMaxOpenConns(1)
+	if _, err := migration.Exec(`ANALYZE reviews.entries, reviews.votes, reviews.audit; SELECT pg_stat_reset();`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.DB.Exec(`SET enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+
+	indexScans := func(indexName string) int64 {
+		t.Helper()
+		if _, err := repo.DB.Exec(`SELECT pg_stat_force_next_flush()`); err != nil {
+			t.Fatal(err)
+		}
+		var n int64
+		if err := migration.QueryRow(`SELECT COALESCE(idx_scan, 0) FROM pg_stat_user_indexes WHERE schemaname='reviews' AND indexrelname=$1`, indexName).Scan(&n); err != nil {
+			return 0
+		}
+		return n
+	}
+
+	// A-03: Course summaries hit reviews_listing.
+	beforeListing := indexScans("reviews_listing")
+	sumCourse, err := f.service.ReadSummaries(ctx, student, "course", []string{"c-0"}, false)
+	if err != nil || len(sumCourse.Items) != 1 || sumCourse.Items[0].ReviewCount != 1 {
+		t.Fatalf("unexpected course summary: %+v err=%v", sumCourse, err)
+	}
+	if afterListing := indexScans("reviews_listing"); afterListing <= beforeListing {
+		t.Fatalf("ReadSummaries(course) failed to use reviews_listing index (before=%d after=%d)", beforeListing, afterListing)
+	}
+
+	// A-03: Teacher summaries hit reviews_teachers GIN index.
+	beforeTeachers := indexScans("reviews_teachers")
+	sumTeacher, err := f.service.ReadSummaries(ctx, student, "teacher", []string{"teacher-special"}, false)
+	if err != nil || len(sumTeacher.Items) != 1 || sumTeacher.Items[0].ReviewCount != 1 {
+		t.Fatalf("unexpected teacher summary: %+v err=%v", sumTeacher, err)
+	}
+	if afterTeachers := indexScans("reviews_teachers"); afterTeachers <= beforeTeachers {
+		t.Fatalf("ReadSummaries(teacher) failed to use reviews_teachers GIN index (before=%d after=%d)", beforeTeachers, afterTeachers)
+	}
+
+	// A-14.1: School-wide and target-scoped sort=upvotes hit composite upvote indexes.
+	beforeUpSchool := indexScans("reviews_upvotes_school")
+	topSchool, err := f.service.List(ctx, student, r.Filter{Sort: "upvotes", Limit: 5})
+	if err != nil || len(topSchool.Items) != 5 || topSchool.Items[0].ID != firstID || topSchool.Items[0].Upvotes != 1 {
+		t.Fatalf("unexpected school-wide top reviews: %+v err=%v", topSchool, err)
+	}
+	if afterUpSchool := indexScans("reviews_upvotes_school"); afterUpSchool <= beforeUpSchool {
+		t.Fatalf("List(sort=upvotes) school-wide failed to use reviews_upvotes_school (before=%d after=%d)", beforeUpSchool, afterUpSchool)
+	}
+
+	beforeUpTarget := indexScans("reviews_upvotes_target")
+	topCourse, err := f.service.List(ctx, student, r.Filter{Kind: "course", TargetID: "c-0-legacy", Sort: "upvotes", Limit: 5})
+	if err != nil || len(topCourse.Items) != 1 || topCourse.Items[0].ID != firstID {
+		t.Fatalf("unexpected target top reviews: %+v err=%v", topCourse, err)
+	}
+	if afterUpTarget := indexScans("reviews_upvotes_target"); afterUpTarget <= beforeUpTarget {
+		t.Fatalf("List(sort=upvotes) target failed to use reviews_upvotes_target (before=%d after=%d)", beforeUpTarget, afterUpTarget)
+	}
+
+	// A-14.2: ReadAudit by Actor and by Target hit dedicated indexes.
+	scopes := []auditquery.Scope{{School: "*", Group: "*", Module: "reviews"}}
+	beforeAuditActor := indexScans("audit_actor_order")
+	auditByActor, err := repo.ReadAudit(ctx, auditquery.Request{Scopes: scopes, Actor: admin.Subject, Until: f.now.Add(time.Hour), Limit: 10})
+	if err != nil || len(auditByActor.Records) == 0 {
+		t.Fatalf("ReadAudit by Actor failed: %+v err=%v", auditByActor, err)
+	}
+	if afterAuditActor := indexScans("audit_actor_order"); afterAuditActor <= beforeAuditActor {
+		t.Fatalf("ReadAudit(Actor) failed to use audit_actor_order (before=%d after=%d)", beforeAuditActor, afterAuditActor)
+	}
+
+	beforeAuditTarget := indexScans("audit_target_order")
+	auditByTarget, err := repo.ReadAudit(ctx, auditquery.Request{Scopes: scopes, Target: "entry/" + firstID, Until: f.now.Add(time.Hour), Limit: 10})
+	if err != nil || len(auditByTarget.Records) == 0 {
+		t.Fatalf("ReadAudit by Target failed: %+v err=%v", auditByTarget, err)
+	}
+	if afterAuditTarget := indexScans("audit_target_order"); afterAuditTarget <= beforeAuditTarget {
+		t.Fatalf("ReadAudit(Target) failed to use audit_target_order (before=%d after=%d)", beforeAuditTarget, afterAuditTarget)
+	}
+
+	// A-14.3: Bounded PruneReplays and PruneOutbox only remove expired/confirmed rows.
+	if _, err := repo.PruneReplays(ctx, time.Time{}, 10); !errors.Is(err, r.ErrInput) {
+		t.Fatalf("expected ErrInput on zero time PruneReplays, got %v", err)
+	}
+	if _, err := repo.PruneOutbox(ctx, f.now, 1001); !errors.Is(err, r.ErrInput) {
+		t.Fatalf("expected ErrInput on over-limit PruneOutbox, got %v", err)
+	}
+	prunedBeforeExpiry, err := repo.PruneReplays(ctx, f.now.Add(time.Hour), 50)
+	if err != nil || prunedBeforeExpiry != 0 {
+		t.Fatalf("active replays pruned prematurely: n=%d err=%v", prunedBeforeExpiry, err)
+	}
+	prunedAfterExpiry, err := repo.PruneReplays(ctx, f.now.Add(25*time.Hour), 25)
+	if err != nil || prunedAfterExpiry != 25 {
+		t.Fatalf("expected bounded 25 expired replays pruned, got n=%d err=%v", prunedAfterExpiry, err)
+	}
+
+	pendingOutbox, err := repo.PendingOutbox(ctx, 10, nil)
+	if err != nil || len(pendingOutbox) < 4 {
+		t.Fatalf("expected pending outbox events, got %d err=%v", len(pendingOutbox), err)
+	}
+	for _, ev := range pendingOutbox[:3] {
+		if err := repo.ConfirmOutbox(ctx, ev.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Unconfirmed rows must never be deleted by PruneOutbox; confirmed rows older than cutoff are boundedly deleted.
+	prunedOutbox, err := outboxPruner(t, migration).PruneOutbox(ctx, time.Now().UTC().Add(time.Minute), 2)
+	if err != nil || prunedOutbox != 2 {
+		t.Fatalf("expected bounded 2 confirmed outbox rows pruned, got n=%d err=%v", prunedOutbox, err)
+	}
+	stillPending, err := repo.PendingOutbox(ctx, 100, nil)
+	if err != nil || len(stillPending) == 0 {
+		t.Fatalf("unconfirmed outbox events were lost: %d err=%v", len(stillPending), err)
+	}
+}
+
+func TestExistingVotesAndReplayDeadlinesSurviveUpgrade(t *testing.T) {
+	f := fixture(t)
+	repo, db := database(t)
+	f.service.Repo = repo
+	ctx := context.Background()
+	entry := create(t, f, "old", input("course", "autumn", 4))
+	if _, err := f.service.Action(ctx, r.Principal{Subject: "voter"}, entry.ID, "old", r.Action{Action: "vote", Vote: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DROP TRIGGER sync_entry_upvotes ON reviews.votes; ALTER TABLE reviews.entries DROP COLUMN upvotes; ALTER TABLE reviews.replays DROP COLUMN expires_at`); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := db.Exec(postgres.Schema); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := f.service.List(ctx, student, r.Filter{Sort: "upvotes", Limit: 1})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Upvotes != 1 {
+		t.Errorf("legacy counted vote: %+v %v", page, err)
+	}
+	n, err := repo.PruneReplays(ctx, f.now.Add(25*time.Hour), 10)
+	if err != nil || n != 2 {
+		t.Fatal(n, err)
+	}
+}
+
+type summaryQueryRecorder struct {
+	r.Repository
+	seen r.SummaryQuery
+}
+type summaryRecorderTx struct {
+	r.Transaction
+	r.SummaryTransaction
+	rec *summaryQueryRecorder
+}
+
+func (t summaryRecorderTx) SummaryAggregates(q r.SummaryQuery) ([]r.SummaryAggregate, error) {
+	t.rec.seen = q
+	return t.SummaryTransaction.SummaryAggregates(q)
+}
+func (rec *summaryQueryRecorder) Transaction(ctx context.Context, fn func(r.Transaction) error) error {
+	return rec.Repository.Transaction(ctx, func(t r.Transaction) error { return fn(summaryRecorderTx{t, t.(r.SummaryTransaction), rec}) })
+}
+
+func TestTeacherSummaryBindsOnlyRequestedAliases(t *testing.T) {
+	f, port := uiReviewFixture(t)
+	ctx := context.Background()
+	create(t, f, "old", input("old-course", "old-term", 1))
+	create(t, f, "new", input("new-course", "autumn", 5))
+	port.aliases = map[string]map[string]string{"course": {"old-course": "new-course", "other-course": "other"}, "term": {"old-term": "autumn"}, "teacher": {"old-a": "teacher-a", "other-old": "teacher-b"}}
+	rec := &summaryQueryRecorder{Repository: f.service.Repo}
+	f.service.Repo = rec
+	for _, charts := range []bool{false, true} {
+		result, err := f.service.ReadSummaries(ctx, student, "teacher", []string{"teacher-a"}, charts)
+		if err != nil || len(result.Items) != 1 || result.Items[0].Dimensions[0].Courses != 1 || result.Items[0].ReviewCount != 2 {
+			t.Fatal(result, err)
+		}
+		if charts && (len(result.Items[0].Terms) != 1 || result.Items[0].Terms[0].TermID != "autumn") {
+			t.Fatal(result)
+		}
+		if len(rec.seen.TargetAliases) != 1 || len(rec.seen.CourseAliases) != 0 || len(rec.seen.TermAliases) != 0 {
+			t.Error("bound unrelated alias dictionaries to targeted SQL")
+		}
+	}
+}
+
+type boundedSummaryCatalog struct{ *summaryCatalog }
+
+func (c boundedSummaryCatalog) EquivalentIDs(_ context.Context, kind, id string) ([]string, error) {
+	out := []string{id}
+	for alias, canonical := range c.aliases[kind] {
+		if canonical == id {
+			out = append(out, alias)
+		}
+	}
+	return out, nil
+}
+func (c boundedSummaryCatalog) CanonicalCourses(_ context.Context, ids []string) (map[string]string, error) {
+	result := map[string]string{}
+	for _, id := range ids {
+		result[id] = id
+		if mapped := c.aliases["course"][id]; mapped != "" {
+			result[id] = mapped
+		}
+	}
+	return result, nil
+}
+func (c boundedSummaryCatalog) SummaryAliases(context.Context, string, string) (map[string]string, error) {
+	return nil, r.ErrUnavailable
+}
+func TestTargetedSummaryUsesScopedCatalogLookups(t *testing.T) {
+	f, port := uiReviewFixture(t)
+	ctx := context.Background()
+	create(t, f, "old-c", input("old-course", "old-term", 4))
+	port.aliases = map[string]map[string]string{"teacher": {"teacher-a": "new-a"}, "course": {"old-course": "new-course"}, "term": {"old-term": "new-term"}}
+	f.service.Catalog = boundedSummaryCatalog{port}
+	for _, tc := range []struct{ kind, id string }{{"teacher", "new-a"}, {"course", "new-course"}} {
+		result, err := f.service.ReadSummaries(ctx, student, tc.kind, []string{tc.id}, true)
+		if err != nil || len(result.Items) != 1 || result.Items[0].ReviewCount != 1 || len(result.Items[0].Terms) != 1 || result.Items[0].Terms[0].TermID != "new-term" {
+			t.Fatal(result, err)
+		}
+	}
+}
+
+func TestOwnOverviewKeepsCountsOnAliasFailure(t *testing.T) {
+	f, port := uiReviewFixture(t)
+	ctx := context.Background()
+	// 3. A-15.2: OwnOverview preserves review_count and draft_count when SummaryAliases fails.
+	create(t, f, "ov-mine", input("course", "autumn", 4))
+	if _, err := f.service.SaveDraft(ctx, student, "", "ov-draft", input("other", "autumn", 3), 0); err != nil {
+		t.Fatal(err)
+	}
+	port.items = []r.PendingCourse{{CourseID: "pending-c", CourseName: "Pending", TermID: "autumn", TermName: "Autumn"}}
+	port.failed = true
+	overview, err := f.service.OwnOverview(ctx, student)
+	if err != nil || overview.ReviewCount != 1 || overview.DraftCount != 1 || overview.PendingCourses.State != "unavailable" {
+		t.Fatalf("OwnOverview discarded local counts on alias outage: %+v err=%v", overview, err)
+	}
+
+	port.failed = false
+	port.ownErr = context.DeadlineExceeded
+	overview, err = f.service.OwnOverview(ctx, student)
+	if err != nil || overview.ReviewCount != 1 || overview.DraftCount != 1 || overview.PendingCourses.Count != nil || overview.PendingCourses.State != "unavailable" {
+		t.Fatal(overview, err)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err = f.service.OwnOverview(canceled, student); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+
 }

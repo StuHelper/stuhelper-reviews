@@ -2,7 +2,6 @@ package reviews
 
 import (
 	"context"
-	"errors"
 )
 
 type PendingCourse struct {
@@ -10,6 +9,7 @@ type PendingCourse struct {
 	CourseName string `json:"course_name"`
 	TermID     string `json:"term_id"`
 	TermName   string `json:"term_name"`
+	DraftID    string `json:"draft_id,omitempty"`
 }
 type PendingCourses struct {
 	State  string          `json:"state"`
@@ -53,8 +53,8 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 	out.PendingCourses = PendingCourses{State: "unavailable", Reason: "enrollment_unavailable", Items: []PendingCourse{}}
 	school, err := s.contentScope(ctx, p, "")
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return OwnOverview{}, err
+		if ctx.Err() != nil {
+			return OwnOverview{}, ctx.Err()
 		}
 		return out, nil
 	}
@@ -63,10 +63,10 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 	if !ok || !refsOK {
 		return out, nil
 	}
-	candidates, err := courses.OwnReviewCourses(ctx, p)
+	candidates, err := s.catalogOwnReviewCourses(ctx, courses, p)
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return OwnOverview{}, err
+		if ctx.Err() != nil {
+			return OwnOverview{}, ctx.Err()
 		}
 		return out, nil
 	}
@@ -83,13 +83,19 @@ func (s *Service) OwnOverview(ctx context.Context, p Principal) (OwnOverview, er
 		out.PendingCourses = PendingCourses{State: "available", Count: &count, Items: []PendingCourse{}}
 		return out, nil
 	}
-	courseAliases, err := refs.SummaryAliases(ctx, school, "course")
+	courseAliases, err := s.catalogSummaryAliases(ctx, refs, school, "course")
 	if err != nil {
-		return OwnOverview{}, err
+		if ctx.Err() != nil {
+			return OwnOverview{}, ctx.Err()
+		}
+		return out, nil
 	}
-	termAliases, err := refs.SummaryAliases(ctx, school, "term")
+	termAliases, err := s.catalogSummaryAliases(ctx, refs, school, "term")
 	if err != nil {
-		return OwnOverview{}, err
+		if ctx.Err() != nil {
+			return OwnOverview{}, ctx.Err()
+		}
+		return out, nil
 	}
 	err = s.Repo.Transaction(ctx, func(tx Transaction) error {
 		port, ok := tx.(SummaryTransaction)
