@@ -53,7 +53,7 @@ PostgreSQL 测试覆盖资格缺失、不同学期教师、内容准入、本人
 
 真实身份和校园资格由应用提供。缺少事实或依赖时拒绝相应操作，不以演示身份代替。真实账号、备份恢复和压力基准仍待验收。
 
-业务规则见 [课程与评价规格](https://github.com/StuHelper/stuhelper-next/blob/develop/docs/spec/academic-content.md)。
+业务规则见 [课程与评价规格](https://github.com/StuHelper/stuhelper/blob/develop/docs/spec/academic-content.md)。
 
 展示配置包含评分文案、学校和修订，历史修订保存于审计表。
 
