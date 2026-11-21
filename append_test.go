@@ -14,7 +14,88 @@ import (
 
 	r "github.com/StuHelper/stuhelper-reviews"
 	"github.com/StuHelper/stuhelper-reviews/httpapi"
+	"github.com/StuHelper/stuhelper-reviews/sdk"
 )
+
+func TestCourseAppendFirstPublicationWindow(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	f.now = time.Date(2026, 11, 20, 8, 0, 0, 123456000, time.UTC)
+	retryAt := f.now.Add(5 * time.Minute)
+	original := input("course", "autumn", 4)
+	root := create(t, f, "first-publication", original)
+	republished := create(t, f, "will-republish", original)
+
+	f.now = f.now.Add(time.Minute)
+	withdrawn, err := f.service.Action(ctx, student, republished.ID, "withdraw", r.Action{Action: "withdraw", Revision: republished.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	republished, err = f.service.Action(ctx, student, republished.ID, "republish", r.Action{Action: "republish", Revision: withdrawn.Revision, Input: &original})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	moderationCalls := 0
+	f.service.Moderation = beforeAppendCommit{func() error {
+		moderationCalls++
+		return nil
+	}}
+	handler := httpapi.Handler{
+		Service:      f.service,
+		Authenticate: func(*http.Request) (r.Principal, error) { return student, nil },
+	}.Routes()
+	appendRequest := func(root r.Result) *httptest.ResponseRecorder {
+		body := fmt.Sprintf(`{"action":"append","revision":%d,"body":"Follow-up"}`, root.Revision)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/reviews/"+root.ID+"/actions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Idempotency-Key", "append")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	f.now = retryAt.Add(-time.Nanosecond)
+	rejected := appendRequest(root)
+	if rejected.Code != http.StatusConflict {
+		t.Fatalf("append before the boundary returned %d: %s", rejected.Code, rejected.Body)
+	}
+	var problem sdk.Error
+	if err := json.Unmarshal(rejected.Body.Bytes(), &problem); err != nil {
+		t.Fatal(err)
+	}
+	if problem.Code != "conflict" || problem.Subcode == nil || *problem.Subcode != "append_window_not_open" ||
+		problem.Field == nil || *problem.Field != "action" || problem.RetryAt == nil || !problem.RetryAt.Equal(retryAt) {
+		t.Fatalf("unexpected conflict payload: %s", rejected.Body)
+	}
+	before, err := f.service.GetWithOptions(ctx, student, root.ID, r.ViewOptions{IncludeAppends: true})
+	if err != nil || before.Revision != root.Revision || len(before.Appends) != 0 || moderationCalls != 0 {
+		t.Fatalf("early append changed the review or called moderation: %+v, calls=%d, %v", before, moderationCalls, err)
+	}
+
+	// Retrying the same key at the boundary succeeds because a rejection stores no receipt.
+	f.now = retryAt
+	atBoundary := appendRequest(root)
+	if atBoundary.Code != http.StatusOK || moderationCalls != 1 {
+		t.Fatalf("append at the boundary returned %d, calls=%d: %s", atBoundary.Code, moderationCalls, atBoundary.Body)
+	}
+	// A saved success still replays if the server clock moves back into the window.
+	f.now = retryAt.Add(-time.Nanosecond)
+	repeated := appendRequest(root)
+	if repeated.Code != http.StatusOK || repeated.Body.String() != atBoundary.Body.String() || moderationCalls != 1 {
+		t.Fatalf("idempotent replay returned %d, calls=%d: %s", repeated.Code, moderationCalls, repeated.Body)
+	}
+	view, err := f.service.GetWithOptions(ctx, student, root.ID, r.ViewOptions{IncludeAppends: true})
+	if err != nil || view.Revision != root.Revision+1 || len(view.Appends) != 1 || !view.Appends[0].CreatedAt.Equal(retryAt) {
+		t.Fatalf("unexpected stored append after replay: %+v %v", view, err)
+	}
+
+	f.now = retryAt.Add(time.Nanosecond)
+	after := appendRequest(republished)
+	if after.Code != http.StatusOK || moderationCalls != 2 {
+		t.Fatalf("append after the first publication's window returned %d, calls=%d: %s", after.Code, moderationCalls, after.Body)
+	}
+}
 
 func TestPostWindowAppendPreservesAttributionSamplesAndModeration(t *testing.T) {
 	f, _ := uiReviewFixture(t)
@@ -187,6 +268,7 @@ func TestAppendLimitMatchesContract(t *testing.T) {
 	}
 	ctx := context.Background()
 	root := create(t, f, "limit", input("course", "autumn", 4))
+	f.now = f.now.Add(f.service.Config.EditWindow)
 	f.service.Config.MaxAppends = 11
 	revision := root.Revision
 	for i := range 10 {
@@ -215,6 +297,7 @@ func TestAppendRechecksAccountAfterModeration(t *testing.T) {
 	f := fixture(t)
 	ctx := context.Background()
 	root := create(t, f, "closure", input("course", "autumn", 4))
+	f.now = f.now.Add(f.service.Config.EditWindow)
 	f.service.Moderation = beforeAppendCommit{func() error {
 		return f.service.AnonymizeOwner(ctx, student.Subject, "00000000-0000-4000-8000-000000000021")
 	}}
