@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -14,7 +15,7 @@ func TestActivityCalendarMigrationAndRollbackPreserveNewWrites(t *testing.T) {
 	repo, _, db := activityDatabase(t)
 	ctx := context.Background()
 	midnight := time.Date(2026, 10, 31, 16, 0, 0, 0, time.UTC)
-	target := strings.Repeat("课", 30) + "/course"
+	target := strings.Repeat("course-", 12) + "canonical"
 	exec := func(query string, args ...any) {
 		t.Helper()
 		if _, err := db.ExecContext(ctx, query, args...); err != nil {
@@ -29,12 +30,21 @@ func TestActivityCalendarMigrationAndRollbackPreserveNewWrites(t *testing.T) {
 
 	entry := func(id, root, kind, target, state string, at time.Time, teacherReply bool) {
 		t.Helper()
-		exec(`INSERT INTO reviews.entries(id,root_id,owner,school_id,kind,target_id,term_id,state,created_at,first_published_at,data)
- VALUES($1,$2,'owner','school',$3,$4,'term',$5,$6,$6,
- jsonb_build_object('id',$1::text,'root_id',$2::text,'school_id','school','owner','owner',
-  'input',jsonb_build_object('kind',$3::text,'target_id',$4::text),'state',$5::text,'activity_target_id',$4::text,
-  'teacher_ids',jsonb_build_array('teacher-a','teacher-a'),'teacher_reply',$7::boolean))`,
-			id, root, kind, target, state, at, teacherReply)
+		value := m.Entry{
+			ID: id, RootID: root, Owner: "owner", SchoolID: "school", State: state,
+			Input:            m.Input{Kind: kind, TargetID: target, TermID: "term"},
+			ActivityTargetID: target, TeacherIDs: []string{"teacher-a", "teacher-a"},
+			TeacherReply: teacherReply, FirstPublishedAt: &at, CreatedAt: at, UpdatedAt: at,
+		}
+		data, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exec(`INSERT INTO reviews.entries
+ (id,root_id,owner,school_id,kind,target_id,term_id,state,created_at,first_published_at,data)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$10)`,
+			value.ID, value.RootID, value.Owner, value.SchoolID, value.Input.Kind,
+			value.Input.TargetID, value.Input.TermID, value.State, at, data)
 	}
 	entry("early", "early", "course", target, "published", midnight.Add(-time.Second), false)
 	entry("late", "late", "course", target, "published", midnight, false)
