@@ -1,14 +1,18 @@
 package reviews
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
-// ErrorDetail carries a stable machine-readable subcode, optional form/parameter
-// field name, and optional current server revision while preserving sentinel errors.Is checks.
+// ErrorDetail carries a stable subcode and optional field, current revision, or retry time.
+// It preserves sentinel errors.Is checks.
 type ErrorDetail struct {
 	Base            error
 	Subcode         string
 	Field           string
 	CurrentRevision *int64
+	RetryAt         *time.Time
 }
 
 func (e ErrorDetail) Error() string {

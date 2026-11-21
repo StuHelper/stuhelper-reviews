@@ -122,10 +122,11 @@ func (h Handler) sameOriginWrite(r *http.Request) bool {
 }
 
 type errorResponse struct {
-	Code            string `json:"code"`
-	Subcode         string `json:"subcode,omitempty"`
-	Field           string `json:"field,omitempty"`
-	CurrentRevision *int64 `json:"current_revision,omitempty"`
+	Code            string     `json:"code"`
+	Subcode         string     `json:"subcode,omitempty"`
+	Field           string     `json:"field,omitempty"`
+	CurrentRevision *int64     `json:"current_revision,omitempty"`
+	RetryAt         *time.Time `json:"retry_at,omitempty"`
 }
 
 func respond(w http.ResponseWriter, v any, e error) {
@@ -170,6 +171,7 @@ func respond(w http.ResponseWriter, v any, e error) {
 			payload.Subcode = detail.Subcode
 			payload.Field = detail.Field
 			payload.CurrentRevision = detail.CurrentRevision
+			payload.RetryAt = detail.RetryAt
 		}
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(payload)

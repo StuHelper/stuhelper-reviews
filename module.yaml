@@ -137,10 +137,6 @@ scenario_tests:
   ACAD-41:
     - append_test.go#TestCourseAppendFirstPublicationWindow
     - append_test.go#TestPostWindowAppendPreservesAttributionSamplesAndModeration
-  ACAD-45:
-    - append_test.go#TestCourseAppendFirstPublicationWindow
-  ACAD-46:
-    - append_test.go#TestCourseAppendFirstPublicationWindow
   CM-09:
     - administration_test.go#TestAdministrativeReadsAuditEverySuccessfulCall
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned
