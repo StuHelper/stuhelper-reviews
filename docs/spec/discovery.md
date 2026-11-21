@@ -34,7 +34,11 @@ relay 通过 `Inspect` 核对普通评价事件的当前修订，再按 `ReviewR
 
 postgres.Repository.DiscoverySnapshot(ctx, cursor, limit) 供受信重建任务调用，返回 Items 和 Next，单页 1 至 100 条。空 cursor 开始，空 Next 结束。不可变历史与 PostgreSQL 可见性快照固定首轮成员，分页按 ID 字节序递增。
 
-分页期间的修改、删除和延迟提交不会替换首轮版本。游标五分钟有效，历史修改或清理会使旧游标失效，必须中止重建。历史与墓碑不自动清理，保留策略须结合消费者重放期限单独确认。
+分页期间的修改、删除和延迟提交不会替换首轮版本。游标五分钟有效，历史修改或清理会使旧游标失效，必须中止重建。
+
+搜索旧修订自被替代起、最小墓碑自产生起默认保留 90 天。清理墓碑前须确认各订阅方已处理该墓碑、较早事件无法重放且无有效 `legal_hold`。墓碑仅保存识别对象及修订顺序所需的数据。
+
+全文、投影、历史修订和事件载荷中仍可关联个人的信息，按适用期限中较早到期的时间删除或匿名化。到期后只保留必要且无法重新识别个人的元数据。搜索记录的自动清理待实施。[现行条款第 4 节](https://stuhelper.com/terms.html) · [数据保留与删除](https://github.com/StuHelper/stuhelper/blob/develop/docs/spec/data-retention.md)
 
 这些来源接口供宿主通过 Go 调用。运行身份读取 `discovery_history`、`discovery_retention`，追加 `discovery_history`，并读写和确认 outbox。历史修改及删除权限限于迁移或维护身份。
 
