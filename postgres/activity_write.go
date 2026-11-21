@@ -4,15 +4,17 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	m "github.com/StuHelper/stuhelper-reviews"
 	"time"
+
+	m "github.com/StuHelper/stuhelper-reviews"
+	"github.com/StuHelper/stuhelper-reviews/internal/activityday"
 )
 
 // The advisory lock also serializes a bucket's first insert, when no row exists
 // yet. ON CONFLICT(id) alone can race with the separate (kind,target_id,day)
 // unique constraint. Callers acquire bucket locks in ID order.
 func (t *transaction) changeActivity(kind, target, school string, day time.Time, firstDelta, secondDelta int64, forcedVisibility *bool, at time.Time) error {
-	day = day.UTC().Truncate(24 * time.Hour)
+	day = activityday.Date(day)
 	id := m.ActivityID(kind, target, day)
 	if _, _, e := m.ParseActivityID(id); e != nil {
 		return e
@@ -46,5 +48,5 @@ func (t *transaction) changeActivity(kind, target, school string, day time.Time,
 		return safe(e)
 	}
 	eventID := fmt.Sprintf("activity:%x:%d", sha256.Sum256([]byte(id)), revision)
-	return t.saveEnvelope(m.Envelope{SpecVersion: "1.0", ID: eventID, Source: "reviews", Type: "discovery.activity.v1", Subject: id, Time: at, Data: data})
+	return t.saveEnvelope(m.Envelope{SpecVersion: "1.0", ID: eventID, Source: "reviews", Type: m.ActivityEventType, Subject: id, Time: at, Data: data})
 }

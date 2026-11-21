@@ -53,6 +53,7 @@ scenario_tests:
     - accountquery/query_test.go#TestAccountQueryAuthorizationAndFailures
     - postgres/account_query_test.go#TestAccountQueryScopePaginationAndRuntime
   REV-ACTIVITY-01:
+    - postgres/activity_migration_test.go#TestActivityCalendarMigrationAndRollbackPreserveNewWrites
     - activity_test.go#TestActivityChecksSharedTeacherOnceAndRechecksDeletion
     - activity_test.go#TestActivityInactiveTeacherDoesNotBlockCourseReview
     - postgres/activity_test.go#TestActivitySnapshotSchemaRollbackAndBoundedCleanup

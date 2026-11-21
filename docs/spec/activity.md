@@ -10,7 +10,7 @@ updated: 2026-11-21
 
 活动遵循 `contracts/discovery-activity.schema.json` 固定的 search Schema。来源提交、版本与 SHA-256 见相邻来源记录。测试核对固定摘要和 outbox 事件，并验证指标字段归属。
 
-reviews 只发送 reviews 与 interactions。事件类型为 discovery.activity.v1，source 固定为 reviews，target.source 固定为 catalog。活动 ID 为 kind/base64url(规范对象 ID)/UTC 日期，base64url 不带填充，subject 等于活动 ID。
+reviews 发送 `reviews` 和 `interactions`。事件类型为 `discovery.activity.v2`，来源是 reviews，统计目标归 catalog。活动 ID 由对象类型、无填充的规范 ID base64url 编码和北京时间日期组成，`subject` 等于活动 ID。
 
 每个对象日维护独立单调修订。事件完整替换日快照，零值显式发送。消费者忽略旧修订。事件、计数和修订历史在同一业务事务提交，并在提交后唤醒 relay。
 
@@ -19,6 +19,8 @@ reviews 只发送 reviews 与 interactions。事件类型为 discovery.activity.
 ## 评价与互动计数
 
 reviews 统计当日首次发布、且当前发布可见的课程评价主帖。撤回后重新发布沿用首次发布日期，不在重新发布当天再加一。待审、隐藏、删除和到期对象不贡献计数。
+
+统计按北京时间（Asia/Shanghai）零点分日。目录热度与热门排行的 `window_days` 计入今天和之前的 N−1 日，包含今天已经发生的活动。
 
 interactions 统计当前有效的投票与已发布回复。每条有效投票计一，赞成改为反对不重复计数；取消修订原投票日，再次投票使用新的投票日。回复使用首次发布日期，父帖隐藏时所有子回复和投票一同退出计数。
 
@@ -36,7 +38,7 @@ backend 的目录适配器必须优先使用 catalog.Object.CanonicalID，非别
 
 ## 公开接口与一致性
 
-postgres.Repository.ActivitySnapshot(ctx, fromDay, toDay, cursor, limit) 返回 []Activity、next、error。日期必须为 UTC 零点，窗口左闭右开，limit 为 1 至 100。首轮 cursor 为空，next 为空表示结束。
+`postgres.Repository.ActivitySnapshot` 接收起止时刻，转换为北京时间日期后查询左闭右开的区间。每页最多 100 条。首轮游标为空，返回的下一页游标为空表示结束。
 
 分页绑定窗口、上限和 PostgreSQL 可见性快照，读取不可变历史中的首轮最新修订，包含零计数和不可见墓碑。分页期间的新增、修改及延迟提交不能进入旧快照。游标有效五分钟，窗口或上限变化会被拒绝。
 
@@ -52,12 +54,22 @@ OutboxChannel 为 reviews_outbox。PendingOutbox(ctx, limit, excludeSubjects) �
 
 ## 清理、权限与验证
 
-PruneActivityHistory(ctx, beforeDay, limit) 每次最多删除 1000 条旧修订，保留每个对象日的最新修订和墓碑。清理在同一事务提高保留修订号，已有分页游标失效，调用方须中止重建。
+`PruneActivityHistory` 将截止时刻转换为北京时间日期，每次最多清理该日期之前的 1000 条旧修订。清理保留各对象日的最新修订和墓碑，并在同一事务使现有分页游标失效。
 
 运行身份需要 activity_buckets 的读写、activity_history 的读取和追加、activity_retention 的读取，以及 outbox 的读写确认权限。历史删除权限只授予负责清理的身份。当前日快照和最新墓碑不自动删除。
+
+## 日期迁移与回退
+
+暂停业务写入和 relay 后，由迁移身份执行 `postgres.Schema`。迁移使用已保存的首次发布时间和投票首次创建时间，按当前发布状态和原有规范归属精确重算北京日贡献。缺少可信规范归属的历史条目无法建立对应对象的桶。
+
+切换单事务保存日历和新修订，为移出的旧桶发送零计数快照。旧日历待投递活动由新快照取代，原记录和内容事件保留。切换使已有活动游标失效，search 从各来源重新构建活动投影。重复执行同一方向保持修订不变。
+
+回退同样先暂停写入和 relay。迁移身份调用 `postgres.RollbackActivityCalendar`，按 UTC 日期重算当前事实并发送 v1 快照。切换后新增的评价、回复和投票随源事实保留。全部来源回退后恢复旧服务，并从 UTC 来源重建搜索投影。
+
+## 场景
 
 接口均为公开 Go 端口。`module.yaml` 登记 `REV-ACTIVITY-01` 的单仓和隔离 PostgreSQL 测试。backend 的 `TestActivitySourcesRelayPopularityAndAtomicRebuild` 覆盖活动源、relay、热门聚合和重建。
 
 | 场景 | 验证条件 |
 | --- | --- |
-| REV-ACTIVITY-01 | 本来源计数、权限、并发、回滚、事件 Schema、固定分页、墓碑和清理上限 |
+| REV-ACTIVITY-01 | 本来源计数、权限、并发、回滚、事件 Schema、固定分页、墓碑、清理上限、日期切换、幂等和保留新写入的回退 |

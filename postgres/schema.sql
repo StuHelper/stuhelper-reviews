@@ -152,3 +152,124 @@ CREATE INDEX IF NOT EXISTS reviews_published_teacher_replies ON reviews.entries(
  WHERE state='published' AND COALESCE((data->>'teacher_reply')::boolean,false);
 CREATE INDEX IF NOT EXISTS reviews_activity_roots ON reviews.entries(kind,(data->>'activity_target_id'),id)
  WHERE state='published';
+
+-- Occurrence instants and review visibility are shared by live writes and
+-- calendar rebuilds. The caller checks or joins the discussion's root.
+CREATE OR REPLACE FUNCTION reviews.activity_facts(root_filter text, as_of timestamptz)
+RETURNS TABLE(root_id text, occurred_at timestamptz, reviews integer, interactions integer)
+LANGUAGE sql STABLE AS $$
+ SELECT e.root_id,e.first_published_at,CASE WHEN e.kind='course' THEN 1 ELSE 0 END,CASE WHEN e.kind='reply' THEN 1 ELSE 0 END
+ FROM reviews.entries e
+ WHERE (root_filter IS NULL OR e.root_id=root_filter)
+   AND e.state='published' AND (e.expires_at IS NULL OR e.expires_at>as_of)
+   AND e.first_published_at IS NOT NULL AND ((e.id=e.root_id AND e.kind='course') OR e.kind='reply')
+ UNION ALL
+ SELECT e.root_id,v.created_at,0,1
+ FROM reviews.votes v JOIN reviews.entries e ON e.id=v.id
+ WHERE (root_filter IS NULL OR e.root_id=root_filter)
+   AND e.state='published' AND (e.expires_at IS NULL OR e.expires_at>as_of)
+$$;
+
+ALTER TABLE reviews.activity_retention ADD COLUMN IF NOT EXISTS time_zone text NOT NULL DEFAULT 'UTC'
+ CHECK (time_zone IN ('UTC','Asia/Shanghai'));
+
+CREATE OR REPLACE FUNCTION reviews.set_activity_timezone(target_zone text)
+RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE
+ migration_time timestamptz := transaction_timestamp();
+ event_type text;
+BEGIN
+ IF target_zone IS NULL OR target_zone NOT IN ('UTC','Asia/Shanghai') THEN
+  RAISE EXCEPTION 'unsupported reviews activity calendar';
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('reviews:activity-calendar',0));
+ IF EXISTS (SELECT 1 FROM reviews.activity_retention WHERE singleton AND time_zone=target_zone) THEN
+  RETURN;
+ END IF;
+
+ -- Run while the application and relay are stopped. Concurrent writers cause
+ -- the migration to fail rather than waiting while holding other table locks.
+ LOCK TABLE reviews.entries,reviews.votes,reviews.activity_contributions,reviews.activity_buckets,
+   reviews.activity_history,reviews.activity_retention,reviews.outbox IN SHARE ROW EXCLUSIVE MODE NOWAIT;
+ event_type := CASE target_zone WHEN 'UTC' THEN 'discovery.activity.v1' ELSE 'discovery.activity.v2' END;
+
+ DELETE FROM reviews.activity_contributions;
+ WITH active_roots AS (
+  SELECT e.id,e.school_id,e.kind,e.data FROM reviews.entries e
+  WHERE e.id=e.root_id AND e.state='published' AND (e.expires_at IS NULL OR e.expires_at>migration_time)
+ ), targets AS (
+  SELECT r.id AS root_id,r.school_id,CASE r.kind WHEN 'course' THEN 'course' ELSE 'teacher' END AS kind,
+         r.data->>'activity_target_id' AS target_id
+  FROM active_roots r WHERE r.kind IN ('course','mentor')
+  UNION
+  SELECT r.id,r.school_id,'teacher',t.id
+  FROM active_roots r
+  CROSS JOIN LATERAL jsonb_array_elements_text(
+   CASE WHEN jsonb_typeof(r.data->'teacher_ids')='array' THEN r.data->'teacher_ids' ELSE '[]'::jsonb END
+  ) AS t(id)
+  WHERE r.kind='course'
+ ), root_counts AS (
+  SELECT f.root_id,(f.occurred_at AT TIME ZONE target_zone)::date AS day,
+         sum(f.reviews) AS reviews,sum(f.interactions) AS interactions
+  FROM reviews.activity_facts(NULL,migration_time) f
+  GROUP BY f.root_id,day
+ )
+ INSERT INTO reviews.activity_contributions(root_id,id,kind,target_id,school_id,day,reviews,interactions)
+ SELECT t.root_id,t.kind||'/'||translate(encode(convert_to(t.target_id,'UTF8'),'base64'),'+/='||chr(10),'-_')
+            ||'/'||to_char(c.day,'YYYY-MM-DD'),
+        t.kind,t.target_id,t.school_id,c.day,c.reviews,c.interactions
+ FROM targets t JOIN root_counts c USING(root_id)
+ WHERE octet_length(t.target_id) BETWEEN 1 AND 200;
+
+ -- Complete snapshots supersede previously queued snapshots under the other
+ -- calendar. Keep the outbox rows and leave unrelated content events pending.
+ UPDATE reviews.outbox SET sent_at=migration_time
+ WHERE sent_at IS NULL AND data->>'type' IN ('discovery.activity.v1','discovery.activity.v2')
+   AND data->>'type'<>event_type;
+
+ WITH totals AS (
+  SELECT id,kind,target_id,school_id,day,sum(reviews)::bigint AS reviews,sum(interactions)::bigint AS interactions
+  FROM reviews.activity_contributions GROUP BY id,kind,target_id,school_id,day
+ ), next AS (
+  SELECT coalesce(t.id,b.id) AS id,coalesce(t.kind,b.kind) AS kind,coalesce(t.target_id,b.target_id) AS target_id,
+         coalesce(t.school_id,b.school_id) AS school_id,coalesce(t.day,b.day) AS day,
+         coalesce(t.reviews,0) AS reviews,coalesce(t.interactions,0) AS interactions,
+         coalesce(b.revision,0)+1 AS revision,t.id IS NOT NULL AS visible
+  FROM totals t FULL JOIN reviews.activity_buckets b USING(id)
+ ), updated AS (
+  INSERT INTO reviews.activity_buckets(id,kind,target_id,school_id,day,first_count,second_count,revision,visible,data)
+  SELECT id,kind,target_id,school_id,day,reviews,interactions,revision,visible,
+         jsonb_build_object('source','reviews','id',id,'day',to_char(day,'YYYY-MM-DD'),
+          'target',jsonb_build_object('source','catalog','kind',kind,'id',target_id),
+          'metrics',jsonb_build_object('reviews',reviews,'interactions',interactions),
+          'revision',revision,'visible',visible)
+  FROM next
+  ON CONFLICT(id) DO UPDATE SET first_count=excluded.first_count,second_count=excluded.second_count,
+    revision=excluded.revision,visible=excluded.visible,data=excluded.data,school_id=excluded.school_id
+  RETURNING id,revision,day,data
+ ), history AS (
+  INSERT INTO reviews.activity_history(id,revision,day,data)
+  SELECT id,revision,day,data FROM updated RETURNING id,revision,data
+ ), events AS (
+  SELECT 'activity:'||encode(sha256(convert_to(id,'UTF8')),'hex')||':'||revision AS event_id,id,data
+  FROM history
+ )
+ INSERT INTO reviews.outbox(id,data)
+ SELECT event_id,jsonb_build_object('specversion','1.0','id',event_id,'source','reviews','type',event_type,
+    'subject',id,'time',migration_time,'data',data)
+ FROM events;
+
+ IF EXISTS (
+  SELECT 1 FROM reviews.activity_buckets
+  WHERE first_count NOT BETWEEN 0 AND 1000000000 OR second_count NOT BETWEEN 0 AND 1000000000
+ ) THEN
+  RAISE EXCEPTION 'reviews activity count exceeds snapshot contract';
+ END IF;
+
+ UPDATE reviews.activity_retention SET time_zone=target_zone,revision=revision+1 WHERE singleton;
+ PERFORM pg_notify('reviews_outbox','');
+END
+$$;
+REVOKE ALL ON FUNCTION reviews.set_activity_timezone(text) FROM PUBLIC;
+
+SELECT reviews.set_activity_timezone('Asia/Shanghai');

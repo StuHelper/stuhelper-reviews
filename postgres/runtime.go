@@ -2,7 +2,9 @@ package postgres
 
 import (
 	"context"
+
 	reviews "github.com/StuHelper/stuhelper-reviews"
+	"github.com/StuHelper/stuhelper-reviews/internal/activityday"
 )
 
 // CheckRuntime rejects migration identities and privileges crossing module schemas.
@@ -20,7 +22,8 @@ func (r *Repository) CheckRuntime(ctx context.Context) error {
      OR has_any_column_privilege(current_user, relation, 'UPDATE')
  )
  OR EXISTS(SELECT 1 FROM pg_namespace WHERE nspname NOT IN ('reviews','public','information_schema') AND nspname NOT LIKE 'pg_%' AND has_schema_privilege(current_user,oid,'USAGE'))
- FROM pg_roles WHERE rolname=current_user`).Scan(&unsafe)
+ OR NOT EXISTS (SELECT 1 FROM reviews.activity_retention WHERE singleton AND time_zone=$1)
+ FROM pg_roles WHERE rolname=current_user`, activityday.Zone).Scan(&unsafe)
 	if err != nil || unsafe {
 		return reviews.ErrUnavailable
 	}

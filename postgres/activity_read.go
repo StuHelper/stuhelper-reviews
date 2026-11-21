@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
-	m "github.com/StuHelper/stuhelper-reviews"
 	"time"
+
+	m "github.com/StuHelper/stuhelper-reviews"
+	"github.com/StuHelper/stuhelper-reviews/internal/activityday"
 )
 
 var _ m.ActivityReader = (*Repository)(nil)
@@ -36,13 +38,17 @@ func (r *Repository) ReadActivity(ctx context.Context, id string) (m.Activity, e
 }
 func (r *Repository) ActivitySnapshot(ctx context.Context, fromDay, toDay time.Time, cursor string, limit int) ([]m.Activity, string, error) {
 	out := []m.Activity{}
-	if !m.ActivityDay(fromDay) || !m.ActivityDay(toDay) || !fromDay.Before(toDay) || limit < 1 || limit > 100 || len(cursor) > 16384 {
+	if !m.ActivityDay(fromDay) || !m.ActivityDay(toDay) || limit < 1 || limit > 100 || len(cursor) > 16384 {
 		return out, "", m.ErrInput
 	}
-	state := activityCursor{Version: 1, From: fromDay, To: toDay, Limit: limit, Expires: time.Now().Add(5 * time.Minute)}
+	fromDay, toDay = activityday.Date(fromDay), activityday.Date(toDay)
+	if !fromDay.Before(toDay) {
+		return out, "", m.ErrInput
+	}
+	state := activityCursor{Version: 2, From: fromDay, To: toDay, Limit: limit, Expires: time.Now().Add(5 * time.Minute)}
 	if cursor != "" {
 		raw, e := base64.RawURLEncoding.DecodeString(cursor)
-		if e != nil || json.Unmarshal(raw, &state) != nil || state.Version != 1 || !state.From.Equal(fromDay) || !state.To.Equal(toDay) || state.Limit != limit || state.After == "" || len(state.After) > 512 || state.Visibility == "" || !time.Now().Before(state.Expires) {
+		if e != nil || json.Unmarshal(raw, &state) != nil || state.Version != 2 || !state.From.Equal(fromDay) || !state.To.Equal(toDay) || state.Limit != limit || state.After == "" || len(state.After) > 512 || state.Visibility == "" || !time.Now().Before(state.Expires) {
 			return out, "", m.ErrInput
 		}
 	}
@@ -106,7 +112,7 @@ func (r *Repository) PruneActivityHistory(ctx context.Context, beforeDay time.Ti
 	if !m.ActivityDay(beforeDay) || limit < 1 || limit > 1000 {
 		return 0, m.ErrInput
 	}
-	result, e := r.DB.ExecContext(ctx, `DELETE FROM reviews.activity_history WHERE (id,revision) IN (SELECT h.id,h.revision FROM reviews.activity_history h JOIN reviews.activity_buckets b USING(id) WHERE h.day<$1 AND h.revision<b.revision ORDER BY h.day,h.id,h.revision LIMIT $2)`, beforeDay, limit)
+	result, e := r.DB.ExecContext(ctx, `DELETE FROM reviews.activity_history WHERE (id,revision) IN (SELECT h.id,h.revision FROM reviews.activity_history h JOIN reviews.activity_buckets b USING(id) WHERE h.day<$1 AND h.revision<b.revision ORDER BY h.day,h.id,h.revision LIMIT $2)`, activityday.Date(beforeDay), limit)
 	if e != nil {
 		return 0, safe(e)
 	}
