@@ -173,6 +173,24 @@ $$;
 ALTER TABLE reviews.activity_retention ADD COLUMN IF NOT EXISTS time_zone text NOT NULL DEFAULT 'UTC'
  CHECK (time_zone IN ('UTC','Asia/Shanghai'));
 
+-- Keep an old process or an early rollback restart from mixing calendars.
+CREATE OR REPLACE FUNCTION reviews.guard_activity_calendar()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE expected_type text;
+BEGIN
+ SELECT CASE time_zone WHEN 'UTC' THEN 'discovery.activity.v1' ELSE 'discovery.activity.v2' END
+ INTO STRICT expected_type FROM reviews.activity_retention WHERE singleton;
+ IF NEW.data->>'type'<>expected_type THEN
+  RAISE EXCEPTION 'reviews activity event calendar does not match storage';
+ END IF;
+ RETURN NULL;
+END
+$$;
+REVOKE ALL ON FUNCTION reviews.guard_activity_calendar() FROM PUBLIC;
+CREATE OR REPLACE TRIGGER guard_activity_calendar AFTER INSERT ON reviews.outbox FOR EACH ROW
+WHEN ((NEW.data->>'type') IN ('discovery.activity.v1','discovery.activity.v2'))
+EXECUTE FUNCTION reviews.guard_activity_calendar();
+
 CREATE OR REPLACE FUNCTION reviews.set_activity_timezone(target_zone text)
 RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE
@@ -192,6 +210,7 @@ BEGIN
  LOCK TABLE reviews.entries,reviews.votes,reviews.activity_contributions,reviews.activity_buckets,
    reviews.activity_history,reviews.activity_retention,reviews.outbox IN SHARE ROW EXCLUSIVE MODE NOWAIT;
  event_type := CASE target_zone WHEN 'UTC' THEN 'discovery.activity.v1' ELSE 'discovery.activity.v2' END;
+ UPDATE reviews.activity_retention SET time_zone=target_zone,revision=revision+1 WHERE singleton;
 
  DELETE FROM reviews.activity_contributions;
  WITH active_roots AS (
@@ -266,7 +285,6 @@ BEGIN
   RAISE EXCEPTION 'reviews activity count exceeds snapshot contract';
  END IF;
 
- UPDATE reviews.activity_retention SET time_zone=target_zone,revision=revision+1 WHERE singleton;
  PERFORM pg_notify('reviews_outbox','');
 END
 $$;

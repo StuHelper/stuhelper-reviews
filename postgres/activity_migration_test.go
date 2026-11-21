@@ -49,6 +49,13 @@ func TestActivityCalendarMigrationAndRollbackPreserveNewWrites(t *testing.T) {
 		}
 		return bucket
 	}
+	assertRejectsVersion := func(version string) {
+		t.Helper()
+		_, err := repo.DB.ExecContext(ctx, `INSERT INTO reviews.outbox(id,data) VALUES('wrong-calendar',jsonb_build_object('type',$1::text))`, version)
+		if err == nil {
+			t.Fatalf("database accepted an event from the wrong calendar: %s", version)
+		}
+	}
 	assertPending := func(version string) {
 		t.Helper()
 		var expected, opposite, content int
@@ -71,6 +78,7 @@ func TestActivityCalendarMigrationAndRollbackPreserveNewWrites(t *testing.T) {
 	}
 	utc := assertBucket("course", target, midnight.Add(-time.Second), 2, 2)
 	assertPending("discovery.activity.v1")
+	assertRejectsVersion(m.ActivityEventType)
 	from, until := midnight.AddDate(0, 0, -1), midnight
 	_, cursor, err := repo.ActivitySnapshot(ctx, from, until, "", 1)
 	if err != nil || cursor == "" {
@@ -104,6 +112,7 @@ func TestActivityCalendarMigrationAndRollbackPreserveNewWrites(t *testing.T) {
 		t.Fatal(early, late)
 	}
 	assertPending(m.ActivityEventType)
+	assertRejectsVersion("discovery.activity.v1")
 	for at, want := range map[time.Time]int{from: 0, midnight: 1} {
 		ids, err := repo.ActivityDisclosureEntries(ctx, m.ActivityID("course", target, at), 100)
 		if err != nil || len(ids) != want || (want == 1 && ids[0] != "reply") {
