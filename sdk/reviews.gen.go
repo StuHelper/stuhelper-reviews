@@ -734,6 +734,9 @@ type Error struct {
 	// Field 出错的请求字段或参数名称，用于表单焦点定位与 aria-invalid/aria-describedby 无障碍播报。
 	Field *string `json:"field,omitempty"`
 
+	// RetryAt subcode=append_window_not_open 时返回。使用 RFC 3339 UTC 表示首次公开发布修改窗口结束的时间，到达该时间即可尝试追评。
+	RetryAt *time.Time `json:"retry_at,omitempty"`
+
 	// Subcode 稳定的机器可读细分子错误码，直接映射前端八种语言（含阿拉伯语 RTL）翻译键。
 	Subcode *string `json:"subcode,omitempty"`
 }
@@ -1534,13 +1537,13 @@ type ClientInterface interface {
 	// ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
 	//
-	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. 课程评价从首次公开发布起满一个修改窗口（默认 5 分钟）即可追评。重新发布沿用首次发布时间。相同幂等键和请求内容重放成功的追评时返回原结果。
 	ReviewActionWithBody(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReviewAction performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 	// Takes a body of the `application/json` content type.
 	//
-	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. 课程评价从首次公开发布起满一个修改窗口（默认 5 分钟）即可追评。重新发布沿用首次发布时间。相同幂等键和请求内容重放成功的追评时返回原结果。
 	ReviewAction(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplyWithBody performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
@@ -2006,7 +2009,7 @@ func (c *Client) GetReview(ctx context.Context, id string, params *GetReviewPara
 // ReviewActionWithBody performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 // with any type of body and a specified content type.
 //
-// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. 课程评价从首次公开发布起满一个修改窗口（默认 5 分钟）即可追评。重新发布沿用首次发布时间。相同幂等键和请求内容重放成功的追评时返回原结果。
 func (c *Client) ReviewActionWithBody(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReviewActionRequestWithBody(c.Server, id, params, contentType, body)
 	if err != nil {
@@ -2022,7 +2025,7 @@ func (c *Client) ReviewActionWithBody(ctx context.Context, id string, params *Re
 // ReviewAction performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 // Takes a body of the `application/json` content type.
 //
-// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. 课程评价从首次公开发布起满一个修改窗口（默认 5 分钟）即可追评。重新发布沿用首次发布时间。相同幂等键和请求内容重放成功的追评时返回原结果。
 func (c *Client) ReviewAction(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReviewActionRequest(c.Server, id, params, body)
 	if err != nil {
@@ -4464,7 +4467,7 @@ type ClientWithResponsesInterface interface {
 	// ReviewActionWithBodyWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 	// with any type of body and a specified content type.
 	//
-	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. 课程评价从首次公开发布起满一个修改窗口（默认 5 分钟）即可追评。重新发布沿用首次发布时间。相同幂等键和请求内容重放成功的追评时返回原结果。
 	//
 	// Returns a wrapper object for the known response body format(s).
 	ReviewActionWithBodyWithResponse(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error)
@@ -4472,7 +4475,7 @@ type ClientWithResponsesInterface interface {
 	// ReviewActionWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+	// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. 课程评价从首次公开发布起满一个修改窗口（默认 5 分钟）即可追评。重新发布沿用首次发布时间。相同幂等键和请求内容重放成功的追评时返回原结果。
 	ReviewActionWithResponse(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error)
 
 	// ReplyWithBodyWithResponse performs a POST /api/v1/reviews/{id}/replies (the `Reply` operationId) request,
@@ -7015,7 +7018,7 @@ func (c *ClientWithResponses) GetReviewWithResponse(ctx context.Context, id stri
 // ReviewActionWithBodyWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request,
 // with any type of body and a specified content type.
 //
-// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. 课程评价从首次公开发布起满一个修改窗口（默认 5 分钟）即可追评。重新发布沿用首次发布时间。相同幂等键和请求内容重放成功的追评时返回原结果。
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) ReviewActionWithBodyWithResponse(ctx context.Context, id string, params *ReviewActionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error) {
@@ -7029,7 +7032,7 @@ func (c *ClientWithResponses) ReviewActionWithBodyWithResponse(ctx context.Conte
 // ReviewActionWithResponse performs a POST /api/v1/reviews/{id}/actions (the `ReviewAction` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content.
+// New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. 课程评价从首次公开发布起满一个修改窗口（默认 5 分钟）即可追评。重新发布沿用首次发布时间。相同幂等键和请求内容重放成功的追评时返回原结果。
 func (c *ClientWithResponses) ReviewActionWithResponse(ctx context.Context, id string, params *ReviewActionParams, body ReviewActionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviewActionResponse, error) {
 	rsp, err := c.ReviewAction(ctx, id, params, body, reqEditors...)
 	if err != nil {
