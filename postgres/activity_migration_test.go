@@ -21,6 +21,12 @@ func TestActivityCalendarMigrationAndRollbackPreserveNewWrites(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	exec(`DROP FUNCTION reviews.set_activity_timezone(text)`)
+	if err := RollbackActivityCalendar(ctx, db); err != nil {
+		t.Fatalf("rollback before forward migration: %v", err)
+	}
+	exec(Schema)
+
 	entry := func(id, root, kind, target, state string, at time.Time, teacherReply bool) {
 		t.Helper()
 		exec(`INSERT INTO reviews.entries(id,root_id,owner,school_id,kind,target_id,term_id,state,created_at,first_published_at,data)
