@@ -6,14 +6,19 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/StuHelper/stuhelper-reviews/internal/activityday"
 )
 
-// Activity is one complete provider-owned UTC daily snapshot, including zeros.
+const ActivityEventType = "discovery.activity.v2"
+
 type ActivityTarget struct {
 	Source string `json:"source"`
 	Kind   string `json:"kind"`
 	ID     string `json:"id"`
 }
+
+// Activity is a complete provider-owned Beijing daily snapshot, including zeros.
 type Activity struct {
 	Source   string           `json:"source"`
 	ID       string           `json:"id"`
@@ -24,13 +29,18 @@ type Activity struct {
 	Metrics  map[string]int64 `json:"metrics"`
 }
 type ActivityReader interface {
+	// ActivitySnapshot uses an inclusive start date and an exclusive end date
+	// in Asia/Shanghai. The time of day within each supplied date is ignored.
 	ActivitySnapshot(context.Context, time.Time, time.Time, string, int) ([]Activity, string, error)
 	ReadActivity(context.Context, string) (Activity, error)
 }
 
+// ActivityID uses the Beijing date containing the supplied instant.
 func ActivityID(kind, id string, day time.Time) string {
-	return kind + "/" + base64.RawURLEncoding.EncodeToString([]byte(id)) + "/" + day.UTC().Format(time.DateOnly)
+	return kind + "/" + base64.RawURLEncoding.EncodeToString([]byte(id)) + "/" + activityday.Date(day).Format(time.DateOnly)
 }
+
+// ParseActivityID returns the target and the start of its Beijing activity day.
 func ParseActivityID(id string) (ActivityTarget, time.Time, error) {
 	parts := strings.Split(id, "/")
 	if len(parts) != 3 || (parts[0] != "course" && parts[0] != "teacher") {
@@ -40,15 +50,17 @@ func ParseActivityID(id string) (ActivityTarget, time.Time, error) {
 	if e != nil || len(raw) == 0 || len(raw) > 200 || !utf8.Valid(raw) {
 		return ActivityTarget{}, time.Time{}, ErrInput
 	}
-	day, e := time.Parse(time.DateOnly, parts[2])
-	if e != nil || id != ActivityID(parts[0], string(raw), day) {
+	day, e := time.ParseInLocation(time.DateOnly, parts[2], activityday.Location)
+	if e != nil || day.Year() < 1 || id != ActivityID(parts[0], string(raw), day) {
 		return ActivityTarget{}, time.Time{}, ErrInput
 	}
 	return ActivityTarget{Source: "catalog", Kind: parts[0], ID: string(raw)}, day, nil
 }
+
+// ActivityDay reports whether an instant is in the supported Beijing date range.
 func ActivityDay(t time.Time) bool {
-	_, offset := t.Zone()
-	return !t.IsZero() && t.Year() >= 1 && t.Year() <= 9999 && offset == 0 && t.Equal(t.UTC().Truncate(24*time.Hour))
+	date := activityday.Date(t)
+	return !t.IsZero() && date.Year() >= 1 && date.Year() <= 9999
 }
 
 // ActivityDisclosureReader limits live checks for replies whose visibility needs

@@ -205,14 +205,17 @@ func TestActivitySnapshotSchemaRollbackAndBoundedCleanup(t *testing.T) {
 	if _, _, e = repo.ActivitySnapshot(ctx, day, day.AddDate(0, 0, 1), firstCursor, 2); e == nil {
 		t.Fatal("limit changed")
 	}
-	if _, _, e = repo.ActivitySnapshot(ctx, day.Add(time.Hour), day.AddDate(0, 0, 1), "", 1); e == nil {
-		t.Fatal("non-midnight accepted")
+	if _, _, e = repo.ActivitySnapshot(ctx, day.Add(time.Hour), day.AddDate(0, 0, 1), firstCursor, 1); e != nil {
+		t.Fatal("same Beijing date changed the cursor window", e)
+	}
+	if _, _, e = repo.ActivitySnapshot(ctx, day, day.Add(time.Hour), "", 1); !errors.Is(e, m.ErrInput) {
+		t.Fatal("empty date window accepted", e)
 	}
 	raw, e := os.ReadFile("../contracts/discovery-activity.schema.json")
 	if e != nil {
 		t.Fatal(e)
 	}
-	if fmt.Sprintf("%x", sha256.Sum256(raw)) != "0449f23e99a9146b01e56f00942b49fc756e5c60fb1d4e0486520651d02fc867" {
+	if fmt.Sprintf("%x", sha256.Sum256(raw)) != "b536d1161b4dbf53db99c3da9760dbe294be6e705f4e8f75541df02c6f318bb7" {
 		t.Fatal("activity contract drift")
 	}
 	var definition any
@@ -287,7 +290,7 @@ func TestActivitySnapshotSchemaRollbackAndBoundedCleanup(t *testing.T) {
 		t.Fatal("latest tombstone removed", current, e)
 	}
 	// A failed outbox insert cannot leave a partial counter revision.
-	if _, e = db.Exec(`ALTER TABLE reviews.outbox ADD CONSTRAINT fail_activity CHECK(data->>'type'<>'discovery.activity.v1') NOT VALID`); e != nil {
+	if _, e = db.Exec(`ALTER TABLE reviews.outbox ADD CONSTRAINT fail_activity CHECK(data->>'type'<>'discovery.activity.v2') NOT VALID`); e != nil {
 		t.Fatal(e)
 	}
 	current, e = repo.ReadActivity(ctx, m.ActivityID("course", "a", day))

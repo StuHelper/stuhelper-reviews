@@ -103,7 +103,7 @@ func TestActivityConcurrentReviewsAndVotesDoNotLoseCounts(t *testing.T) {
 	f := fixture(t)
 	ctx := context.Background()
 	repo := f.service.Repo.(*postgres.Repository)
-	day := f.now.UTC().Truncate(24 * time.Hour)
+	day := f.now
 	var wg sync.WaitGroup
 	errs := make(chan error, 8)
 	for i := range 8 {
