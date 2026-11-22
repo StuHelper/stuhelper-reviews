@@ -1,5 +1,5 @@
 id: reviews
-version: 0.9.0
+version: 0.9.0 # 模块清单版本。源码发行版本由 Git tag 标识。
 kind: module
 api: 1
 critical: false
@@ -25,6 +25,7 @@ capabilities:
   - reviews.read
   - reviews.write
   - reviews.moderate
+# identity 在宿主的能力检查中约束评价的读、写及管理入口。
 capability_requires:
   reviews.read:
     - id: identity
@@ -40,6 +41,7 @@ specifications:
   - docs/spec/activity.md
   - docs/spec/discovery.md
   - docs/spec/ui-data.md
+# 规格场景对应的 Go 测试。scripts/check-module.mjs 核对每个函数引用。
 scenario_tests:
   REV-IDENTITY-01:
     - course_identity_test.go#TestCourseIdentityPreservesHistoryNewWritesAndCanonicalIdempotency
@@ -51,6 +53,7 @@ scenario_tests:
     - accountquery/query_test.go#TestAccountQueryAuthorizationAndFailures
     - postgres/account_query_test.go#TestAccountQueryScopePaginationAndRuntime
   REV-ACTIVITY-01:
+    - postgres/activity_migration_test.go#TestActivityCalendarMigrationAndRollbackPreserveNewWrites
     - activity_test.go#TestActivityChecksSharedTeacherOnceAndRechecksDeletion
     - activity_test.go#TestActivityInactiveTeacherDoesNotBlockCourseReview
     - postgres/activity_test.go#TestActivitySnapshotSchemaRollbackAndBoundedCleanup
@@ -131,6 +134,9 @@ scenario_tests:
     - presentation_test.go#TestPresentationHTTPPreservesRatingTexts
     - presentation_test.go#TestDecisionContractAndPresentationReplay
     - rating_texts_test.go#TestDefaultRatingTextsCoverEightLocalesAndPresentationFallback
+  ACAD-41:
+    - append_test.go#TestCourseAppendFirstPublicationWindow
+    - append_test.go#TestPostWindowAppendPreservesAttributionSamplesAndModeration
   CM-09:
     - administration_test.go#TestAdministrativeReadsAuditEverySuccessfulCall
     - management_test.go#TestPresentationConfigAndAttributionChangesAreScopedAndVersioned

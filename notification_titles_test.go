@@ -14,19 +14,23 @@ func TestNotificationTitlesRespectScopePublicationAndRootNames(t *testing.T) {
 	in.Title = "Readable review title"
 	root := create(t, f, "root", in)
 	reply := addReply(t, f, root.ID, "private reply body", student)
-	got, err := f.service.NotificationTitles(ctx, student, []string{root.ID, reply.ID, "missing"})
-	if err != nil || len(got) != 2 {
-		t.Fatal(got, err)
+	nested := addReply(t, f, reply.ID, "private nested reply body", student)
+	ids := []string{root.ID, reply.ID, nested.ID, "missing"}
+	got, err := f.service.NotificationTitles(ctx, student, ids)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("unexpected notification results: %+v, err=%v", got, err)
 	}
+	wantIDs := map[string]bool{root.ID: true, reply.ID: true, nested.ID: true}
 	for _, item := range got {
-		if item.Title != in.Title {
-			t.Fatal("reply body exposed", item)
+		if !wantIDs[item.ID] || item.RootID != root.ID || item.Title != in.Title {
+			t.Fatalf("unexpected notification metadata for root %q: %+v", root.ID, item)
 		}
+		delete(wantIDs, item.ID)
 	}
 	f.access.revoked = true
-	got, err = f.service.NotificationTitles(ctx, student, []string{root.ID})
+	got, err = f.service.NotificationTitles(ctx, student, ids)
 	if err != nil || len(got) != 0 {
-		t.Fatal("revoked name", got, err)
+		t.Fatal("revoked access exposed notification metadata", got, err)
 	}
 	f.access.revoked = false
 	f.access.failed = true
@@ -45,8 +49,8 @@ func TestNotificationTitlesRespectScopePublicationAndRootNames(t *testing.T) {
 	if _, err = f.service.Action(ctx, student, root.ID, "withdraw", r.Action{Action: "withdraw", Revision: 1}); err != nil {
 		t.Fatal(err)
 	}
-	got, err = f.service.NotificationTitles(ctx, student, []string{root.ID, reply.ID})
+	got, err = f.service.NotificationTitles(ctx, student, ids)
 	if err != nil || len(got) != 0 {
-		t.Fatal("withdrawn title", got, err)
+		t.Fatal("withdrawn root exposed notification metadata", got, err)
 	}
 }

@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// NotificationTitle is current authorized metadata, never stored in an inbox.
-// Replies use their root title rather than copying discussion text.
-type NotificationTitle struct{ ID, Title string }
+// NotificationTitle is current authorized metadata for rendering an inbox.
+// RootID identifies the root review, whose title is also used for replies.
+type NotificationTitle struct{ ID, RootID, Title string }
 type NotificationCandidate struct {
 	Entry Entry
 	Root  Entry
@@ -104,7 +104,7 @@ func (s *Service) NotificationTitles(ctx context.Context, p Principal, ids []str
 			title = ref.Name
 		}
 		authorized[row.Entry.ID] = row
-		out = append(out, NotificationTitle{row.Entry.ID, title})
+		out = append(out, NotificationTitle{ID: row.Entry.ID, RootID: row.Root.ID, Title: title})
 	}
 	// Authorization may call other modules. Re-read publication and revisions
 	// afterwards, dropping edits, unlisting, deletion, and expired roots.

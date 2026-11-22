@@ -48,7 +48,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. */
+        /** @description New upvotes and downvotes require current content admission. A zero vote cancels only the authenticated user vote, requires no current content qualification, and does not return target content. 课程评价从首次公开发布起满一个修改窗口（默认 5 分钟）即可追评。重新发布沿用首次发布时间。相同幂等键和请求内容重放成功的追评时返回原结果。 */
         post: operations["reviewAction"];
         delete?: never;
         options?: never;
@@ -382,6 +382,11 @@ export interface components {
             field?: string;
             /** @description 409 修订号冲突且调用方已通过归属或管理授权校验时返回的服务端当前修订号。 */
             current_revision?: number;
+            /**
+             * Format: date-time
+             * @description subcode=append_window_not_open 时返回。使用 RFC 3339 UTC 表示首次公开发布修改窗口结束的时间，到达该时间即可尝试追评。
+             */
+            retry_at?: string;
         };
         Input: {
             /** @enum {string} */
@@ -1079,7 +1084,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Revision or idempotency conflict */
+            /** @description 修订号、幂等键或当前状态冲突。课程评价的首次发布修改窗口内提交追评时，返回 code=conflict、subcode=append_window_not_open、field=action 及可重试时间 retry_at。 */
             409: {
                 headers: {
                     [name: string]: unknown;

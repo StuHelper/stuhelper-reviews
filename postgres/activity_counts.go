@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"errors"
-	m "github.com/StuHelper/stuhelper-reviews"
 	"sort"
 	"time"
+
+	m "github.com/StuHelper/stuhelper-reviews"
+	"github.com/StuHelper/stuhelper-reviews/internal/activityday"
 )
 
 type rootActivity struct {
@@ -73,13 +75,8 @@ func (t *transaction) rootActivityChanges(rootID string, at time.Time) ([]activi
 		if root.Input.Kind == "mentor" {
 			targets["teacher:"+root.ActivityTargetID] = root.ActivityTargetID
 		}
-		rows, e = t.tx.QueryContext(t.ctx, `SELECT activity_day,sum(reviews),sum(interactions) FROM (
-   SELECT (first_published_at AT TIME ZONE 'UTC')::date AS activity_day,CASE WHEN id=root_id AND kind='course' THEN 1 ELSE 0 END reviews,CASE WHEN kind='reply' THEN 1 ELSE 0 END interactions
-   FROM reviews.entries WHERE root_id=$1 AND state='published' AND first_published_at IS NOT NULL AND (expires_at IS NULL OR expires_at>$2)
-   UNION ALL
-   SELECT (v.created_at AT TIME ZONE 'UTC')::date,0,1 FROM reviews.votes v JOIN reviews.entries e ON e.id=v.id
-   WHERE e.root_id=$1 AND e.state='published' AND (e.expires_at IS NULL OR e.expires_at>$2)
-  ) facts GROUP BY activity_day ORDER BY activity_day LIMIT 10001`, rootID, at)
+		rows, e = t.tx.QueryContext(t.ctx, `SELECT (occurred_at AT TIME ZONE $3)::date AS day,sum(reviews),sum(interactions)
+ FROM reviews.activity_facts($1,$2) GROUP BY day ORDER BY day LIMIT 10001`, rootID, at, activityday.Zone)
 		if e != nil {
 			return nil, safe(e)
 		}

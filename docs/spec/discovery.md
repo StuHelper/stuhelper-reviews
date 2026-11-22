@@ -1,16 +1,16 @@
 ---
 type: spec
 status: Accepted
-updated: 2026-11-19
+updated: 2026-11-21
 ---
 
 # 搜索来源与可靠投递
 
-## 搜索来源与事件投递
+## 投影、事件与读取
 
-contracts/discovery-event.schema.json 固定 search 9e791c6 的 discovery.v1 约定，来源提交和校验值记录在相邻 source.json。投影只有公开标题、学校、课程与教师归属、修订、可见状态和时间，不包含正文、作者、认证材料或评分。
+`contracts/discovery-event.schema.json` 固定 search 的 `discovery.v1` 约定，来源提交与校验值见相邻来源记录。投影只含公开标题、学校、课程与教师归属、修订、可见状态和时间。
 
-搜索文档只覆盖课程评价主帖，kind 为 review。教师归属来自评价的可信归属快照，不复制选课证据。导师评论与讨论回复暂不建立搜索文档。发布、修订、撤回、审核隐藏、恢复、逻辑删除、永久删除和到期清理均更新对应对象投影。
+搜索文档只覆盖课程评价主帖，kind 为 review。教师归属来自评价的可信归属快照。发布、修订、撤回、审核隐藏、恢复、逻辑删除、永久删除和到期清理均更新对应对象投影。
 
 每次来源对象保存都在业务事务内追加 discovery_history，并写入 reviews.discovery.v1 outbox 与 pg_notify('reviews_outbox', '')。不可见文档是墓碑，标题为空且不携带课程和教师关联。原始对象删除后，墓碑仍保留。
 
@@ -30,13 +30,17 @@ Service.DiscoveryCurrent(ctx, principal, ids) 接收 1 至 100 个 ID，每次�
 
 Service.DiscoveryMyVotes(ctx, principal, cursor, limit) 返回 Items 与 NextCursor，choice 为 up 或 down，每个目标重新检查当前阅读权限。分页游标按已返回的主帖 ID 前进，隐藏结果不阻断后续页。已有 MyVotes 继续提供本人操作回执。
 
-旧 Handoff 和事务内 Events、CompleteEvent、FailEvent 已移除。relay 对普通评价事件按当前 Inspect 的修订和 ReviewRequested 判断是否交给审核，不能用一个消费者的确认跳过其他订阅者。
+relay 通过 `Inspect` 核对普通评价事件的当前修订，再按 `ReviewRequested` 和待审追评标识向 moderation 建立任务。所有订阅消费者完成持久化后才确认事件。
 
 postgres.Repository.DiscoverySnapshot(ctx, cursor, limit) 供受信重建任务调用，返回 Items 和 Next，单页 1 至 100 条。空 cursor 开始，空 Next 结束。不可变历史与 PostgreSQL 可见性快照固定首轮成员，分页按 ID 字节序递增。
 
-分页期间的修改、删除和延迟提交不会替换首轮版本。游标五分钟有效，历史修改或清理会使旧游标失效，必须中止重建。历史与墓碑不自动清理，保留策略须结合消费者重放期限单独确认。
+分页期间的修改、删除和延迟提交不会替换首轮版本。游标五分钟有效，历史修改或清理会使旧游标失效，必须中止重建。
 
-本次只新增公开 Go 来源接口，不新增或修改 OpenAPI 路径。运行身份需要读取 discovery_history、discovery_retention，追加 discovery_history，并读取、写入和确认 outbox。历史的修改与删除保留给迁移或维护身份。
+搜索旧修订自被替代起、最小墓碑自产生起默认保留 90 天。清理墓碑前须确认各订阅方已处理该墓碑、较早事件无法重放且无有效 `legal_hold`。墓碑仅保存识别对象及修订顺序所需的数据。
+
+全文、投影、历史修订和事件载荷中仍可关联个人的信息，按适用期限中较早到期的时间删除或匿名化。到期后只保留必要且无法重新识别个人的元数据。搜索记录的自动清理待实施。[现行条款第 4 节](https://stuhelper.com/terms.html) · [数据保留与删除](https://github.com/StuHelper/stuhelper/blob/develop/docs/spec/data-retention.md)
+
+这些来源接口供宿主通过 Go 调用。运行身份读取 `discovery_history`、`discovery_retention`，追加 `discovery_history`，并读写和确认 outbox。历史修改及删除权限限于迁移或维护身份。
 
 | 场景 | 验证条件 |
 | --- | --- |
@@ -44,4 +48,4 @@ postgres.Repository.DiscoverySnapshot(ctx, cursor, limit) 供受信重建任务�
 | REV-DISCOVERY-02 | 当前有效投票、资格撤销、取消、分页和本人回执区别 |
 | REV-OUTBOX-01 | 提交通知、回滚无通知、主题排除、积压与幂等确认 |
 
-搜索投票只返回当前学校已发布、未过期的课程评价主帖。一次查询按本人投票和可见目标筛选后分页，返回 up 或 down，无需读取平台资料或认证标签。本人投票回执继续包含导师评论及回复。
+`module.yaml` 登记来源、有效投票及 outbox 的隔离测试。本人投票回执可包含导师评论与回复。搜索投票的对象仅限符合当前学校范围且已发布、未到期的课程评价主帖。

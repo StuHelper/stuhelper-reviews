@@ -27,6 +27,15 @@ func (s *Service) validateAppendTarget(t Transaction, p Principal, entry Entry, 
 	if entry.Revision != revision || entry.State != "published" || len(entry.Appends) >= s.maxAppends() {
 		return ErrConflict
 	}
+	if entry.Input.Kind == "course" {
+		if entry.FirstPublishedAt == nil {
+			return conflictStateErr("invalid_state", "state")
+		}
+		retryAt := entry.FirstPublishedAt.Add(s.Config.EditWindow).UTC()
+		if now.Before(retryAt) {
+			return ErrorDetail{Base: ErrConflict, Subcode: "append_window_not_open", Field: "action", RetryAt: &retryAt}
+		}
+	}
 	if s.Config.AppendCooldown > 0 && len(entry.Appends) > 0 {
 		last := entry.Appends[len(entry.Appends)-1]
 		if now.Before(last.CreatedAt.Add(s.Config.AppendCooldown)) {
