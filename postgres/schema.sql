@@ -291,3 +291,27 @@ $$;
 REVOKE ALL ON FUNCTION reviews.set_activity_timezone(text) FROM PUBLIC;
 
 SELECT reviews.set_activity_timezone('Asia/Shanghai');
+
+-- Final completion can occur later than this module's own closure step.
+ALTER TABLE reviews.closed_owners ADD COLUMN IF NOT EXISTS closure_completed_at timestamptz;
+CREATE INDEX IF NOT EXISTS reviews_closure_marker_expiry ON reviews.closed_owners(closure_completed_at,owner) WHERE closure_completed_at IS NOT NULL;
+CREATE OR REPLACE FUNCTION reviews.mark_closure_completed(p_owner text,p_id text,p_at timestamptz)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF p_at IS NULL OR NOT isfinite(p_at) OR p_at>statement_timestamp()+interval '5 minutes' THEN
+    RAISE EXCEPTION 'invalid closure completion' USING ERRCODE='22023';
+ END IF;
+ UPDATE reviews.closed_owners SET closure_completed_at=p_at WHERE owner=p_owner AND closure_id=p_id AND closure_completed_at IS NULL;
+ IF EXISTS (SELECT 1 FROM reviews.closed_owners WHERE owner=p_owner AND (closure_id IS DISTINCT FROM p_id OR closure_completed_at IS DISTINCT FROM p_at)) THEN
+    RAISE EXCEPTION 'inconsistent closure completion' USING ERRCODE='22023';
+ END IF;
+END;
+$$;
+CREATE OR REPLACE FUNCTION reviews.prune_closure_markers(p_limit integer) RETURNS bigint
+LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog SET TimeZone='Asia/Shanghai' AS $$
+ WITH due AS (SELECT owner FROM reviews.closed_owners WHERE closure_completed_at + interval '12 months' <= statement_timestamp()
+   ORDER BY closure_completed_at,owner LIMIT least(greatest(p_limit,0),1000) FOR UPDATE SKIP LOCKED),
+ removed AS (DELETE FROM reviews.closed_owners t USING due WHERE t.owner=due.owner RETURNING 1)
+ SELECT count(*) FROM removed
+$$;
+REVOKE ALL ON FUNCTION reviews.mark_closure_completed(text,text,timestamptz),reviews.prune_closure_markers(integer) FROM PUBLIC;

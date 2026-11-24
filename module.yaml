@@ -43,6 +43,8 @@ specifications:
   - docs/spec/ui-data.md
 # 规格场景对应的 Go 测试。scripts/check-module.mjs 核对每个函数引用。
 scenario_tests:
+  RET-11:
+    - closure_retention_test.go#TestClosedOwnerExpiresOnlyAfterRecordedCompletion
   REV-IDENTITY-01:
     - course_identity_test.go#TestCourseIdentityPreservesHistoryNewWritesAndCanonicalIdempotency
   REV-SPORTS-01:
