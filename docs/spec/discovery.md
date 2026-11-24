@@ -1,7 +1,7 @@
 ---
 type: spec
 status: Accepted
-updated: 2026-11-21
+updated: 2026-11-24
 ---
 
 # 搜索来源与可靠投递
@@ -47,5 +47,6 @@ postgres.Repository.DiscoverySnapshot(ctx, cursor, limit) 供受信重建任务�
 | REV-DISCOVERY-01 | 状态变化、墓碑、Schema 校验、权限、回滚与固定快照 |
 | REV-DISCOVERY-02 | 当前有效投票、资格撤销、取消、分页和本人回执区别 |
 | REV-OUTBOX-01 | 提交通知、回滚无通知、主题排除、积压与幂等确认 |
+| RET-12 | 旧修订被替代满 90 日后清理，墓碑须同时有投递、无旧重放和无有效保留的证据。 |
 
 `module.yaml` 登记来源、有效投票及 outbox 的隔离测试。本人投票回执可包含导师评论与回复。搜索投票的对象仅限符合当前学校范围且已发布、未到期的课程评价主帖。
