@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -254,7 +255,7 @@ func TestContentAdmissionAndCurrentAccessCannotLeakIdentity(t *testing.T) {
 		t.Fatal("qualified read failed", e)
 	}
 	b, _ := json.Marshal(full)
-	for _, secret := range []string{"student", "enrollment", "approved", "source_id", "owner"} {
+	for _, secret := range []string{"student", "enrollment-", `"evidence"`, "approved", "source_id", "owner"} {
 		if strings.Contains(string(b), secret) {
 			t.Fatal("private field leaked", secret)
 		}
@@ -566,5 +567,47 @@ func TestTrustedBrowserOriginBehindProxy(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != 200 {
 		t.Fatal(rec.Code)
+	}
+}
+
+type schoolDataReviewCatalog struct {
+	*catalog
+	outcome error
+	matched bool
+}
+
+func (s schoolDataReviewCatalog) Evidence(ctx context.Context, p r.Principal, course, term string) ([]r.Evidence, error) {
+	if s.outcome != nil {
+		return nil, s.outcome
+	}
+	if !s.matched {
+		return []r.Evidence{}, nil
+	}
+	return s.catalog.Evidence(ctx, p, course, term)
+}
+func TestReviewEnrollmentStatusUsesOnlyCompleteReadsAndPreservesSnapshot(t *testing.T) {
+	f := fixture(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name, status string
+		matched      bool
+		err          error
+	}{
+		{"active_match", "enrolled", true, nil}, {"active_empty", "not_enrolled", false, nil}, {"unauthorized", "unknown", false, r.ErrForbidden}, {"source_outage", "unknown", false, r.ErrUnavailable},
+	} {
+		f.service.Catalog = schoolDataReviewCatalog{f.catalog, tc.err, tc.matched}
+		out, err := f.service.Create(ctx, student, tc.name, input("course", "autumn", 4))
+		if err != nil {
+			t.Fatal(tc.name, err)
+		}
+		f.service.Catalog = schoolDataReviewCatalog{f.catalog, r.ErrForbidden, false}
+		view, err := f.service.GetWithOptions(ctx, student, out.ID, r.ViewOptions{IncludeTeacherIDs: true})
+		teachers := []string{"public-teacher"}
+		if tc.matched {
+			teachers = []string{"teacher-a", "teacher-b"}
+		}
+		if err != nil || view.EnrollmentStatus != tc.status || !slices.Equal(view.TeacherIDs, teachers) {
+			t.Fatal(tc.name, view.EnrollmentStatus, view.TeacherIDs, err)
+		}
 	}
 }

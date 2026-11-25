@@ -43,6 +43,10 @@ specifications:
   - docs/spec/ui-data.md
 # 规格场景对应的 Go 测试。scripts/check-module.mjs 核对每个函数引用。
 scenario_tests:
+  ACAD-SD-01:
+    - integration_test.go#TestReviewEnrollmentStatusUsesOnlyCompleteReadsAndPreservesSnapshot
+  ACAD-SD-02:
+    - integration_test.go#TestReviewEnrollmentStatusUsesOnlyCompleteReadsAndPreservesSnapshot
   RET-12:
     - discovery_retention_test.go#TestDiscoveryRetentionRequiresSupersessionDeliveryAndNoHold
   RET-11:

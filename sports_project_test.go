@@ -24,7 +24,7 @@ func TestSportsProjectRequiresOwnTeacherAndKeepsAttribution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	view, err := f.service.Get(ctx, student, unspecified.ID)
+	view, err := f.service.GetWithOptions(ctx, student, unspecified.ID, r.ViewOptions{IncludeTeacherIDs: true})
 	if err != nil || view.EnrollmentStatus != "enrolled" || !slices.Equal(view.TeacherIDs, []string{"teacher-a", "teacher-b"}) {
 		t.Fatal(view, err)
 	}
