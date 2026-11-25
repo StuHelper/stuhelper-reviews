@@ -197,29 +197,11 @@ func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, [
 	if term.SchoolID != target.SchoolID {
 		return target, nil, nil, g, inputFieldErr("term_school_mismatch", "term_id")
 	}
-	evidence, e := s.catalogEvidenceFor(ctx, "prepare_evidence", p, in.TargetID, in.TermID)
+	evidence, ids, status, e := s.reviewEnrollment(ctx, p, target.ID, in.TermID)
 	if e != nil {
 		return target, nil, nil, g, e
 	}
-	if len(evidence) > 1000 {
-		return target, nil, nil, g, ErrUnavailable
-	}
-	if (g.EnrollmentRequired || target.TeacherRequired) && len(evidence) == 0 {
-		g.Requirements = append(g.Requirements, Requirement{"course_enrollment", "missing"})
-		return target, nil, nil, g, NewErrorDetail(ErrEnrollment, "enrollment_missing", "term_id", nil)
-	}
-	if g.EnrollmentRequired || target.TeacherRequired {
-		g.Requirements = append(g.Requirements, Requirement{"course_enrollment", "satisfied"})
-	}
-	ids := []string{}
-	for _, v := range evidence {
-		if v.TermID != in.TermID || v.ID == "" || v.SourceID == "" || v.Revision < 1 || v.FetchedAt.IsZero() {
-			return target, nil, nil, g, ErrUnavailable
-		}
-		ids = append(ids, v.TeacherIDs...)
-	}
-	slices.Sort(ids)
-	ids = slices.Compact(ids)
+	target.enrollmentStatus = status
 	ids, e = s.selectedTeachers(ctx, in.TeacherID, ids)
 	if e != nil {
 		return target, nil, nil, g, e
@@ -312,9 +294,6 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 	if err != nil {
 		return out, err
 	}
-	if target.TeacherRequired && in.TeacherID == "" {
-		return out, inputFieldErr("teacher_required", "teacher_id")
-	}
 	if _, err = s.validateDisclosures(ctx, p, target.SchoolID, func() string {
 		if in.Kind == "course" {
 			return in.TargetID
@@ -342,7 +321,7 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 		}
 	}
 	now := s.now()
-	entry := Entry{ActivityTargetID: target.ID, ChangeOrigin: "author", ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
+	entry := Entry{EnrollmentStatus: target.enrollmentStatus, ActivityTargetID: target.ID, ChangeOrigin: "author", ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
 	state, err := s.check(ctx, entry)
 	if err != nil {
 		return out, err
@@ -749,10 +728,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 				}
 				repubTeacherReply = disclosure.ownCourse
 			} else {
-				target, _, _, grant, err := s.prepare(ctx, p, *in.Input)
-				if err == nil && target.TeacherRequired && in.Input.TeacherID == "" {
-					return out, inputFieldErr("teacher_required", "teacher_id")
-				}
+				_, _, _, grant, err := s.prepare(ctx, p, *in.Input)
 				if err != nil {
 					return out, err
 				}

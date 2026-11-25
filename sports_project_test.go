@@ -11,33 +11,31 @@ import (
 
 type sportsCatalog struct{ *catalog }
 
-func (c sportsCatalog) Target(ctx context.Context, kind, id string) (r.Target, error) {
-	target, err := c.catalog.Target(ctx, kind, id)
-	if err == nil && id == "project" {
-		target.TeacherRequired = true
-	}
-	return target, err
-}
 func TestSportsProjectRequiresOwnTeacherAndKeepsAttribution(t *testing.T) {
 	f := fixture(t)
 	f.service.Catalog = sportsCatalog{f.catalog}
 	ctx := context.Background()
 	composer, err := f.service.Composer(ctx, student, "course", "project", "autumn", "")
-	if err != nil || !composer.Allowed || !composer.TeacherRequired || !slices.Equal(composer.TeacherIDs, []string{"teacher-a", "teacher-b"}) {
+	if err != nil || !composer.Allowed || !slices.Equal(composer.TeacherIDs, []string{"teacher-a", "teacher-b"}) {
 		t.Fatal(composer, err)
 	}
 	in := input("project", "autumn", 4)
-	if _, err = f.service.Create(ctx, student, "missing-teacher", in); !errors.Is(err, r.ErrInput) {
-		t.Fatal("teacherless project review", err)
+	unspecified, err := f.service.Create(ctx, student, "missing-teacher", in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := f.service.GetWithOptions(ctx, student, unspecified.ID, r.ViewOptions{IncludeTeacherIDs: true})
+	if err != nil || view.EnrollmentStatus != "enrolled" || !slices.Equal(view.TeacherIDs, []string{"teacher-a", "teacher-b"}) {
+		t.Fatal(view, err)
 	}
 	in.TeacherID = "teacher-c"
 	if _, err = f.service.Create(ctx, student, "wrong-teacher", in); !errors.Is(err, r.ErrForbidden) {
 		t.Fatal("foreign teacher", err)
 	}
 	in.TeacherID = "teacher-a"
-	f.access.optional = true
+
 	f.catalog.missing = true
-	if _, err = f.service.Create(ctx, student, "no-enrollment", in); !errors.Is(err, r.ErrEnrollment) {
+	if _, err = f.service.Create(ctx, student, "no-enrollment", in); !errors.Is(err, r.ErrForbidden) {
 		t.Fatal("project eligibility relaxed", err)
 	}
 	f.catalog.missing = false
@@ -54,11 +52,11 @@ func TestSportsProjectRequiresOwnTeacherAndKeepsAttribution(t *testing.T) {
 		t.Fatal(entry, err)
 	}
 	page, err := f.service.List(ctx, student, r.Filter{Kind: "course", TargetID: "project", TeacherID: "teacher-a", Limit: 100})
-	if err != nil || len(page.Items) != 1 {
+	if err != nil || len(page.Items) != 2 {
 		t.Fatal(page, err)
 	}
 	page, err = f.service.List(ctx, student, r.Filter{Kind: "course", TargetID: "project", TeacherID: "teacher-b", Limit: 100})
-	if err != nil || len(page.Items) != 0 {
+	if err != nil || len(page.Items) != 1 {
 		t.Fatal("other teacher received score", page, err)
 	}
 	in.TeacherID = ""
@@ -67,7 +65,7 @@ func TestSportsProjectRequiresOwnTeacherAndKeepsAttribution(t *testing.T) {
 	}
 	// Rejected creates and edits leave the single published project/teacher entry.
 	page, err = f.service.List(ctx, student, r.Filter{Owner: student.Subject, Limit: 100})
-	if err != nil || len(page.Items) != 1 || page.Items[0].Revision != result.Revision {
+	if err != nil || len(page.Items) != 2 || page.Items[0].Revision != result.Revision {
 		t.Fatal(page, err)
 	}
 }
@@ -97,9 +95,6 @@ func TestModeratedProjectTeacherAndPreviewAudit(t *testing.T) {
 	in := input("project", "autumn", 4)
 	in.TeacherID = "teacher-a"
 	root := create(t, f, "project", in)
-	if _, err := f.service.PreviewAttribution(ctx, admin, root.ID, ""); !errors.Is(err, r.ErrInput) {
-		t.Errorf("teacherless preview: %v", err)
-	}
 	preview, err := f.service.PreviewAttribution(ctx, admin, root.ID, "current-teacher")
 	if err != nil || !slices.Equal(preview.TeacherIDs, []string{"current-teacher"}) {
 		t.Fatal(preview, err)
@@ -109,13 +104,6 @@ func TestModeratedProjectTeacherAndPreviewAudit(t *testing.T) {
 		t.Fatal(reads, err)
 	}
 	d := r.Decision{ID: "correct", ObjectID: root.ID, Revision: 1, Action: "reassign", Reason: "Updated source", EvidenceRevision: preview.EvidenceRevision}
-	if _, err = f.service.Apply(ctx, admin, d); !errors.Is(err, r.ErrInput) {
-		t.Fatal(err)
-	}
-	before, err := f.service.GetOwn(ctx, student, root.ID)
-	if err != nil || before.TeacherID != "teacher-a" || before.Revision != 1 {
-		t.Fatal(before, err)
-	}
 	d.TeacherID = "current-teacher"
 	if _, err = f.service.Apply(ctx, admin, d); err != nil {
 		t.Fatal(err)

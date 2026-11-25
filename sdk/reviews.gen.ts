@@ -469,6 +469,11 @@ export interface components {
             readonly appends?: components["schemas"]["Append"][];
             /** @description 仅在本人专属视图（GetOwn 与 /reviews/me/entries）返回的脱敏结构化审核原因码，与管理员内部备注严格隔离。 */
             readonly moderation_reason_code?: components["schemas"]["ModerationReasonCode"];
+            /**
+             * @description Present on course reviews. Snapshot at publication. An authorized complete read with no match yields not_enrolled. Missing authorization, an incomplete or failed source read, and historical reviews yield unknown.
+             * @enum {string}
+             */
+            enrollment_status?: "enrolled" | "not_enrolled" | "unknown";
         };
         Page: {
             items: components["schemas"]["View"][];
@@ -559,7 +564,7 @@ export interface components {
         };
         Requirement: {
             /** @enum {string} */
-            key: "login" | "campus_eligibility" | "phone_bound" | "identity_verified" | "course_enrollment";
+            key: "login" | "campus_eligibility" | "phone_bound" | "identity_verified";
             /** @enum {string} */
             state: "satisfied" | "missing" | "unavailable";
         };
@@ -569,16 +574,15 @@ export interface components {
              * @description Requests without an authenticated session return HTTP 401.
              * @enum {string}
              */
-            state: "ready" | "choose_term" | "forbidden" | "enrollment_required" | "unavailable" | "disclosure_required";
+            state: "ready" | "choose_term" | "forbidden" | "unavailable" | "disclosure_required";
             requirements: components["schemas"]["Requirement"][];
+            /** @description When the author has active school data authorization and matching enrollment, teachers from that enrollment. Otherwise all public teachers for this course and term. An unspecified teacher is allowed. */
             teacher_ids: string[];
             /** @enum {string} */
             identity: "choice" | "anonymous" | "signed";
             rule_version: string;
             disclosures?: components["schemas"]["DisclosureOption"][];
             teacher_reply?: boolean;
-            /** @description true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。 */
-            teacher_required?: boolean;
             /** @description 请求人在当前目标（及所选学期或父回复）下最近保存的既有草稿或未过期撤回草稿 ID，供移动端断点续写。 */
             own_draft_id?: string;
             /** @description 请求人在当前目标（及所选学期或父回复）下已保存的非删除、未过期评价或回复 ID 列表。 */

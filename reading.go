@@ -178,7 +178,7 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		if entry.Projection == nil {
 			return nil, ErrUnavailable
 		}
-		v := View{Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
+		v := View{EnrollmentStatus: entry.EnrollmentStatus, Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
 		if options.IncludeAppends && own && len(entry.Appends) > 0 {
 			v.Appends = slices.Clone(entry.Appends)
 		} else if options.IncludeAppends && !own && len(entry.Appends) > 0 {

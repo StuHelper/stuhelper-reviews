@@ -151,7 +151,7 @@ func respond(w http.ResponseWriter, v any, e error) {
 		for _, x := range []struct {
 			e error
 			s int
-		}{{reviews.ErrUnauthenticated, 401}, {reviews.ErrInput, 400}, {reviews.ErrForbidden, 403}, {reviews.ErrEnrollment, 403}, {reviews.ErrNotFound, 404}, {reviews.ErrConflict, 409}, {reviews.ErrWindow, 409}} {
+		}{{reviews.ErrUnauthenticated, 401}, {reviews.ErrInput, 400}, {reviews.ErrForbidden, 403}, {reviews.ErrNotFound, 404}, {reviews.ErrConflict, 409}, {reviews.ErrWindow, 409}} {
 			if errors.Is(e, x.e) {
 				status = x.s
 				code = x.e.Error()
