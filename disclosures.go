@@ -33,7 +33,7 @@ type DisclosureOption struct {
 	Required bool   `json:"required"`
 }
 
-var disclosureKeys = []string{"gender", "department", "enrollment", "real_name", "teacher", "organization"}
+var disclosureKeys = []string{"gender", "department", "real_name", "teacher", "organization"}
 
 func validDisclosureKeys(keys []string) bool {
 	if len(keys) > len(disclosureKeys) {
@@ -101,17 +101,11 @@ func (s *Service) disclosureContext(ctx context.Context, p Principal, school, co
 		if key == "department" && !facts.StudentVerified {
 			continue
 		}
-		if key == "enrollment" && (course == "" || !facts.StudentVerified) {
-			continue
-		}
 		fact, ok := facts.Attributes[key]
 		if !ok || !fact.MayDisclose || !s.now().Before(fact.ValidUntil) || strings.TrimSpace(fact.Source) == "" || strings.TrimSpace(fact.Revision) == "" || !textOK(fact.Value, 256) || strings.TrimSpace(fact.Value) == "" {
 			continue
 		}
 		if key == "teacher" && fact.Value != "verified" {
-			continue
-		}
-		if key == "enrollment" && !slices.Contains([]string{"enrolled", "not_enrolled"}, fact.Value) {
 			continue
 		}
 		out.options = append(out.options, DisclosureOption{key, fact.Value, out.ownCourse && (key == "real_name" || key == "teacher")})
