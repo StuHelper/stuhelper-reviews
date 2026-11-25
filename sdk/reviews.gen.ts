@@ -635,7 +635,7 @@ export interface components {
             items: components["schemas"]["AdminBatchItemResult"][];
         };
         /** @enum {string} */
-        DisclosureKey: "gender" | "department" | "enrollment" | "real_name" | "teacher" | "organization";
+        DisclosureKey: "gender" | "department" | "real_name" | "teacher" | "organization";
         DisclosureOption: {
             key: components["schemas"]["DisclosureKey"];
             value: string;

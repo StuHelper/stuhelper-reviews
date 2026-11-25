@@ -143,7 +143,6 @@ func (e ComposerState) Valid() bool {
 // Defines values for DisclosureKey.
 const (
 	DisclosureKeyDepartment   DisclosureKey = "department"
-	DisclosureKeyEnrollment   DisclosureKey = "enrollment"
 	DisclosureKeyGender       DisclosureKey = "gender"
 	DisclosureKeyOrganization DisclosureKey = "organization"
 	DisclosureKeyRealName     DisclosureKey = "real_name"
@@ -154,8 +153,6 @@ const (
 func (e DisclosureKey) Valid() bool {
 	switch e {
 	case DisclosureKeyDepartment:
-		return true
-	case DisclosureKeyEnrollment:
 		return true
 	case DisclosureKeyGender:
 		return true

@@ -4154,7 +4154,6 @@
         "enum": [
           "gender",
           "department",
-          "enrollment",
           "real_name",
           "teacher",
           "organization"
