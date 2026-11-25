@@ -193,7 +193,7 @@ func TestComposerUsesCurrentFactsAndDiscussionIdentity(t *testing.T) {
 	}
 	f.catalog.missing = true
 	missing, err := f.service.Composer(ctx, student, "course", "course", "autumn", "")
-	if err != nil || missing.State != "enrollment_required" || missing.Allowed {
+	if err != nil || missing.State != "ready" || !missing.Allowed || !slices.Equal(missing.TeacherIDs, []string{"public-teacher"}) {
 		t.Fatal(missing, err)
 	}
 	mentor, err := f.service.Composer(ctx, student, "mentor", "teacher", "", "")

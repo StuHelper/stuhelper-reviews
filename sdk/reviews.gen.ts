@@ -583,8 +583,6 @@ export interface components {
             rule_version: string;
             disclosures?: components["schemas"]["DisclosureOption"][];
             teacher_reply?: boolean;
-            /** @description true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。 */
-            teacher_required?: boolean;
             /** @description 请求人在当前目标（及所选学期或父回复）下最近保存的既有草稿或未过期撤回草稿 ID，供移动端断点续写。 */
             own_draft_id?: string;
             /** @description 请求人在当前目标（及所选学期或父回复）下已保存的非删除、未过期评价或回复 ID 列表。 */

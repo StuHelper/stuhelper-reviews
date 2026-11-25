@@ -55,10 +55,14 @@ func (c *catalog) Evidence(_ context.Context, p r.Principal, course, term string
 	return []r.Evidence{{ID: "enrollment-" + term, TermID: term, TeacherIDs: teachers, SourceID: "approved", Revision: 2, FetchedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}, nil
 }
 
-type access struct{ revoked, failed, optional bool }
+func (c *catalog) CourseTermTeachers(context.Context, string, string) ([]string, error) {
+	return []string{"public-teacher"}, nil
+}
+
+type access struct{ revoked, failed bool }
 
 func (a *access) Authorize(_ context.Context, p r.Principal, action, school string) (r.Grant, error) {
-	g := r.Grant{SchoolID: "school", RuleVersion: "rule-1", EnrollmentRequired: !a.optional}
+	g := r.Grant{SchoolID: "school", RuleVersion: "rule-1"}
 	if a.failed {
 		return g, r.ErrUnavailable
 	}
@@ -218,14 +222,13 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 		t.Fatal("republish changed attribution")
 	}
 	f.catalog.missing = true
-	if _, e = f.service.Create(ctx, student, "missing-enrollment", input("course", "autumn", 4)); !errors.Is(e, r.ErrEnrollment) {
-		t.Fatal("missing evidence allowed")
+	if _, e = f.service.Create(ctx, student, "missing-enrollment", input("course", "autumn", 4)); e != nil {
+		t.Fatal("missing record blocked publication", e)
 	}
 	mentor := r.Input{Kind: "mentor", TargetID: "teacher-c", Title: "Mentoring", Body: "A freely edited comment without template sections."}
 	if _, e = f.service.Create(ctx, student, "mentor", mentor); e != nil {
 		t.Fatal("mentor incorrectly requires enrollment", e)
 	}
-	f.access.optional = true
 	if _, e = f.service.Create(ctx, student, "optional", input("course", "autumn", 3)); e != nil {
 		t.Fatal(e)
 	}

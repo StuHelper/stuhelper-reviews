@@ -91,7 +91,6 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 			return out, err
 		}
 		school = object.SchoolID
-		out.TeacherRequired = object.TeacherRequired
 		if school != scope {
 			return Composer{}, ErrForbidden
 		}
@@ -128,8 +127,6 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 			out.State = "ready"
 			out.Allowed = true
 		}
-	case errors.Is(checkErr, ErrEnrollment):
-		out.State = "enrollment_required"
 	case errors.Is(checkErr, ErrForbidden):
 		out.State = "forbidden"
 	case errors.Is(checkErr, ErrUnavailable):

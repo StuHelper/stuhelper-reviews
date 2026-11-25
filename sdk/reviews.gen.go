@@ -685,9 +685,6 @@ type Composer struct {
 	// TeacherIds When the author has active school data authorization and matching enrollment, teachers from that enrollment. Otherwise all public teachers for this course and term. An unspecified teacher is allowed.
 	TeacherIds   []string `json:"teacher_ids"`
 	TeacherReply *bool    `json:"teacher_reply,omitempty"`
-
-	// TeacherRequired true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。
-	TeacherRequired *bool `json:"teacher_required,omitempty"`
 }
 
 // ComposerIdentity defines model for Composer.Identity.

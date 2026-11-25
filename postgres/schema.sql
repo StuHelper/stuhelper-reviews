@@ -437,3 +437,8 @@ RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$
  DELETE FROM reviews.discovery_delivery_evidence WHERE id=p_id AND revision=p_revision AND sealed
 $$;
 REVOKE ALL ON FUNCTION reviews.claim_discovery_retirements(integer),reviews.ack_discovery_retirement(text,bigint) FROM PUBLIC;
+
+-- Existing course entries predate individual authorization. Preserve their
+-- attribution and give each such entry an explicit publication snapshot.
+UPDATE reviews.entries SET data=jsonb_set(data,'{enrollment_status}','"unknown"'::jsonb)
+ WHERE kind='course' AND NOT (data ? 'enrollment_status');

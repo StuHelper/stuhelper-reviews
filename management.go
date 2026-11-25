@@ -204,25 +204,10 @@ func (s *Service) attribution(ctx context.Context, p Principal, id, teacher stri
 	if target.SchoolID != entry.SchoolID || target.Inactive {
 		return out, nil, ErrForbidden
 	}
-	if target.TeacherRequired && teacher == "" {
-		return out, nil, ErrInput
-	}
-	evidence, err := s.catalogEvidence(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
+	evidence, ids, _, err := s.reviewEnrollment(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
 	if err != nil {
 		return out, nil, err
 	}
-	if len(evidence) == 0 || len(evidence) > 1000 {
-		return out, nil, ErrEnrollment
-	}
-	ids := []string{}
-	for _, record := range evidence {
-		if record.TermID != entry.Input.TermID || record.ID == "" || record.SourceID == "" || record.Revision < 1 || record.FetchedAt.IsZero() {
-			return out, nil, ErrUnavailable
-		}
-		ids = append(ids, record.TeacherIDs...)
-	}
-	slices.Sort(ids)
-	ids = slices.Compact(ids)
 	ids, err = s.selectedTeachers(ctx, teacher, ids)
 	if err != nil {
 		return out, nil, err
@@ -231,7 +216,10 @@ func (s *Service) attribution(ctx context.Context, p Principal, id, teacher stri
 	if err != nil {
 		return out, nil, err
 	}
-	out = AttributionPreview{entry.Revision, hash(evidence), ids, entry.TeacherIDs}
+	out = AttributionPreview{entry.Revision, hash(struct {
+		Evidence []Evidence
+		Teachers []string
+	}{evidence, ids}), ids, entry.TeacherIDs}
 	return out, evidence, nil
 }
 func (s *Service) PreviewAttribution(ctx context.Context, p Principal, id, teacher string) (AttributionPreview, error) {
