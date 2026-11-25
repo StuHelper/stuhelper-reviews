@@ -61,13 +61,6 @@ func TestStructuredErrorSubcodesFieldsAndConflictRevisions(t *testing.T) {
 	}
 	currentCaller = student
 
-	// 2. Sports project missing teacher -> 400 invalid_input + teacher_required + field=teacher_id.
-	f.service.Catalog = sportsCatalog{f.catalog}
-	status, payload = send("POST", "/api/v1/reviews", `{"kind":"course","target_id":"project","term_id":"autumn","title":"Archery","body":"Great class","ratings":[5,5,5,5,5],"signed":false}`, "sports-missing-teacher")
-	if status != 400 || payload.Code != "invalid_input" || payload.Subcode != "teacher_required" || payload.Field != "teacher_id" {
-		t.Fatalf("expected teacher_required on teacher_id, got %d %+v", status, payload)
-	}
-
 	// 3. Invalid ratings -> 400 invalid_input + invalid_ratings + field=ratings.
 	status, payload = send("POST", "/api/v1/reviews", `{"kind":"course","target_id":"course","term_id":"autumn","title":"Course","body":"Body","ratings":[0,5,5,5,5],"signed":false}`, "zero-rating")
 	if status != 400 || payload.Code != "invalid_input" || payload.Subcode != "invalid_ratings" || payload.Field != "ratings" {

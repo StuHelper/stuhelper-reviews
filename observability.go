@@ -30,7 +30,7 @@ func ClassifyDiagnosticCategory(err error) string {
 		return "unauthenticated"
 	case errors.Is(err, ErrInput):
 		return "invalid_input"
-	case errors.Is(err, ErrForbidden), errors.Is(err, ErrEnrollment):
+	case errors.Is(err, ErrForbidden):
 		return "forbidden"
 	case errors.Is(err, ErrNotFound):
 		return "not_found"

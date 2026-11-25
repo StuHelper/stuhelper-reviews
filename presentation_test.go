@@ -73,7 +73,7 @@ func (a globalPresentationAccess) Authorize(ctx context.Context, p r.Principal, 
 		return r.Grant{SchoolID: "*", RuleVersion: "rule-1"}, nil
 	}
 	if action == "read_full" && p.Subject == "student" {
-		return r.Grant{SchoolID: "school", RuleVersion: "rule-1", EnrollmentRequired: true}, nil
+		return r.Grant{SchoolID: "school", RuleVersion: "rule-1"}, nil
 	}
 	return a.access.Authorize(ctx, p, action, school)
 }

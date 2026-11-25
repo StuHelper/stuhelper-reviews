@@ -3506,6 +3506,15 @@
             "$ref": "#/components/schemas/ModerationReasonCode",
             "readOnly": true,
             "description": "仅在本人专属视图（GetOwn 与 /reviews/me/entries）返回的脱敏结构化审核原因码，与管理员内部备注严格隔离。"
+          },
+          "enrollment_status": {
+            "type": "string",
+            "enum": [
+              "enrolled",
+              "not_enrolled",
+              "unknown"
+            ],
+            "description": "Present on course reviews. Snapshot at publication. An authorized complete read with no match yields not_enrolled. Missing authorization, an incomplete or failed source read, and historical reviews yield unknown."
           }
         },
         "required": [
@@ -3864,8 +3873,7 @@
               "login",
               "campus_eligibility",
               "phone_bound",
-              "identity_verified",
-              "course_enrollment"
+              "identity_verified"
             ]
           },
           "state": {
@@ -3896,7 +3904,6 @@
               "ready",
               "choose_term",
               "forbidden",
-              "enrollment_required",
               "unavailable",
               "disclosure_required"
             ]
@@ -3911,7 +3918,8 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "When the author has active school data authorization and matching enrollment, teachers from that enrollment. Otherwise all public teachers for this course and term. An unspecified teacher is allowed."
           },
           "identity": {
             "type": "string",
@@ -3932,10 +3940,6 @@
           },
           "teacher_reply": {
             "type": "boolean"
-          },
-          "teacher_required": {
-            "type": "boolean",
-            "description": "true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。"
           },
           "own_draft_id": {
             "type": "string",
@@ -4150,7 +4154,6 @@
         "enum": [
           "gender",
           "department",
-          "enrollment",
           "real_name",
           "teacher",
           "organization"

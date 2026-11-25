@@ -15,12 +15,11 @@ var (
 	ErrConflict        = errors.New("conflict")
 	ErrUnavailable     = errors.New("unavailable")
 	ErrWindow          = errors.New("edit_window_closed")
-	ErrEnrollment      = errors.New("enrollment_required")
 )
 
 type Principal struct{ Subject string }
 type Target struct {
-	TeacherRequired    bool
+	enrollmentStatus   string
 	ID, SchoolID, Kind string
 	Inactive           bool
 }
@@ -40,29 +39,26 @@ type Catalog interface {
 }
 
 // Access evaluates the current action configuration and facts on every request.
-// EnrollmentRequired is read from the same effective rule version as Authorize.
 type Grant struct {
-	SchoolID           string
-	RuleVersion        string
-	EnrollmentRequired bool
-	Requirements       []Requirement
+	SchoolID     string
+	RuleVersion  string
+	Requirements []Requirement
 }
 type Requirement struct {
 	Key   string `json:"key"`
 	State string `json:"state"`
 }
 type Composer struct {
-	OwnDraftID      string             `json:"own_draft_id,omitempty"`
-	OwnEntryIDs     []string           `json:"own_entry_ids,omitempty"`
-	TeacherRequired bool               `json:"teacher_required,omitempty"`
-	Disclosures     []DisclosureOption `json:"disclosures,omitempty"`
-	TeacherReply    bool               `json:"teacher_reply,omitempty"`
-	Allowed         bool               `json:"allowed"`
-	State           string             `json:"state"`
-	Requirements    []Requirement      `json:"requirements"`
-	TeacherIDs      []string           `json:"teacher_ids"`
-	Identity        string             `json:"identity"`
-	RuleVersion     string             `json:"rule_version"`
+	OwnDraftID   string             `json:"own_draft_id,omitempty"`
+	OwnEntryIDs  []string           `json:"own_entry_ids,omitempty"`
+	Disclosures  []DisclosureOption `json:"disclosures,omitempty"`
+	TeacherReply bool               `json:"teacher_reply,omitempty"`
+	Allowed      bool               `json:"allowed"`
+	State        string             `json:"state"`
+	Requirements []Requirement      `json:"requirements"`
+	TeacherIDs   []string           `json:"teacher_ids"`
+	Identity     string             `json:"identity"`
+	RuleVersion  string             `json:"rule_version"`
 }
 type PublishDraft struct {
 	Revision int64 `json:"revision"`
@@ -108,6 +104,7 @@ type Append struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 type Entry struct {
+	EnrollmentStatus     string      `json:"enrollment_status,omitempty"`
 	Appends              []Append    `json:"appends,omitempty"`
 	ActivityTargetID     string      `json:"activity_target_id"`
 	ChangeReason         string      `json:"change_reason,omitempty"`
@@ -151,6 +148,7 @@ type Author struct {
 	Profile     *Profile           `json:"profile,omitempty"`
 }
 type View struct {
+	EnrollmentStatus     string     `json:"enrollment_status,omitempty"`
 	Appends              []Append   `json:"appends,omitempty"`
 	ModerationReasonCode string     `json:"moderation_reason_code,omitempty"`
 	ReplyCount           *int       `json:"reply_count,omitempty"`

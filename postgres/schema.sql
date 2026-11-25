@@ -437,3 +437,31 @@ RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$
  DELETE FROM reviews.discovery_delivery_evidence WHERE id=p_id AND revision=p_revision AND sealed
 $$;
 REVOKE ALL ON FUNCTION reviews.claim_discovery_retirements(integer),reviews.ack_discovery_retirement(text,bigint) FROM PUBLIC;
+
+-- Count only entries first migrated by this transaction. A repeated rollout
+-- also catches reviews written by the previous slot before traffic moved.
+CREATE TABLE IF NOT EXISTS reviews.school_data_migration(
+ singleton boolean PRIMARY KEY CHECK(singleton),
+ migrated_course_reviews bigint NOT NULL CHECK(migrated_course_reviews>=0)
+);
+REVOKE ALL ON reviews.school_data_migration FROM PUBLIC;
+WITH migrated AS (
+ UPDATE reviews.entries SET data=jsonb_set(data,'{enrollment_status}','"unknown"'::jsonb)
+ WHERE kind='course' AND NOT (data ? 'enrollment_status') RETURNING 1
+)
+INSERT INTO reviews.school_data_migration AS receipt(singleton,migrated_course_reviews)
+ SELECT true,count(*) FROM migrated
+ ON CONFLICT(singleton) DO UPDATE SET migrated_course_reviews=receipt.migrated_course_reviews+excluded.migrated_course_reviews
+ WHERE excluded.migrated_course_reviews>0;
+
+UPDATE reviews.history SET data=jsonb_set(data,'{enrollment_status}','"unknown"'::jsonb)
+ WHERE data#>>'{input,kind}'='course' AND NOT (data ? 'enrollment_status');
+
+-- Authors can no longer select enrollment as an identity disclosure. Remove
+-- just that retired option from saved inputs returned by draft and admin APIs.
+UPDATE reviews.entries SET data=jsonb_set(data,'{input,disclosures}',(data#>'{input,disclosures}')-'enrollment')
+ WHERE data#>'{input,disclosures}' ? 'enrollment';
+UPDATE reviews.history SET data=jsonb_set(data,'{input,disclosures}',(data#>'{input,disclosures}')-'enrollment')
+ WHERE data#>'{input,disclosures}' ? 'enrollment';
+UPDATE reviews.drafts SET data=jsonb_set(data,'{input,disclosures}',(data#>'{input,disclosures}')-'enrollment')
+ WHERE data#>'{input,disclosures}' ? 'enrollment';

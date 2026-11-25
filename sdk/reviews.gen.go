@@ -117,7 +117,6 @@ func (e ComposerIdentity) Valid() bool {
 const (
 	ComposerStateChooseTerm         ComposerState = "choose_term"
 	ComposerStateDisclosureRequired ComposerState = "disclosure_required"
-	ComposerStateEnrollmentRequired ComposerState = "enrollment_required"
 	ComposerStateForbidden          ComposerState = "forbidden"
 	ComposerStateReady              ComposerState = "ready"
 	ComposerStateUnavailable        ComposerState = "unavailable"
@@ -129,8 +128,6 @@ func (e ComposerState) Valid() bool {
 	case ComposerStateChooseTerm:
 		return true
 	case ComposerStateDisclosureRequired:
-		return true
-	case ComposerStateEnrollmentRequired:
 		return true
 	case ComposerStateForbidden:
 		return true
@@ -146,7 +143,6 @@ func (e ComposerState) Valid() bool {
 // Defines values for DisclosureKey.
 const (
 	DisclosureKeyDepartment   DisclosureKey = "department"
-	DisclosureKeyEnrollment   DisclosureKey = "enrollment"
 	DisclosureKeyGender       DisclosureKey = "gender"
 	DisclosureKeyOrganization DisclosureKey = "organization"
 	DisclosureKeyRealName     DisclosureKey = "real_name"
@@ -157,8 +153,6 @@ const (
 func (e DisclosureKey) Valid() bool {
 	switch e {
 	case DisclosureKeyDepartment:
-		return true
-	case DisclosureKeyEnrollment:
 		return true
 	case DisclosureKeyGender:
 		return true
@@ -335,7 +329,6 @@ func (e RecommendationPolicyStatus) Valid() bool {
 // Defines values for RequirementKey.
 const (
 	CampusEligibility RequirementKey = "campus_eligibility"
-	CourseEnrollment  RequirementKey = "course_enrollment"
 	IdentityVerified  RequirementKey = "identity_verified"
 	Login             RequirementKey = "login"
 	PhoneBound        RequirementKey = "phone_bound"
@@ -345,8 +338,6 @@ const (
 func (e RequirementKey) Valid() bool {
 	switch e {
 	case CampusEligibility:
-		return true
-	case CourseEnrollment:
 		return true
 	case IdentityVerified:
 		return true
@@ -392,6 +383,27 @@ func (e ReviewSummaryKind) Valid() bool {
 	case ReviewSummaryKindCourse:
 		return true
 	case ReviewSummaryKindTeacher:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ViewEnrollmentStatus.
+const (
+	Enrolled    ViewEnrollmentStatus = "enrolled"
+	NotEnrolled ViewEnrollmentStatus = "not_enrolled"
+	Unknown     ViewEnrollmentStatus = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the ViewEnrollmentStatus enum.
+func (e ViewEnrollmentStatus) Valid() bool {
+	switch e {
+	case Enrolled:
+		return true
+	case NotEnrolled:
+		return true
+	case Unknown:
 		return true
 	default:
 		return false
@@ -665,12 +677,11 @@ type Composer struct {
 	RuleVersion  string        `json:"rule_version"`
 
 	// State Requests without an authenticated session return HTTP 401.
-	State        ComposerState `json:"state"`
-	TeacherIds   []string      `json:"teacher_ids"`
-	TeacherReply *bool         `json:"teacher_reply,omitempty"`
+	State ComposerState `json:"state"`
 
-	// TeacherRequired true 表示评价对象为体育项目，发布时必须提交一个 teacher_id。选项仍为本人的 teacher_ids。普通课程省略或返回 false。
-	TeacherRequired *bool `json:"teacher_required,omitempty"`
+	// TeacherIds When the author has active school data authorization and matching enrollment, teachers from that enrollment. Otherwise all public teachers for this course and term. An unspecified teacher is allowed.
+	TeacherIds   []string `json:"teacher_ids"`
+	TeacherReply *bool    `json:"teacher_reply,omitempty"`
 }
 
 // ComposerIdentity defines model for Composer.Identity.
@@ -970,10 +981,13 @@ type View struct {
 	Body      string    `json:"body"`
 	CanEdit   bool      `json:"can_edit"`
 	Downvotes int       `json:"downvotes"`
-	Featured  *bool     `json:"featured,omitempty"`
-	Id        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	Mine      bool      `json:"mine"`
+
+	// EnrollmentStatus Present on course reviews. Snapshot at publication. An authorized complete read with no match yields not_enrolled. Missing authorization, an incomplete or failed source read, and historical reviews yield unknown.
+	EnrollmentStatus *ViewEnrollmentStatus `json:"enrollment_status,omitempty"`
+	Featured         *bool                 `json:"featured,omitempty"`
+	Id               string                `json:"id"`
+	Kind             string                `json:"kind"`
+	Mine             bool                  `json:"mine"`
 
 	// ModerationReasonCode 面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。
 	ModerationReasonCode *ModerationReasonCode `json:"moderation_reason_code,omitempty"`
@@ -1012,6 +1026,9 @@ type View struct {
 	Title      string    `json:"title"`
 	Upvotes    int       `json:"upvotes"`
 }
+
+// ViewEnrollmentStatus Present on course reviews. Snapshot at publication. An authorized complete read with no match yields not_enrolled. Missing authorization, an incomplete or failed source read, and historical reviews yield unknown.
+type ViewEnrollmentStatus string
 
 // ListReviewsParams defines parameters for ListReviews.
 type ListReviewsParams struct {
