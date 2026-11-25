@@ -79,18 +79,11 @@ type ReviewSummaries struct {
 	GeneratedAt time.Time            `json:"generated_at"`
 }
 
-// DirectoryReviewMetric is a trusted public Go port. It exposes only bands and
-// aggregate counts; exact means remain local to the owning review service.
-type DirectoryReviewMetric struct {
-	Summary       ReviewSummary
-	RecentReviews int64
-}
-
 // SummaryAggregate is already aggregated by the owning repository. No author,
 // review body or enrollment evidence crosses this read boundary.
 type SummaryAggregate struct {
 	TargetID, CourseID, TermID string
-	ReviewCount, RecentReviews int64
+	ReviewCount                int64
 	Sums, Counts               [5]int64
 	Histogram                  [5][5]int64
 }
@@ -113,7 +106,7 @@ type SummaryQuery struct {
 	Kind, SchoolID                            string
 	Targets, ExpandedTargets                  []string
 	Charts                                    bool
-	From, Until, Now                          time.Time
+	Now                                       time.Time
 	CourseAliases, TargetAliases, TermAliases map[string]string
 }
 
@@ -169,13 +162,13 @@ func (s *Service) ReadSummaries(ctx context.Context, p Principal, kind string, i
 	}
 	slices.Sort(canonical)
 	canonical = slices.Compact(canonical)
-	metrics, err := s.summaryMetrics(ctx, kind, school, canonical, charts, out.GeneratedAt, out.GeneratedAt)
+	metrics, err := s.summaryMetrics(ctx, kind, school, canonical, charts)
 	if err != nil {
 		return out, err
 	}
 	byID := map[string]ReviewSummary{}
 	for _, metric := range metrics {
-		byID[metric.Summary.TargetID] = metric.Summary
+		byID[metric.TargetID] = metric
 	}
 	for _, id := range canonical {
 		v, ok := byID[id]
@@ -194,23 +187,23 @@ func (s *Service) ReadSummaries(ctx context.Context, p Principal, kind string, i
 // DirectoryMetrics reads all nonzero review aggregates for one currently
 // authorized school in one query, bounded at 100000 course/target groups. This
 // supports sorting an entire catalog without an N+1 read for each visible row.
-func (s *Service) DirectoryMetrics(ctx context.Context, p Principal, kind, school string, from, until time.Time) ([]DirectoryReviewMetric, error) {
-	if !validSummaryKind(kind) || !from.Before(until) || until.Sub(from) > 366*24*time.Hour {
+func (s *Service) DirectoryMetrics(ctx context.Context, p Principal, kind, school string) ([]ReviewSummary, error) {
+	if !validSummaryKind(kind) {
 		return nil, ErrInput
 	}
 	scope, err := s.contentScope(ctx, p, school)
 	if err != nil {
 		return nil, err
 	}
-	return s.summaryMetrics(ctx, kind, scope, nil, false, from, until)
+	return s.summaryMetrics(ctx, kind, scope, nil, false)
 }
 
-func (s *Service) summaryMetrics(ctx context.Context, kind, school string, targets []string, charts bool, from, until time.Time) ([]DirectoryReviewMetric, error) {
+func (s *Service) summaryMetrics(ctx context.Context, kind, school string, targets []string, charts bool) ([]ReviewSummary, error) {
 	port, ok := s.Catalog.(SummaryCatalog)
 	if !ok || !s.Config.Recommendations.valid() {
 		return nil, ErrUnavailable
 	}
-	query := SummaryQuery{Kind: kind, SchoolID: school, Targets: targets, Charts: charts, From: from, Until: until, Now: s.now()}
+	query := SummaryQuery{Kind: kind, SchoolID: school, Targets: targets, Charts: charts, Now: s.now()}
 	targeted := len(targets) > 0
 	var err error
 	if targeted {
@@ -344,7 +337,6 @@ type summaryAccumulator struct {
 
 func addSummary(a, b SummaryAggregate) SummaryAggregate {
 	a.ReviewCount += b.ReviewCount
-	a.RecentReviews += b.RecentReviews
 	for dimension := range 5 {
 		a.Sums[dimension] += b.Sums[dimension]
 		a.Counts[dimension] += b.Counts[dimension]
@@ -355,14 +347,12 @@ func addSummary(a, b SummaryAggregate) SummaryAggregate {
 	return a
 }
 
-func (s *Service) summarizeCourses(courses iter.Seq[SummaryAggregate], charts bool) (ReviewSummary, int64) {
+func (s *Service) summarizeCourses(courses iter.Seq[SummaryAggregate], charts bool) ReviewSummary {
 	out := ReviewSummary{Recommendation: "unrated"}
 	var means [5]float64
 	var histogram [5][5]int64
-	var recent int64
 	for course := range courses {
 		out.ReviewCount += int(course.ReviewCount)
-		recent += course.RecentReviews
 		for dimension := range 5 {
 			if course.Counts[dimension] > 0 {
 				means[dimension] += float64(course.Sums[dimension]) / float64(course.Counts[dimension])
@@ -400,24 +390,24 @@ func (s *Service) summarizeCourses(courses iter.Seq[SummaryAggregate], charts bo
 		}
 	}
 	out.Recommendation = s.Config.Recommendations.level(means[0], out.Dimensions[0].Samples)
-	return out, recent
+	return out
 }
 
-func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kind, school string, rows []SummaryAggregate, charts, mergeCourses bool) ([]DirectoryReviewMetric, error) {
+func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kind, school string, rows []SummaryAggregate, charts, mergeCourses bool) ([]ReviewSummary, error) {
 	if !charts && !mergeCourses {
 		// Repository groups by canonical target/course with an empty term, so
 		// each row is one course's complete aggregate. Group contiguous targets
 		// without allocating per-target maps or unused chart distributions.
 		slices.SortFunc(rows, func(a, b SummaryAggregate) int { return strings.Compare(a.TargetID, b.TargetID) })
-		out := make([]DirectoryReviewMetric, 0, len(rows))
+		out := make([]ReviewSummary, 0, len(rows))
 		for start := 0; start < len(rows); {
 			end := start + 1
 			for end < len(rows) && rows[end].TargetID == rows[start].TargetID {
 				end++
 			}
-			summary, recent := s.summarizeCourses(slices.Values(rows[start:end]), false)
+			summary := s.summarizeCourses(slices.Values(rows[start:end]), false)
 			summary.TargetID, summary.Kind = rows[start].TargetID, kind
-			out = append(out, DirectoryReviewMetric{summary, recent})
+			out = append(out, summary)
 			start = end
 		}
 		return out, nil
@@ -452,16 +442,16 @@ func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kin
 			return nil, err
 		}
 	}
-	out := make([]DirectoryReviewMetric, 0, len(grouped))
+	out := make([]ReviewSummary, 0, len(grouped))
 	for id, group := range grouped {
-		summary, recent := s.summarizeCourses(maps.Values(group.courses), charts)
+		summary := s.summarizeCourses(maps.Values(group.courses), charts)
 		summary.TargetID, summary.Kind = id, kind
 		if !charts {
 			summary.Distribution = nil
 		} else {
 			summary.Terms = []TermSummary{}
 			for termID, courses := range group.terms {
-				v, _ := s.summarizeCourses(maps.Values(courses), false)
+				v := s.summarizeCourses(maps.Values(courses), false)
 				name := ""
 				if term := termNames[termID]; term.Kind == "term" && term.SchoolID == school {
 					name = term.Name
@@ -475,8 +465,8 @@ func (s *Service) foldSummaries(ctx context.Context, catalog SummaryCatalog, kin
 				return strings.Compare(a.TermID, b.TermID)
 			})
 		}
-		out = append(out, DirectoryReviewMetric{summary, recent})
+		out = append(out, summary)
 	}
-	slices.SortFunc(out, func(a, b DirectoryReviewMetric) int { return strings.Compare(a.Summary.TargetID, b.Summary.TargetID) })
+	slices.SortFunc(out, func(a, b ReviewSummary) int { return strings.Compare(a.TargetID, b.TargetID) })
 	return out, nil
 }
