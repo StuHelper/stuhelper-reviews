@@ -129,8 +129,14 @@ func validate(in Input, draft bool) error {
 		if (!draft || in.TermID != "") && !validID(in.TermID) {
 			return inputFieldErr("invalid_term_id", "term_id")
 		}
-		if in.TeacherID != "" && !validID(in.TeacherID) {
-			return inputFieldErr("invalid_teacher_id", "teacher_id")
+		if err := validateTeacherSelection(in.TeacherIDs); err != nil {
+			return err
+		}
+		if len(in.TeacherIDs) != 0 && in.TermID == "" {
+			return inputFieldErr("invalid_term_id", "term_id")
+		}
+		if in.Grade != nil && !in.Grade.valid() {
+			return inputFieldErr("invalid_grade", "grade")
 		}
 		for _, v := range in.Ratings {
 			if v < 0 || v > 5 || !draft && v == 0 {
@@ -141,8 +147,11 @@ func validate(in Input, draft bool) error {
 		if in.TermID != "" {
 			return inputFieldErr("unexpected_term_id", "term_id")
 		}
-		if in.TeacherID != "" {
-			return inputFieldErr("unexpected_teacher_id", "teacher_id")
+		if len(in.TeacherIDs) != 0 {
+			return inputFieldErr("unexpected_teacher_ids", "teacher_ids")
+		}
+		if in.Grade != nil {
+			return inputFieldErr("unexpected_grade", "grade")
 		}
 		if in.Ratings != [5]int{} {
 			return inputFieldErr("unexpected_ratings", "ratings")
@@ -166,51 +175,46 @@ func (s *Service) authorize(ctx context.Context, p Principal, action, school str
 	s.emitDiagnostic("authorize_"+action, "access", start, err)
 	return g, wrapExternalErr(ctx, err)
 }
-func (s *Service) prepare(ctx context.Context, p Principal, in Input) (Target, []Evidence, []string, Grant, error) {
+func publishAction(kind string) string {
+	if kind == "mentor" {
+		return "publish_mentor"
+	}
+	return "publish_course"
+}
+
+func (s *Service) publicationTarget(ctx context.Context, p Principal, in Input) (Target, Grant, error) {
 	kind := "course"
-	action := "publish_course"
 	if in.Kind == "mentor" {
 		kind = "teacher"
-		action = "publish_mentor"
 	}
 	target, e := s.catalogTargetFor(ctx, "prepare_target", kind, in.TargetID)
 	if e != nil {
-		return target, nil, nil, Grant{}, e
+		return target, Grant{}, e
 	}
 	if target.Inactive {
-		return target, nil, nil, Grant{}, forbiddenErr("target_inactive", "target_id")
+		return target, Grant{}, forbiddenErr("target_inactive", "target_id")
 	}
-	g, e := s.authorize(ctx, p, action, target.SchoolID)
-	if e != nil {
-		if errors.Is(e, ErrForbidden) {
-			return target, nil, nil, g, forbiddenErr("eligibility_missing", "")
-		}
-		return target, nil, nil, g, e
+	g, e := s.authorize(ctx, p, publishAction(in.Kind), target.SchoolID)
+	if errors.Is(e, ErrForbidden) {
+		e = forbiddenErr("eligibility_missing", "")
 	}
-	if in.Kind == "mentor" {
-		return target, nil, nil, g, nil
-	}
+	return target, g, e
+}
+
+func (s *Service) courseAttribution(ctx context.Context, target Target, in Input) ([]string, string, error) {
 	term, e := s.catalogTargetFor(ctx, "prepare_term", "term", in.TermID)
 	if e != nil {
-		return target, nil, nil, g, e
+		return nil, "", e
 	}
 	if term.SchoolID != target.SchoolID {
-		return target, nil, nil, g, inputFieldErr("term_school_mismatch", "term_id")
+		return nil, "", inputFieldErr("term_school_mismatch", "term_id")
 	}
-	evidence, ids, status, e := s.reviewEnrollment(ctx, p, target.ID, in.TermID)
+	ids, e := s.courseTeachers(ctx, target.ID, term.ID)
 	if e != nil {
-		return target, nil, nil, g, e
+		return nil, "", e
 	}
-	target.enrollmentStatus = status
-	ids, e = s.selectedTeachers(ctx, in.TeacherID, ids)
-	if e != nil {
-		return target, nil, nil, g, e
-	}
-	ids, e = s.activityTeacherIDs(ctx, target.SchoolID, ids)
-	if e != nil {
-		return target, nil, nil, g, e
-	}
-	return target, evidence, ids, g, nil
+	selected, e := s.selectedTeachers(ctx, in.TeacherIDs, ids)
+	return selected, term.ID, e
 }
 func (s *Service) check(ctx context.Context, e Entry) (string, error) {
 	start := time.Now()
@@ -290,16 +294,9 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 	if err := validate(in, false); err != nil {
 		return out, err
 	}
-	target, evidence, ids, g, err := s.prepare(ctx, p, in)
+	in = in.sortedTeachers()
+	target, g, err := s.publicationTarget(ctx, p, in)
 	if err != nil {
-		return out, err
-	}
-	if _, err = s.validateDisclosures(ctx, p, target.SchoolID, func() string {
-		if in.Kind == "course" {
-			return in.TargetID
-		}
-		return ""
-	}(), in.TermID, in); err != nil {
 		return out, err
 	}
 	// An old link and its canonical course are the same submission target.
@@ -321,6 +318,43 @@ func (s *Service) create(ctx context.Context, p Principal, key string, in Input,
 		}
 	}
 	now := s.now()
+	var replayed bool
+	err = s.Repo.Transaction(ctx, func(t Transaction) error {
+		closed, err := t.ClosedOwners([]string{p.Subject})
+		if err != nil {
+			return err
+		}
+		if closed[p.Subject] {
+			return forbiddenErr("account_closed", "")
+		}
+		out, replayed, err = replay(t, rk, h, now)
+		if err != nil || replayed {
+			return err
+		}
+		out, replayed, err = replayPreviousCreation(t, previous, now)
+		return err
+	})
+	if err != nil || replayed {
+		return out, err
+	}
+	var evidence []Evidence
+	var ids []string
+	var course string
+	if in.Kind == "course" {
+		var term string
+		ids, term, err = s.courseAttribution(ctx, target, in)
+		if err != nil {
+			return out, err
+		}
+		course = target.ID
+		evidence, target.enrollmentStatus, err = s.reviewEnrollment(ctx, p, course, term)
+		if err != nil {
+			return out, err
+		}
+	}
+	if _, err = s.validateDisclosures(ctx, p, target.SchoolID, course, in.TermID, in); err != nil {
+		return out, err
+	}
 	entry := Entry{EnrollmentStatus: target.enrollmentStatus, ActivityTargetID: target.ID, ChangeOrigin: "author", ID: rk, RootID: rk, Owner: p.Subject, SchoolID: target.SchoolID, Input: in, TeacherIDs: ids, Evidence: evidence, Revision: 1, CreatedAt: now, UpdatedAt: now, RuleVersion: g.RuleVersion}
 	state, err := s.check(ctx, entry)
 	if err != nil {
@@ -637,6 +671,10 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 			return out, err
 		}
 	}
+	if in.Input != nil && (in.Action == "republish" || in.Action == "save_withdrawn") {
+		sorted := in.Input.sortedTeachers()
+		in.Input = &sorted
+	}
 	if in.Action == "vote" && (in.Vote < -1 || in.Vote > 1) {
 		return out, inputFieldErr("invalid_vote", "vote")
 	}
@@ -728,7 +766,7 @@ func (s *Service) Action(ctx context.Context, p Principal, id, key string, in Ac
 				}
 				repubTeacherReply = disclosure.ownCourse
 			} else {
-				_, _, _, grant, err := s.prepare(ctx, p, *in.Input)
+				_, grant, err := s.publicationTarget(ctx, p, *in.Input)
 				if err != nil {
 					return out, err
 				}
@@ -876,8 +914,8 @@ func attributionMismatchField(old, next Input) string {
 		return "target_id"
 	case next.TermID != old.TermID:
 		return "term_id"
-	case next.TeacherID != old.TeacherID:
-		return "teacher_id"
+	case !slices.Equal(next.TeacherIDs, old.TeacherIDs):
+		return "teacher_ids"
 	default:
 		return ""
 	}

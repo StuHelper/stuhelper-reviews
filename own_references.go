@@ -114,9 +114,7 @@ func draftReferenceIDs(in Input) []string {
 	if in.TermID != "" {
 		out = append(out, in.TermID)
 	}
-	if in.TeacherID != "" {
-		out = append(out, in.TeacherID)
-	}
+	out = append(out, in.TeacherIDs...)
 	slices.Sort(out)
 	return slices.Compact(out)
 }
@@ -161,7 +159,11 @@ func (s *Service) verifyDraftReferences(ctx context.Context, p Principal, in Inp
 			kind = "teacher"
 		}
 	}
-	pairs := []struct{ kind, id string }{{kind, in.TargetID}, {"term", in.TermID}, {"teacher", in.TeacherID}}
+	type referenceKey struct{ kind, id string }
+	pairs := []referenceKey{{kind, in.TargetID}, {"term", in.TermID}}
+	for _, id := range in.TeacherIDs {
+		pairs = append(pairs, referenceKey{"teacher", id})
+	}
 	ids := []string{}
 	state := "verified"
 	for _, pair := range pairs {

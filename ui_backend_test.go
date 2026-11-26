@@ -277,9 +277,9 @@ func TestSummariesUpvoteAndAuditUseIndexesWithoutFullScan(t *testing.T) {
 		in := input(cid, "autumn", (i%5)+1)
 		if i == 0 {
 			in.TargetID = "c-0-legacy"
-			in.TeacherID = "teacher-b"
+			in.TeacherIDs = []string{"teacher-b"}
 		} else {
-			in.TeacherID = "teacher-a"
+			in.TeacherIDs = []string{"teacher-a"}
 		}
 		p := r.Principal{Subject: fmt.Sprintf("author-%d", i)}
 		res, err := f.service.Create(ctx, p, fmt.Sprintf("seed-%d", i), in)

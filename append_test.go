@@ -104,7 +104,7 @@ func TestPostWindowAppendPreservesAttributionSamplesAndModeration(t *testing.T) 
 	ctx := context.Background()
 
 	orig := input("course", "autumn", 4)
-	orig.TeacherID = "teacher-a"
+	orig.TeacherIDs = []string{"teacher-a"}
 	root := create(t, f, "append-root", orig)
 	if _, err := f.service.Action(ctx, r.Principal{Subject: "voter"}, root.ID, "vote-root", r.Action{Action: "vote", Vote: 1}); err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestPostWindowAppendPreservesAttributionSamplesAndModeration(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if afterFirst.Body != orig.Body || afterFirst.Ratings != orig.Ratings || afterFirst.TeacherID != "teacher-a" || !afterFirst.PublishedAt.Equal(*firstPublishedView.PublishedAt) || afterFirst.Upvotes != 1 {
+	if afterFirst.Body != orig.Body || afterFirst.Ratings != orig.Ratings || len(afterFirst.TeacherIDs) != 1 || afterFirst.TeacherIDs[0] != "teacher-a" || !afterFirst.PublishedAt.Equal(*firstPublishedView.PublishedAt) || afterFirst.Upvotes != 1 {
 		t.Fatalf("append mutated original fields: %+v", afterFirst)
 	}
 	if len(afterFirst.Appends) != 1 || afterFirst.Appends[0].Body != "期末出分更新：给分公正，考题贴合讲义。" || afterFirst.Appends[0].State != "published" {

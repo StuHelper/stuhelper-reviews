@@ -188,6 +188,111 @@ func (e DraftViewReferenceState) Valid() bool {
 	}
 }
 
+// Defines values for GradeFiveLevelScale.
+const (
+	FiveLevel GradeFiveLevelScale = "five_level"
+)
+
+// Valid indicates whether the value is a known member of the GradeFiveLevelScale enum.
+func (e GradeFiveLevelScale) Valid() bool {
+	switch e {
+	case FiveLevel:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GradeFiveLevelValue.
+const (
+	GradeFiveLevelValueExcellent GradeFiveLevelValue = "excellent"
+	GradeFiveLevelValueFail      GradeFiveLevelValue = "fail"
+	GradeFiveLevelValueGood      GradeFiveLevelValue = "good"
+	GradeFiveLevelValueMedium    GradeFiveLevelValue = "medium"
+	GradeFiveLevelValuePass      GradeFiveLevelValue = "pass"
+)
+
+// Valid indicates whether the value is a known member of the GradeFiveLevelValue enum.
+func (e GradeFiveLevelValue) Valid() bool {
+	switch e {
+	case GradeFiveLevelValueExcellent:
+		return true
+	case GradeFiveLevelValueFail:
+		return true
+	case GradeFiveLevelValueGood:
+		return true
+	case GradeFiveLevelValueMedium:
+		return true
+	case GradeFiveLevelValuePass:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GradePercentScale.
+const (
+	Percent GradePercentScale = "percent"
+)
+
+// Valid indicates whether the value is a known member of the GradePercentScale enum.
+func (e GradePercentScale) Valid() bool {
+	switch e {
+	case Percent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GradeTwoLevelScale.
+const (
+	TwoLevel GradeTwoLevelScale = "two_level"
+)
+
+// Valid indicates whether the value is a known member of the GradeTwoLevelScale enum.
+func (e GradeTwoLevelScale) Valid() bool {
+	switch e {
+	case TwoLevel:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GradeTwoLevelValue.
+const (
+	GradeTwoLevelValueFail GradeTwoLevelValue = "fail"
+	GradeTwoLevelValuePass GradeTwoLevelValue = "pass"
+)
+
+// Valid indicates whether the value is a known member of the GradeTwoLevelValue enum.
+func (e GradeTwoLevelValue) Valid() bool {
+	switch e {
+	case GradeTwoLevelValueFail:
+		return true
+	case GradeTwoLevelValuePass:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GradeWithdrawnScale.
+const (
+	Withdrawn GradeWithdrawnScale = "withdrawn"
+)
+
+// Valid indicates whether the value is a known member of the GradeWithdrawnScale enum.
+func (e GradeWithdrawnScale) Valid() bool {
+	switch e {
+	case Withdrawn:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InputKind.
 const (
 	InputKindCourse InputKind = "course"
@@ -634,7 +739,8 @@ type AppendState string
 
 // AttributionInput defines model for AttributionInput.
 type AttributionInput struct {
-	TeacherId string `json:"teacher_id"`
+	// TeacherIds 明确选择的公开任课教师 ID。空数组表示不指定教师，归属到该课程所选学期的全部公开任课教师。
+	TeacherIds TeacherSelection `json:"teacher_ids"`
 }
 
 // AttributionPreview defines model for AttributionPreview.
@@ -677,11 +783,14 @@ type Composer struct {
 	RuleVersion  string        `json:"rule_version"`
 
 	// State Requests without an authenticated session return HTTP 401.
-	State ComposerState `json:"state"`
+	State        ComposerState `json:"state"`
+	TeacherReply *bool         `json:"teacher_reply,omitempty"`
 
-	// TeacherIds When the author has active school data authorization and matching enrollment, teachers from that enrollment. Otherwise all public teachers for this course and term. An unspecified teacher is allowed.
-	TeacherIds   []string `json:"teacher_ids"`
-	TeacherReply *bool    `json:"teacher_reply,omitempty"`
+	// Teachers 所选学期该课程的全部公开任课教师。未选择学期时为空。
+	Teachers []ComposerTeacher `json:"teachers"`
+
+	// Terms 课程在目录截止学期范围内有开课记录的学期，按学期排序键从新到旧。
+	Terms []ComposerTerm `json:"terms"`
 }
 
 // ComposerIdentity defines model for Composer.Identity.
@@ -689,6 +798,22 @@ type ComposerIdentity string
 
 // ComposerState Requests without an authenticated session return HTTP 401.
 type ComposerState string
+
+// ComposerTeacher defines model for ComposerTeacher.
+type ComposerTeacher struct {
+	// Enrolled 仅在学校数据认证有效且有相符的本人选课记录时为 true。
+	Enrolled bool   `json:"enrolled"`
+	Id       string `json:"id"`
+}
+
+// ComposerTerm defines model for ComposerTerm.
+type ComposerTerm struct {
+	// Enrolled 仅在学校数据认证有效且有相符的本人选课记录时为 true。
+	Enrolled     bool   `json:"enrolled"`
+	Id           string `json:"id"`
+	Name         string `json:"name"`
+	TermOrderKey int    `json:"term_order_key"`
+}
 
 // CourseStatistic defines model for CourseStatistic.
 type CourseStatistic struct {
@@ -752,13 +877,62 @@ type Error struct {
 	Subcode *string `json:"subcode,omitempty"`
 }
 
+// Grade 作者自愿填写的本人成绩或退课状态，仅用于课程评价。评价公开时随评价展示。
+type Grade struct {
+	union json.RawMessage
+}
+
+// GradeFiveLevel defines model for GradeFiveLevel.
+type GradeFiveLevel struct {
+	Scale GradeFiveLevelScale `json:"scale"`
+	Value GradeFiveLevelValue `json:"value"`
+}
+
+// GradeFiveLevelScale defines model for GradeFiveLevel.Scale.
+type GradeFiveLevelScale string
+
+// GradeFiveLevelValue defines model for GradeFiveLevel.Value.
+type GradeFiveLevelValue string
+
+// GradePercent defines model for GradePercent.
+type GradePercent struct {
+	Scale GradePercentScale `json:"scale"`
+	Value int               `json:"value"`
+}
+
+// GradePercentScale defines model for GradePercent.Scale.
+type GradePercentScale string
+
+// GradeTwoLevel defines model for GradeTwoLevel.
+type GradeTwoLevel struct {
+	Scale GradeTwoLevelScale `json:"scale"`
+	Value GradeTwoLevelValue `json:"value"`
+}
+
+// GradeTwoLevelScale defines model for GradeTwoLevel.Scale.
+type GradeTwoLevelScale string
+
+// GradeTwoLevelValue defines model for GradeTwoLevel.Value.
+type GradeTwoLevelValue string
+
+// GradeWithdrawn defines model for GradeWithdrawn.
+type GradeWithdrawn struct {
+	Scale GradeWithdrawnScale `json:"scale"`
+}
+
+// GradeWithdrawnScale defines model for GradeWithdrawn.Scale.
+type GradeWithdrawnScale string
+
 // Input defines model for Input.
 type Input struct {
 	Body string `json:"body"`
 
 	// Disclosures Only field names. Values are obtained from current authoritative, authorized facts. Defaults to no disclosure.
 	Disclosures *[]DisclosureKey `json:"disclosures,omitempty"`
-	Kind        InputKind        `json:"kind"`
+
+	// Grade 作者自愿填写的本人成绩或退课状态，仅用于课程评价。评价公开时随评价展示。
+	Grade *Grade    `json:"grade,omitempty"`
+	Kind  InputKind `json:"kind"`
 
 	// ParentId 当 kind=reply 保存或发布草稿时绑定的父评价或父回复 ID；课程与导师评价禁止传入。
 	ParentId *string `json:"parent_id,omitempty"`
@@ -770,10 +944,10 @@ type Input struct {
 	// TargetId  体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。
 	TargetId string `json:"target_id"`
 
-	// TeacherId  体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。
-	TeacherId *string `json:"teacher_id,omitempty"`
-	TermId    *string `json:"term_id,omitempty"`
-	Title     string  `json:"title"`
+	// TeacherIds 明确选择的公开任课教师 ID。空数组表示不指定教师，归属到该课程所选学期的全部公开任课教师。
+	TeacherIds *TeacherSelection `json:"teacher_ids,omitempty"`
+	TermId     *string           `json:"term_id,omitempty"`
+	Title      string            `json:"title"`
 }
 
 // InputKind defines model for Input.Kind.
@@ -958,6 +1132,9 @@ type Statistics struct {
 	Until      *time.Time `json:"until"`
 }
 
+// TeacherSelection 明确选择的公开任课教师 ID。空数组表示不指定教师，归属到该课程所选学期的全部公开任课教师。
+type TeacherSelection = []string
+
 // TermSummary defines model for TermSummary.
 type TermSummary struct {
 	// Dimensions 五维统计等级，下标固定为：0=推荐度、1=内容质量、2=课程难度、3=工作量、4=考核给分。
@@ -976,18 +1153,24 @@ type TermSummary struct {
 // View defines model for View.
 type View struct {
 	// Appends 作者在主帖发布的追加追评（按追加时间升序），保留首次正文、评分与教师归属不变。公开视图仅包含已发布追评，无可见追评时省略。
-	Appends   *[]Append `json:"appends,omitempty"`
-	Author    Author    `json:"author"`
-	Body      string    `json:"body"`
-	CanEdit   bool      `json:"can_edit"`
-	Downvotes int       `json:"downvotes"`
+	Appends *[]Append `json:"appends,omitempty"`
+
+	// AttributedTeacherIds 课程评价保存的统计归属快照。仅在 include_teacher_ids=true 且有归属时返回。
+	AttributedTeacherIds *[]string `json:"attributed_teacher_ids,omitempty"`
+	Author               Author    `json:"author"`
+	Body                 string    `json:"body"`
+	CanEdit              bool      `json:"can_edit"`
+	Downvotes            int       `json:"downvotes"`
 
 	// EnrollmentStatus Present on course reviews. Snapshot at publication. An authorized complete read with no match yields not_enrolled. Missing authorization, an incomplete or failed source read, and historical reviews yield unknown.
 	EnrollmentStatus *ViewEnrollmentStatus `json:"enrollment_status,omitempty"`
 	Featured         *bool                 `json:"featured,omitempty"`
-	Id               string                `json:"id"`
-	Kind             string                `json:"kind"`
-	Mine             bool                  `json:"mine"`
+
+	// Grade 作者自愿填写的本人成绩或退课状态，仅用于课程评价。评价公开时随评价展示。
+	Grade *Grade `json:"grade,omitempty"`
+	Id    string `json:"id"`
+	Kind  string `json:"kind"`
+	Mine  bool   `json:"mine"`
 
 	// ModerationReasonCode 面向作者展示的封闭结构化审核原因枚举键，映射前端八语言翻译键，不含管理员内部自由文本备注或举报证据。
 	ModerationReasonCode *ModerationReasonCode `json:"moderation_reason_code,omitempty"`
@@ -1017,14 +1200,11 @@ type View struct {
 	// TargetId  体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。
 	TargetId string `json:"target_id"`
 
-	// TeacherId  体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。
-	TeacherId *string `json:"teacher_id,omitempty"`
-
-	// TeacherIds 课程评价发布时记录的任课教师归属快照（单选教师时为该教师，未单选教师时为该学期本人选课任课教师并集）；非课程评价或无教师归属时省略。 仅在 include_teacher_ids=true 时返回。
-	TeacherIds *[]string `json:"teacher_ids,omitempty"`
-	TermId     *string   `json:"term_id,omitempty"`
-	Title      string    `json:"title"`
-	Upvotes    int       `json:"upvotes"`
+	// TeacherIds 明确选择的公开任课教师 ID。空数组表示不指定教师，归属到该课程所选学期的全部公开任课教师。
+	TeacherIds *TeacherSelection `json:"teacher_ids,omitempty"`
+	TermId     *string           `json:"term_id,omitempty"`
+	Title      string            `json:"title"`
+	Upvotes    int               `json:"upvotes"`
 }
 
 // ViewEnrollmentStatus Present on course reviews. Snapshot at publication. An authorized complete read with no match yields not_enrolled. Missing authorization, an incomplete or failed source read, and historical reviews yield unknown.
@@ -1057,7 +1237,7 @@ type ListReviewsParams struct {
 	// IncludeReplyPreview 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。
 	IncludeReplyPreview *bool `form:"include_reply_preview,omitempty" json:"include_reply_preview,omitempty"`
 
-	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
+	// IncludeTeacherIds 为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。
 	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
 
 	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
@@ -1210,7 +1390,7 @@ type MyReviewsParams struct {
 	// IncludeReplyPreview 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。
 	IncludeReplyPreview *bool `form:"include_reply_preview,omitempty" json:"include_reply_preview,omitempty"`
 
-	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
+	// IncludeTeacherIds 为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。
 	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
 
 	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
@@ -1231,7 +1411,7 @@ type MyReviewsParamsRatingGroup string
 
 // GetOwnEntryParams defines parameters for GetOwnEntry.
 type GetOwnEntryParams struct {
-	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
+	// IncludeTeacherIds 为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。
 	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
 
 	// IncludeModerationDetails 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。
@@ -1289,7 +1469,7 @@ type GetReviewSummariesParamsKind string
 
 // GetReviewParams defines parameters for GetReview.
 type GetReviewParams struct {
-	// IncludeTeacherIds 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。
+	// IncludeTeacherIds 为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。
 	IncludeTeacherIds *bool `form:"include_teacher_ids,omitempty" json:"include_teacher_ids,omitempty"`
 
 	// IncludeParentSummary 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。
@@ -1335,6 +1515,120 @@ type ReviewActionJSONRequestBody = Action
 
 // ReplyJSONRequestBody defines body for Reply for application/json ContentType.
 type ReplyJSONRequestBody = Input
+
+// AsGradePercent returns the union data inside the Grade as a GradePercent
+func (t Grade) AsGradePercent() (GradePercent, error) {
+	var body GradePercent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGradePercent overwrites any union data inside the Grade as the provided GradePercent
+func (t *Grade) FromGradePercent(v GradePercent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGradePercent performs a merge with any union data inside the Grade, using the provided GradePercent
+func (t *Grade) MergeGradePercent(v GradePercent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGradeFiveLevel returns the union data inside the Grade as a GradeFiveLevel
+func (t Grade) AsGradeFiveLevel() (GradeFiveLevel, error) {
+	var body GradeFiveLevel
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGradeFiveLevel overwrites any union data inside the Grade as the provided GradeFiveLevel
+func (t *Grade) FromGradeFiveLevel(v GradeFiveLevel) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGradeFiveLevel performs a merge with any union data inside the Grade, using the provided GradeFiveLevel
+func (t *Grade) MergeGradeFiveLevel(v GradeFiveLevel) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGradeTwoLevel returns the union data inside the Grade as a GradeTwoLevel
+func (t Grade) AsGradeTwoLevel() (GradeTwoLevel, error) {
+	var body GradeTwoLevel
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGradeTwoLevel overwrites any union data inside the Grade as the provided GradeTwoLevel
+func (t *Grade) FromGradeTwoLevel(v GradeTwoLevel) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGradeTwoLevel performs a merge with any union data inside the Grade, using the provided GradeTwoLevel
+func (t *Grade) MergeGradeTwoLevel(v GradeTwoLevel) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGradeWithdrawn returns the union data inside the Grade as a GradeWithdrawn
+func (t Grade) AsGradeWithdrawn() (GradeWithdrawn, error) {
+	var body GradeWithdrawn
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGradeWithdrawn overwrites any union data inside the Grade as the provided GradeWithdrawn
+func (t *Grade) FromGradeWithdrawn(v GradeWithdrawn) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGradeWithdrawn performs a merge with any union data inside the Grade, using the provided GradeWithdrawn
+func (t *Grade) MergeGradeWithdrawn(v GradeWithdrawn) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t Grade) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *Grade) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error

@@ -187,7 +187,11 @@ func decode(w http.ResponseWriter, r *http.Request, v any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 128<<10)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	if d.Decode(v) != nil {
+	if err := d.Decode(v); err != nil {
+		var detail reviews.ErrorDetail
+		if errors.As(err, &detail) {
+			return detail
+		}
 		return reviews.NewErrorDetail(reviews.ErrInput, "malformed_json", "", nil)
 	}
 	var extra any

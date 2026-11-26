@@ -67,10 +67,10 @@ func TestStructuredErrorSubcodesFieldsAndConflictRevisions(t *testing.T) {
 		t.Fatalf("expected invalid_ratings on ratings, got %d %+v", status, payload)
 	}
 
-	// 4. Teacher not in caller's enrollment -> 403 forbidden + teacher_not_enrolled + field=teacher_id.
-	status, payload = send("POST", "/api/v1/reviews", `{"kind":"course","target_id":"course","term_id":"autumn","teacher_id":"teacher-c","title":"Course","body":"Body","ratings":[4,4,4,4,4],"signed":false}`, "wrong-teacher")
-	if status != 403 || payload.Code != "forbidden" || payload.Subcode != "teacher_not_enrolled" || payload.Field != "teacher_id" {
-		t.Fatalf("expected teacher_not_enrolled on teacher_id, got %d %+v", status, payload)
+	// 4. Teacher outside the public offering -> 403 forbidden + teacher_not_candidate + field=teacher_ids.
+	status, payload = send("POST", "/api/v1/reviews", `{"kind":"course","target_id":"course","term_id":"autumn","teacher_ids":["teacher-c"],"title":"Course","body":"Body","ratings":[4,4,4,4,4],"signed":false}`, "wrong-teacher")
+	if status != 403 || payload.Code != "forbidden" || payload.Subcode != "teacher_not_candidate" || payload.Field != "teacher_ids" {
+		t.Fatalf("expected teacher_not_candidate on teacher_ids, got %d %+v", status, payload)
 	}
 
 	// 5. Automated moderation block -> 403 forbidden + moderation_blocked + field=body (and errors.Is preserves ErrForbidden).

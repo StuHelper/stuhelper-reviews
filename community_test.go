@@ -135,9 +135,9 @@ func TestChronologicalPaginationTeacherFilterAndPrivateDetails(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		f.now = f.now.Add(time.Minute)
 		in := input("course", "autumn", 3)
-		in.TeacherID = "teacher-a"
+		in.TeacherIDs = []string{"teacher-a"}
 		if i == 1 {
-			in.TeacherID = "teacher-b"
+			in.TeacherIDs = []string{"teacher-b"}
 		}
 		ids = append(ids, create(t, f, fmt.Sprint(i), in).ID)
 	}
@@ -188,12 +188,12 @@ func TestComposerUsesCurrentFactsAndDiscussionIdentity(t *testing.T) {
 		t.Fatal(choice, err)
 	}
 	fall, err := f.service.Composer(ctx, student, "course", "course", "autumn", "")
-	if err != nil || !fall.Allowed || !slices.Equal(fall.TeacherIDs, []string{"teacher-a", "teacher-b"}) {
+	if err != nil || !fall.Allowed || !slices.Equal(fall.Teachers, []r.ComposerTeacher{{ID: "teacher-a", Enrolled: true}, {ID: "teacher-b", Enrolled: true}}) {
 		t.Fatal(fall, err)
 	}
 	f.catalog.missing = true
 	missing, err := f.service.Composer(ctx, student, "course", "course", "autumn", "")
-	if err != nil || missing.State != "ready" || !missing.Allowed || !slices.Equal(missing.TeacherIDs, []string{"public-teacher"}) {
+	if err != nil || missing.State != "ready" || !missing.Allowed || !slices.Equal(missing.Teachers, []r.ComposerTeacher{{ID: "teacher-a"}, {ID: "teacher-b"}}) {
 		t.Fatal(missing, err)
 	}
 	mentor, err := f.service.Composer(ctx, student, "mentor", "teacher", "", "")
