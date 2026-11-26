@@ -153,7 +153,7 @@ func TestDecisionContractAndPresentationReplay(t *testing.T) {
 		{"PUT", "/api/v1/reviews/admin/presentation?school_id=", "admin", "empty-school", `{"school_id":"school","revision":0,"rating_texts":{}}`, 400},
 		{"PUT", "/api/v1/reviews/admin/presentation?school_id=school&school_id=other", "admin", "ambiguous-school", `{"school_id":"school","revision":0,"rating_texts":{}}`, 400},
 		{"PUT", "/api/v1/reviews/admin/presentation?school_id=other", "admin", "mismatch-q", `{"school_id":"school","revision":0,"rating_texts":{}}`, 400},
-		{"POST", "/api/v1/reviews/admin/entries/entry1/attribution", "admin", "", `{"teacher_id":"teacher-a"}`, 400},
+		{"POST", "/api/v1/reviews/admin/entries/entry1/attribution", "admin", "", `{"teacher_ids":["teacher-a"]}`, 400},
 		{"POST", "/api/v1/reviews/admin/entries/entry1/attribution", "admin", "attr-k1", `{}`, 400},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
@@ -212,7 +212,7 @@ func TestDecisionContractAndPresentationReplay(t *testing.T) {
 			Revision:         2,
 			Action:           action,
 			AuthorHandle:     "author",
-			TeacherID:        "teacher-a",
+			TeacherIDs:       []string{"teacher-a"},
 			EvidenceRevision: "ev-rev-1",
 			Signed:           true,
 			Reason:           "Valid moderation decision",

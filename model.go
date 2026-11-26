@@ -48,6 +48,19 @@ type Requirement struct {
 	Key   string `json:"key"`
 	State string `json:"state"`
 }
+type CourseOfferingTerm struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	TermOrderKey int    `json:"term_order_key"`
+}
+type ComposerTerm struct {
+	CourseOfferingTerm
+	Enrolled bool `json:"enrolled"`
+}
+type ComposerTeacher struct {
+	ID       string `json:"id"`
+	Enrolled bool   `json:"enrolled"`
+}
 type Composer struct {
 	OwnDraftID   string             `json:"own_draft_id,omitempty"`
 	OwnEntryIDs  []string           `json:"own_entry_ids,omitempty"`
@@ -56,7 +69,8 @@ type Composer struct {
 	Allowed      bool               `json:"allowed"`
 	State        string             `json:"state"`
 	Requirements []Requirement      `json:"requirements"`
-	TeacherIDs   []string           `json:"teacher_ids"`
+	Terms        []ComposerTerm     `json:"terms"`
+	Teachers     []ComposerTeacher  `json:"teachers"`
 	Identity     string             `json:"identity"`
 	RuleVersion  string             `json:"rule_version"`
 }
@@ -88,7 +102,8 @@ type Input struct {
 	TargetID    string   `json:"target_id"`
 	ParentID    string   `json:"parent_id,omitempty"`
 	TermID      string   `json:"term_id,omitempty"`
-	TeacherID   string   `json:"teacher_id,omitempty"`
+	TeacherIDs  []string `json:"teacher_ids,omitempty"`
+	Grade       *Grade   `json:"grade,omitempty"`
 	Title       string   `json:"title"`
 	Body        string   `json:"body"`
 	Ratings     [5]int   `json:"ratings"`
@@ -163,8 +178,9 @@ type View struct {
 	SchoolID             string     `json:"school_id"`
 	TargetID             string     `json:"target_id"`
 	TermID               string     `json:"term_id,omitempty"`
-	TeacherID            string     `json:"teacher_id,omitempty"`
 	TeacherIDs           []string   `json:"teacher_ids,omitempty"`
+	AttributedTeacherIDs []string   `json:"attributed_teacher_ids,omitempty"`
+	Grade                *Grade     `json:"grade,omitempty"`
 	Title                string     `json:"title"`
 	Body                 string     `json:"body"`
 	Ratings              [5]int     `json:"ratings"`
@@ -336,19 +352,19 @@ type Inspection struct {
 	Visible                   bool
 }
 type Decision struct {
-	AppendID         string  `json:"append_id,omitempty"`
-	TeacherID        string  `json:"teacher_id,omitempty"`
-	EvidenceRevision string  `json:"evidence_revision,omitempty"`
-	ReasonCode       string  `json:"reason_code,omitempty"`
-	ID               string  `json:"id"`
-	ObjectID         string  `json:"object_id"`
-	Revision         int64   `json:"revision"`
-	Action           string  `json:"action"`
-	Body             *string `json:"body,omitempty"`
-	Subject          string  `json:"subject,omitempty"`
-	AuthorHandle     string  `json:"author_handle,omitempty"`
-	Signed           bool    `json:"signed"`
-	Reason           string  `json:"reason"`
+	AppendID         string   `json:"append_id,omitempty"`
+	TeacherIDs       []string `json:"teacher_ids,omitzero"`
+	EvidenceRevision string   `json:"evidence_revision,omitempty"`
+	ReasonCode       string   `json:"reason_code,omitempty"`
+	ID               string   `json:"id"`
+	ObjectID         string   `json:"object_id"`
+	Revision         int64    `json:"revision"`
+	Action           string   `json:"action"`
+	Body             *string  `json:"body,omitempty"`
+	Subject          string   `json:"subject,omitempty"`
+	AuthorHandle     string   `json:"author_handle,omitempty"`
+	Signed           bool     `json:"signed"`
+	Reason           string   `json:"reason"`
 }
 type Repository interface {
 	Transaction(context.Context, func(Transaction) error) error

@@ -3,7 +3,6 @@ package reviews
 import (
 	"context"
 	"errors"
-	"slices"
 )
 
 func (s *Service) CurrentActivity(ctx context.Context, p Principal, id string) (Activity, bool, error) {
@@ -88,23 +87,4 @@ func (s *Service) CurrentActivity(ctx context.Context, p Principal, id string) (
 		d = latest
 	}
 	return empty, false, ErrUnavailable
-}
-
-func (s *Service) activityTeacherIDs(ctx context.Context, school string, ids []string) ([]string, error) {
-	if len(ids) > 100 {
-		return nil, ErrUnavailable
-	}
-	out := []string{}
-	for _, id := range ids {
-		target, e := s.catalogTarget(ctx, "teacher", id)
-		if e != nil {
-			return nil, e
-		}
-		if target.Kind != "teacher" || target.SchoolID != school || !validID(target.ID) {
-			return nil, ErrUnavailable
-		}
-		out = append(out, target.ID)
-	}
-	slices.Sort(out)
-	return slices.Compact(out), nil
 }

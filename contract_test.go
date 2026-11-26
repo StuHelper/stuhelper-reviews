@@ -121,7 +121,7 @@ func TestOpenAPISchemasHTTPContractAndDecisionParity(t *testing.T) {
 		{ID: "dec-identity-handle", ObjectID: "obj-1", Revision: 7, Action: "identity", AuthorHandle: "author", Signed: true, Reason: "Signed handle"},
 		{ID: "dec-feature", ObjectID: "obj-1", Revision: 8, Action: "feature", Reason: "Featured review"},
 		{ID: "dec-unfeature", ObjectID: "obj-1", Revision: 9, Action: "unfeature", Reason: "Unfeatured review"},
-		{ID: "dec-reassign", ObjectID: "obj-1", Revision: 10, Action: "reassign", TeacherID: "teacher-b", EvidenceRevision: "rev-hash", Reason: "Corrected teacher"},
+		{ID: "dec-reassign", ObjectID: "obj-1", Revision: 10, Action: "reassign", TeacherIDs: []string{"teacher-b"}, EvidenceRevision: "rev-hash", Reason: "Corrected teacher"},
 	}
 	for _, dec := range decisions {
 		raw, err := json.Marshal(dec)
@@ -318,7 +318,7 @@ func TestOpenAPISchemasHTTPContractAndDecisionParity(t *testing.T) {
 	_ = callAndValidate(admin, "GET", "/api/v1/reviews/admin/entries/{id}/history", "/api/v1/reviews/admin/entries/"+created.ID+"/history", "", nil, http.StatusOK)
 	_ = callAndValidate(
 		admin, "POST", "/api/v1/reviews/admin/entries/{id}/attribution", "/api/v1/reviews/admin/entries/"+created.ID+"/attribution", "http-attribution-preview",
-		map[string]any{"teacher_id": "teacher-b"}, http.StatusOK,
+		map[string]any{"teacher_ids": []string{"teacher-b"}}, http.StatusOK,
 	)
 	_ = callAndValidate(student, "GET", "/api/v1/reviews/presentation", "/api/v1/reviews/presentation?school_id=school", "", nil, http.StatusOK)
 	_ = callAndValidate(admin, "GET", "/api/v1/reviews/admin/presentation", "/api/v1/reviews/admin/presentation?school_id=school", "", nil, http.StatusOK)

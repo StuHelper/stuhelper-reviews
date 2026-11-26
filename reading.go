@@ -178,7 +178,7 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 		if entry.Projection == nil {
 			return nil, ErrUnavailable
 		}
-		v := View{EnrollmentStatus: entry.EnrollmentStatus, Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherID: entry.Input.TeacherID, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
+		v := View{EnrollmentStatus: entry.EnrollmentStatus, Featured: entry.Featured, State: entry.State, ID: entry.ID, RootID: entry.RootID, ParentID: entry.ParentID, Kind: entry.Input.Kind, SchoolID: entry.SchoolID, TargetID: entry.Input.TargetID, TermID: entry.Input.TermID, TeacherIDs: slices.Clone(entry.Input.TeacherIDs), Grade: entry.Input.Grade, Title: entry.Input.Title, Body: entry.Input.Body, Ratings: entry.Input.Ratings, Revision: entry.Revision, PublishedAt: entry.FirstPublishedAt, Mine: p.Subject != "" && p.Subject == entry.Owner}
 		if options.IncludeAppends && own && len(entry.Appends) > 0 {
 			v.Appends = slices.Clone(entry.Appends)
 		} else if options.IncludeAppends && !own && len(entry.Appends) > 0 {
@@ -197,7 +197,7 @@ func (s *Service) render(ctx context.Context, p Principal, entries []Entry, own 
 			v.ModerationReasonCode = entry.ModerationReasonCode
 		}
 		if options.IncludeTeacherIDs && entry.Input.Kind == "course" && len(entry.TeacherIDs) > 0 {
-			v.TeacherIDs = slices.Clone(entry.TeacherIDs)
+			v.AttributedTeacherIDs = slices.Clone(entry.TeacherIDs)
 		}
 		if options.IncludeParentSummary && entry.Input.Kind == "reply" && entry.ParentID != "" {
 			parent, found := parents[entry.ParentID]

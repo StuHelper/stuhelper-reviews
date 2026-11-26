@@ -465,3 +465,37 @@ UPDATE reviews.history SET data=jsonb_set(data,'{input,disclosures}',(data#>'{in
  WHERE data#>'{input,disclosures}' ? 'enrollment';
 UPDATE reviews.drafts SET data=jsonb_set(data,'{input,disclosures}',(data#>'{input,disclosures}')-'enrollment')
  WHERE data#>'{input,disclosures}' ? 'enrollment';
+
+CREATE TABLE IF NOT EXISTS reviews.teacher_selection_migration(
+ singleton boolean PRIMARY KEY CHECK(singleton),
+ migrated_entries bigint NOT NULL CHECK(migrated_entries>=0),
+ migrated_history bigint NOT NULL CHECK(migrated_history>=0),
+ migrated_drafts bigint NOT NULL CHECK(migrated_drafts>=0)
+);
+ALTER TABLE reviews.teacher_selection_migration ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON reviews.teacher_selection_migration FROM PUBLIC;
+
+-- Keep the statistical attribution at data.teacher_ids intact. Only the
+-- explicit selection in the author's input changes format.
+CREATE OR REPLACE FUNCTION reviews.migrate_teacher_selection(data jsonb)
+RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
+ SELECT jsonb_set(data #- '{input,teacher_id}', '{input,teacher_ids}',
+  COALESCE(data#>'{input,teacher_ids}',
+   CASE WHEN NULLIF(data#>>'{input,teacher_id}','') IS NULL THEN '[]'::jsonb
+        ELSE jsonb_build_array(data#>>'{input,teacher_id}') END))
+$$;
+REVOKE ALL ON FUNCTION reviews.migrate_teacher_selection(jsonb) FROM PUBLIC;
+WITH entries AS (
+ UPDATE reviews.entries SET data=reviews.migrate_teacher_selection(data) WHERE data->'input' ? 'teacher_id' RETURNING 1
+), history AS (
+ UPDATE reviews.history SET data=reviews.migrate_teacher_selection(data) WHERE data->'input' ? 'teacher_id' RETURNING 1
+), drafts AS (
+ UPDATE reviews.drafts SET data=reviews.migrate_teacher_selection(data) WHERE data->'input' ? 'teacher_id' RETURNING 1
+)
+INSERT INTO reviews.teacher_selection_migration AS receipt(singleton,migrated_entries,migrated_history,migrated_drafts)
+ SELECT true,(SELECT count(*) FROM entries),(SELECT count(*) FROM history),(SELECT count(*) FROM drafts)
+ ON CONFLICT(singleton) DO UPDATE SET
+ migrated_entries=receipt.migrated_entries+excluded.migrated_entries,
+ migrated_history=receipt.migrated_history+excluded.migrated_history,
+ migrated_drafts=receipt.migrated_drafts+excluded.migrated_drafts
+ WHERE (excluded.migrated_entries,excluded.migrated_history,excluded.migrated_drafts)<>(0,0,0);

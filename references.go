@@ -2,6 +2,7 @@ package reviews
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 )
@@ -67,18 +68,34 @@ func (s *Service) canonicalAggregates(ctx context.Context, rows []Aggregate) ([]
 	return out, nil
 }
 
-func (s *Service) selectedTeachers(ctx context.Context, teacher string, teachers []string) ([]string, error) {
-	if teacher == "" {
+func (s *Service) selectedTeachers(ctx context.Context, selected, teachers []string) ([]string, error) {
+	if len(selected) == 0 {
+		if len(teachers) > maxSelectedTeachers {
+			return nil, ErrUnavailable
+		}
 		return teachers, nil
 	}
-	equivalent, err := s.equivalentIDs(ctx, "teacher", teacher)
-	if err != nil {
-		return nil, err
-	}
-	for _, id := range equivalent {
-		if slices.Contains(teachers, id) {
-			return []string{teacher}, nil
+	out := make([]string, 0, len(selected))
+	for _, id := range selected {
+		if _, found := slices.BinarySearch(teachers, id); !found {
+			equivalent, err := s.equivalentIDs(ctx, "teacher", id)
+			if err != nil && !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrInput) && !errors.Is(err, ErrForbidden) {
+				return nil, err
+			}
+			match := slices.IndexFunc(equivalent, func(candidate string) bool {
+				_, found := slices.BinarySearch(teachers, candidate)
+				return found
+			})
+			if match < 0 {
+				return nil, forbiddenErr("teacher_not_candidate", "teacher_ids")
+			}
+			id = equivalent[match]
 		}
+		if slices.Contains(out, id) {
+			return nil, inputFieldErr("invalid_teacher_ids", "teacher_ids")
+		}
+		out = append(out, id)
 	}
-	return nil, forbiddenErr("teacher_not_enrolled", "teacher_id")
+	slices.Sort(out)
+	return out, nil
 }

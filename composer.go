@@ -11,7 +11,7 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 	if err != nil {
 		return Composer{}, err
 	}
-	out := Composer{Requirements: []Requirement{}, TeacherIDs: []string{}, Identity: "choice", Disclosures: []DisclosureOption{}}
+	out := Composer{Requirements: []Requirement{}, Terms: []ComposerTerm{}, Teachers: []ComposerTeacher{}, Identity: "choice", Disclosures: []DisclosureOption{}}
 	if !validID(target) || (term != "" && !validID(term)) || (parent != "" && !validID(parent)) || (kind != "course" && kind != "mentor" && kind != "reply") {
 		return out, ErrInput
 	}
@@ -96,15 +96,17 @@ func (s *Service) Composer(ctx context.Context, p Principal, kind, target, term,
 		}
 		if object.Inactive {
 			checkErr = ErrForbidden
-		} else if kind == "course" && term == "" {
-			grant, checkErr = s.authorize(ctx, p, "publish_course", school)
-			if checkErr == nil {
-				out.State = "choose_term"
-			}
 		} else {
-			_, _, out.TeacherIDs, grant, checkErr = s.prepare(ctx, p, Input{Kind: kind, TargetID: target, TermID: term})
-			if out.TeacherIDs == nil {
-				out.TeacherIDs = []string{}
+			grant, checkErr = s.authorize(ctx, p, publishAction(kind), school)
+		}
+		if checkErr == nil && kind == "course" {
+			terms, teachers, err := s.courseComposerCandidates(ctx, p, object.ID, term)
+			checkErr = err
+			if err == nil {
+				out.Terms, out.Teachers = terms, teachers
+				if term == "" {
+					out.State = "choose_term"
+				}
 			}
 		}
 		if checkErr == nil {
