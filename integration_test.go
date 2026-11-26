@@ -244,6 +244,7 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 	if _, e = f.service.Create(ctx, student, "mentor", mentor); e != nil {
 		t.Fatal("mentor incorrectly requires enrollment", e)
 	}
+	f.now = f.now.Add(time.Second)
 	if _, e = f.service.Create(ctx, student, "optional", input("course", "autumn", 3)); e != nil {
 		t.Fatal(e)
 	}
