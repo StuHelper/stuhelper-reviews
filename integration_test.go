@@ -248,8 +248,8 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 		t.Fatal(e)
 	}
 	s, e = f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 20)
-	if e != nil || s.Dimensions[0].Samples != 0 {
-		t.Fatal("optional missing evidence invented teachers")
+	if e != nil || s.Dimensions[0].Samples != 1 || s.Dimensions[0].Level != 3 {
+		t.Fatal("public teachers did not receive the latest review without enrollment", s, e)
 	}
 }
 func TestContentAdmissionAndCurrentAccessCannotLeakIdentity(t *testing.T) {

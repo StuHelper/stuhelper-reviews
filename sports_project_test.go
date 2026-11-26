@@ -73,8 +73,8 @@ func (c mergedSportsCatalog) CourseTermTeachers(context.Context, string, string)
 }
 
 func (c mergedSportsCatalog) EquivalentIDs(_ context.Context, kind, id string) ([]string, error) {
-	if kind == "teacher" && id == "current-teacher" {
-		return []string{id, "teacher-a"}, nil
+	if kind == "teacher" && (id == "current-teacher" || id == "teacher-a") {
+		return []string{"current-teacher", "teacher-a"}, nil
 	}
 	return []string{id}, nil
 }

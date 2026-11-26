@@ -188,7 +188,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) error {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(v); err != nil {
-		var detail *reviews.ErrorDetail
+		var detail reviews.ErrorDetail
 		if errors.As(err, &detail) {
 			return detail
 		}
