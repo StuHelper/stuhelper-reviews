@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "StuHelper Reviews",
-    "version": "0.9.0"
+    "version": "0.10.0"
   },
   "servers": [
     {
@@ -210,7 +210,7 @@
               "type": "boolean",
               "default": false
             },
-            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+            "description": "为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。"
           },
           {
             "name": "include_parent_summary",
@@ -436,7 +436,7 @@
               "type": "boolean",
               "default": false
             },
-            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+            "description": "为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。"
           },
           {
             "name": "include_parent_summary",
@@ -1010,7 +1010,7 @@
               "type": "boolean",
               "default": false
             },
-            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+            "description": "为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。"
           },
           {
             "name": "include_moderation_details",
@@ -1704,7 +1704,7 @@
               "type": "boolean",
               "default": false
             },
-            "description": "为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。"
+            "description": "为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。"
           },
           {
             "name": "include_moderation_details",
@@ -3249,9 +3249,12 @@
           "term_id": {
             "type": "string"
           },
-          "teacher_id": {
-            "type": "string",
-            "description": " 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。"
+          "teacher_ids": {
+            "$ref": "#/components/schemas/TeacherSelection",
+            "description": "仅用于课程评价。每个 ID 须属于所选学期该课程的公开任课教师。省略等同空数组。"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
           },
           "title": {
             "type": "string",
@@ -3423,17 +3426,20 @@
           "term_id": {
             "type": "string"
           },
-          "teacher_id": {
-            "type": "string",
-            "description": " 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。"
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
           },
           "teacher_ids": {
+            "$ref": "#/components/schemas/TeacherSelection",
+            "description": "作者明确选择的教师 ID。未指定教师或非课程评价时省略。"
+          },
+          "attributed_teacher_ids": {
             "type": "array",
             "readOnly": true,
             "items": {
               "type": "string"
             },
-            "description": "课程评价发布时记录的任课教师归属快照（单选教师时为该教师，未单选教师时为该学期本人选课任课教师并集）；非课程评价或无教师归属时省略。 仅在 include_teacher_ids=true 时返回。"
+            "description": "课程评价保存的统计归属快照。仅在 include_teacher_ids=true 且有归属时返回。"
           },
           "title": {
             "type": "string"
@@ -3816,8 +3822,9 @@
           "author_handle": {
             "type": "string"
           },
-          "teacher_id": {
-            "type": "string"
+          "teacher_ids": {
+            "$ref": "#/components/schemas/TeacherSelection",
+            "description": "reassign 必须提供。"
           },
           "evidence_revision": {
             "type": "string"
@@ -3914,12 +3921,19 @@
               "$ref": "#/components/schemas/Requirement"
             }
           },
-          "teacher_ids": {
+          "terms": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ComposerTerm"
             },
-            "description": "When the author has active school data authorization and matching enrollment, teachers from that enrollment. Otherwise all public teachers for this course and term. An unspecified teacher is allowed."
+            "description": "课程在目录截止学期范围内有开课记录的学期，按学期排序键从新到旧。"
+          },
+          "teachers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComposerTeacher"
+            },
+            "description": "所选学期该课程的全部公开任课教师。未选择学期时为空。"
           },
           "identity": {
             "type": "string",
@@ -3958,7 +3972,8 @@
           "allowed",
           "state",
           "requirements",
-          "teacher_ids",
+          "terms",
+          "teachers",
           "identity",
           "rule_version"
         ]
@@ -4260,12 +4275,12 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "teacher_id": {
-            "type": "string"
+          "teacher_ids": {
+            "$ref": "#/components/schemas/TeacherSelection"
           }
         },
         "required": [
-          "teacher_id"
+          "teacher_ids"
         ]
       },
       "AttributionPreview": {
@@ -4660,6 +4675,162 @@
           "review_count",
           "draft_count",
           "pending_courses"
+        ]
+      },
+      "TeacherSelection": {
+        "type": "array",
+        "maxItems": 100,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "description": "明确选择的公开任课教师 ID。空数组表示不指定教师，归属到该课程所选学期的全部公开任课教师。"
+      },
+      "Grade": {
+        "description": "作者自愿填写的本人成绩或退课状态，仅用于课程评价。评价公开时随评价展示。",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/GradePercent"
+          },
+          {
+            "$ref": "#/components/schemas/GradeFiveLevel"
+          },
+          {
+            "$ref": "#/components/schemas/GradeTwoLevel"
+          },
+          {
+            "$ref": "#/components/schemas/GradeWithdrawn"
+          }
+        ]
+      },
+      "GradePercent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scale": {
+            "type": "string",
+            "enum": [
+              "percent"
+            ]
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "scale",
+          "value"
+        ]
+      },
+      "GradeFiveLevel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scale": {
+            "type": "string",
+            "enum": [
+              "five_level"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "enum": [
+              "excellent",
+              "good",
+              "medium",
+              "pass",
+              "fail"
+            ]
+          }
+        },
+        "required": [
+          "scale",
+          "value"
+        ]
+      },
+      "GradeTwoLevel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scale": {
+            "type": "string",
+            "enum": [
+              "two_level"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail"
+            ]
+          }
+        },
+        "required": [
+          "scale",
+          "value"
+        ]
+      },
+      "GradeWithdrawn": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scale": {
+            "type": "string",
+            "enum": [
+              "withdrawn"
+            ]
+          }
+        },
+        "required": [
+          "scale"
+        ]
+      },
+      "ComposerTerm": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "term_order_key": {
+            "type": "integer"
+          },
+          "enrolled": {
+            "type": "boolean",
+            "description": "仅在学校数据认证有效且有相符的本人选课记录时为 true。"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "term_order_key",
+          "enrolled"
+        ]
+      },
+      "ComposerTeacher": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "enrolled": {
+            "type": "boolean",
+            "description": "仅在学校数据认证有效且有相符的本人选课记录时为 true。"
+          }
+        },
+        "required": [
+          "id",
+          "enrolled"
         ]
       }
     }

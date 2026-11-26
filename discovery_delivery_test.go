@@ -165,7 +165,7 @@ func TestDiscoverySnapshotStableVersionsTombstonesAndSchema(t *testing.T) {
 	repo, db := database(t)
 	ctx := context.Background()
 	save := func(tx m.Transaction, id, state string, revision int64) error {
-		entry := m.Entry{ID: id, RootID: id, Owner: "private-owner", SchoolID: "school", Input: m.Input{Kind: "course", TargetID: "course", Title: "Public title", Body: "private-body", TeacherID: "teacher-a"}, TeacherIDs: []string{"teacher-a", "teacher-b"}, Evidence: []m.Evidence{{ID: "private-evidence"}}, State: state, Revision: revision, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+		entry := m.Entry{ID: id, RootID: id, Owner: "private-owner", SchoolID: "school", Input: m.Input{Kind: "course", TargetID: "course", Title: "Public title", Body: "private-body", TeacherIDs: []string{"teacher-a"}}, TeacherIDs: []string{"teacher-a", "teacher-b"}, Evidence: []m.Evidence{{ID: "private-evidence"}}, State: state, Revision: revision, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 		if state == "deleted" {
 			return tx.DeleteEntry(entry)
 		}

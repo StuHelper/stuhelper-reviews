@@ -25,6 +25,42 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if revision < 0 {
 		return out, inputFieldErr("invalid_revision", "revision")
 	}
+	in = in.sortedTeachers()
+	if id == "" {
+		id = hash([]string{p.Subject, "draft", key})
+	} else if !validID(id) {
+		return out, inputFieldErr("invalid_id", "id")
+	}
+	rk := hash([]string{p.Subject, "save_draft", id, key})
+	h := hash(struct {
+		Input    Input
+		Revision int64
+	}{in, revision})
+	if len(in.TeacherIDs) != 0 {
+		var replayed bool
+		err := s.Repo.Transaction(ctx, func(t Transaction) error {
+			var err error
+			out, replayed, err = replay(t, rk, h, s.now())
+			return err
+		})
+		if err != nil || replayed {
+			return out, err
+		}
+		school, err := s.contentScope(ctx, p, "")
+		if err != nil {
+			return out, err
+		}
+		target, err := s.catalogTarget(ctx, "course", in.TargetID)
+		if err != nil {
+			return out, err
+		}
+		if target.SchoolID != school {
+			return out, ErrForbidden
+		}
+		if _, _, err := s.courseAttribution(ctx, target, in); err != nil {
+			return out, err
+		}
+	}
 	var draftRootID string
 	if in.Kind == "reply" {
 		if len(in.Disclosures) > 0 {
@@ -96,16 +132,6 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 	if err := ctx.Err(); err != nil {
 		return out, err
 	}
-	if id == "" {
-		id = hash([]string{p.Subject, "draft", key})
-	} else if !validID(id) {
-		return out, inputFieldErr("invalid_id", "id")
-	}
-	rk := hash([]string{p.Subject, "save_draft", id, key})
-	h := hash(struct {
-		Input    Input
-		Revision int64
-	}{in, revision})
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		if e := t.Lock("draft-owner:" + p.Subject); e != nil {
 			return e

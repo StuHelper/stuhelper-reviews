@@ -16,7 +16,7 @@ func TestDiscoveryCourseLifecycleCurrentAdmissionAndAttribution(t *testing.T) {
 	ctx := context.Background()
 	repo := f.service.Repo.(*postgres.Repository)
 	in := input("course", "autumn", 4)
-	in.TeacherID = "teacher-a"
+	in.TeacherIDs = []string{"teacher-a"}
 	item := create(t, f, "discovery-course", in)
 	current, e := f.service.DiscoveryCurrent(ctx, student, []string{item.ID, "missing"})
 	if e != nil || len(current) != 1 || current[0].Revision != item.Revision || current[0].CourseID != "course" || !reflect.DeepEqual(current[0].TeacherIDs, []string{"teacher-a"}) {

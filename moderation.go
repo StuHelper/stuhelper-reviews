@@ -41,8 +41,15 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 	if d.ReasonCode != "" && !validModerationReasonCode(d.ReasonCode) {
 		return out, ErrInput
 	}
+	if (d.Action == "reassign") != (d.TeacherIDs != nil) {
+		return out, inputFieldErr("invalid_teacher_ids", "teacher_ids")
+	}
+	if err := validateTeacherSelection(d.TeacherIDs); err != nil {
+		return out, err
+	}
+	d.TeacherIDs = slices.Clone(d.TeacherIDs)
+	slices.Sort(d.TeacherIDs)
 	var attribution AttributionPreview
-	var evidence []Evidence
 	var preEntry Entry
 	if err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		var e error
@@ -54,9 +61,19 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 	if _, err := s.authorize(ctx, p, "moderate", preEntry.SchoolID); err != nil {
 		return out, err
 	}
+	rk := hash([]string{"moderation", d.ID})
+	h := hash(d)
 	if d.Action == "reassign" {
-		var err error
-		attribution, evidence, err = s.attribution(ctx, p, d.ObjectID, d.TeacherID)
+		var replayed bool
+		err := s.Repo.Transaction(ctx, func(t Transaction) error {
+			var err error
+			out, replayed, err = replay(t, rk, h, s.now())
+			return err
+		})
+		if err != nil || replayed {
+			return out, err
+		}
+		attribution, err = s.attribution(ctx, p, d.ObjectID, d.TeacherIDs)
 		if err != nil {
 			return out, err
 		}
@@ -64,8 +81,6 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			return out, ErrConflict
 		}
 	}
-	rk := hash([]string{"moderation", d.ID})
-	h := hash(d)
 	err := s.Repo.Transaction(ctx, func(t Transaction) error {
 		entry, e := t.Entry(d.ObjectID)
 		if e != nil {
@@ -126,9 +141,8 @@ func (s *Service) Apply(ctx context.Context, p Principal, d Decision) (Result, e
 			if attribution.Revision != entry.Revision {
 				return ErrConflict
 			}
-			entry.Input.TeacherID = d.TeacherID
+			entry.Input.TeacherIDs = d.TeacherIDs
 			entry.TeacherIDs = attribution.TeacherIDs
-			entry.Evidence = evidence
 			if d.ReasonCode != "" {
 				entry.ModerationReasonCode = d.ReasonCode
 			}

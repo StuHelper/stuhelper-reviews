@@ -396,8 +396,9 @@ export interface components {
             /** @description 当 kind=reply 保存或发布草稿时绑定的父评价或父回复 ID；课程与导师评价禁止传入。 */
             parent_id?: string;
             term_id?: string;
-            /** @description 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。 */
-            teacher_id?: string;
+            /** @description 仅用于课程评价。每个 ID 须属于所选学期该课程的公开任课教师。省略等同空数组。 */
+            teacher_ids?: components["schemas"]["TeacherSelection"];
+            grade?: components["schemas"]["Grade"];
             title: string;
             body: string;
             /** @description 固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。 */
@@ -444,10 +445,11 @@ export interface components {
             /** @description 体育项目评价继续使用 kind=course，target_id 为 catalog 返回的体育项目 ID。原编号体育课程被隐藏后返回 404。 */
             target_id: string;
             term_id?: string;
-            /** @description 体育项目评价必须选择一个教师，并且教师来自本人同一项目、同一学期的有效教学班；缺少教师返回 invalid_input，越权教师返回 forbidden。 */
-            teacher_id?: string;
-            /** @description 课程评价发布时记录的任课教师归属快照（单选教师时为该教师，未单选教师时为该学期本人选课任课教师并集）；非课程评价或无教师归属时省略。 仅在 include_teacher_ids=true 时返回。 */
-            readonly teacher_ids?: string[];
+            grade?: components["schemas"]["Grade"];
+            /** @description 作者明确选择的教师 ID。未指定教师或非课程评价时省略。 */
+            teacher_ids?: components["schemas"]["TeacherSelection"];
+            /** @description 课程评价保存的统计归属快照。仅在 include_teacher_ids=true 且有归属时返回。 */
+            readonly attributed_teacher_ids?: string[];
             title: string;
             body: string;
             /** @description 固定五维评分数组，下标依次为：0=推荐度（recommendation）、1=内容质量（content_quality）、2=课程难度（difficulty）、3=工作量（workload）、4=考核给分（grading）。课程评价发布时各维取 1..5，草稿或非课程评价可为 0。 */
@@ -550,7 +552,8 @@ export interface components {
             body?: string;
             subject?: string;
             author_handle?: string;
-            teacher_id?: string;
+            /** @description reassign 必须提供。 */
+            teacher_ids?: components["schemas"]["TeacherSelection"];
             evidence_revision?: string;
             signed?: boolean;
             reason: string;
@@ -576,8 +579,10 @@ export interface components {
              */
             state: "ready" | "choose_term" | "forbidden" | "unavailable" | "disclosure_required";
             requirements: components["schemas"]["Requirement"][];
-            /** @description When the author has active school data authorization and matching enrollment, teachers from that enrollment. Otherwise all public teachers for this course and term. An unspecified teacher is allowed. */
-            teacher_ids: string[];
+            /** @description 课程在目录截止学期范围内有开课记录的学期，按学期排序键从新到旧。 */
+            terms: components["schemas"]["ComposerTerm"][];
+            /** @description 所选学期该课程的全部公开任课教师。未选择学期时为空。 */
+            teachers: components["schemas"]["ComposerTeacher"][];
             /** @enum {string} */
             identity: "choice" | "anonymous" | "signed";
             rule_version: string;
@@ -660,7 +665,7 @@ export interface components {
             source: string;
         };
         AttributionInput: {
-            teacher_id: string;
+            teacher_ids: components["schemas"]["TeacherSelection"];
         };
         AttributionPreview: {
             revision: number;
@@ -755,6 +760,43 @@ export interface components {
             draft_count: number;
             pending_courses: components["schemas"]["PendingCourses"];
         };
+        /** @description 明确选择的公开任课教师 ID。空数组表示不指定教师，归属到该课程所选学期的全部公开任课教师。 */
+        TeacherSelection: string[];
+        /** @description 作者自愿填写的本人成绩或退课状态，仅用于课程评价。评价公开时随评价展示。 */
+        Grade: components["schemas"]["GradePercent"] | components["schemas"]["GradeFiveLevel"] | components["schemas"]["GradeTwoLevel"] | components["schemas"]["GradeWithdrawn"];
+        GradePercent: {
+            /** @enum {string} */
+            scale: "percent";
+            value: number;
+        };
+        GradeFiveLevel: {
+            /** @enum {string} */
+            scale: "five_level";
+            /** @enum {string} */
+            value: "excellent" | "good" | "medium" | "pass" | "fail";
+        };
+        GradeTwoLevel: {
+            /** @enum {string} */
+            scale: "two_level";
+            /** @enum {string} */
+            value: "pass" | "fail";
+        };
+        GradeWithdrawn: {
+            /** @enum {string} */
+            scale: "withdrawn";
+        };
+        ComposerTerm: {
+            id: string;
+            name: string;
+            term_order_key: number;
+            /** @description 仅在学校数据认证有效且有相符的本人选课记录时为 true。 */
+            enrolled: boolean;
+        };
+        ComposerTeacher: {
+            id: string;
+            /** @description 仅在学校数据认证有效且有相符的本人选课记录时为 true。 */
+            enrolled: boolean;
+        };
     };
     responses: never;
     parameters: never;
@@ -785,7 +827,7 @@ export interface operations {
                 rating_group?: "low" | "mid" | "high";
                 /** @description 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。 */
                 include_reply_preview?: boolean;
-                /** @description 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。 */
+                /** @description 为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。 */
                 include_teacher_ids?: boolean;
                 /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
                 include_parent_summary?: boolean;
@@ -946,7 +988,7 @@ export interface operations {
     getReview: {
         parameters: {
             query?: {
-                /** @description 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。 */
+                /** @description 为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。 */
                 include_teacher_ids?: boolean;
                 /** @description 传入 true 时返回回复的父楼层可见状态和讨论内作者标识。 */
                 include_parent_summary?: boolean;
@@ -1291,7 +1333,7 @@ export interface operations {
                 term_id?: string;
                 /** @description 为当前可读根评价批量返回 reply_count 与最多三条 reply_preview。默认 false，保留旧客户端的封闭 View 结构。 */
                 include_reply_preview?: boolean;
-                /** @description 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。 */
+                /** @description 为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。 */
                 include_teacher_ids?: boolean;
                 /** @description 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。 */
                 include_moderation_details?: boolean;
@@ -1850,7 +1892,7 @@ export interface operations {
     getOwnEntry: {
         parameters: {
             query?: {
-                /** @description 为 true 时返回课程评价保存的任课教师归属快照；缺省时省略 teacher_ids。 */
+                /** @description 为 true 时在 attributed_teacher_ids 返回课程评价保存的任课教师统计归属。 */
                 include_teacher_ids?: boolean;
                 /** @description 传入 true 时返回获准查看的审核详情。省略时保留既有响应字段。 */
                 include_moderation_details?: boolean;

@@ -92,17 +92,17 @@ func (h Handler) managementRoutes(m *http.ServeMux) {
 			return
 		}
 		var in struct {
-			TeacherID *string `json:"teacher_id"`
+			TeacherIDs []string `json:"teacher_ids"`
 		}
 		if e := decode(w, req, &in); e != nil {
 			respond(w, nil, e)
 			return
 		}
-		if in.TeacherID == nil {
+		if in.TeacherIDs == nil {
 			respond(w, nil, r.ErrInput)
 			return
 		}
-		v, e := h.Service.PreviewAttribution(req.Context(), p, req.PathValue("id"), *in.TeacherID)
+		v, e := h.Service.PreviewAttribution(req.Context(), p, req.PathValue("id"), in.TeacherIDs)
 		respond(w, v, e)
 	})
 }

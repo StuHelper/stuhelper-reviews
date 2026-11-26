@@ -30,14 +30,14 @@ func TestPresentationConfigAndAttributionChangesAreScopedAndVersioned(t *testing
 	if err != nil || view.Body != input("course", "autumn", 3).Body {
 		t.Fatal(view, err)
 	}
-	preview, err := f.service.PreviewAttribution(ctx, admin, root.ID, "teacher-b")
+	preview, err := f.service.PreviewAttribution(ctx, admin, root.ID, []string{"teacher-b"})
 	if err != nil || len(preview.TeacherIDs) != 1 {
 		t.Fatal(preview, err)
 	}
-	if _, err = f.service.Apply(ctx, admin, r.Decision{ID: "wrong-evidence", ObjectID: root.ID, Revision: 1, Action: "reassign", TeacherID: "teacher-b", EvidenceRevision: "stale", Reason: "Source corrected"}); !errors.Is(err, r.ErrConflict) {
+	if _, err = f.service.Apply(ctx, admin, r.Decision{ID: "wrong-evidence", ObjectID: root.ID, Revision: 1, Action: "reassign", TeacherIDs: []string{"teacher-b"}, EvidenceRevision: "stale", Reason: "Source corrected"}); !errors.Is(err, r.ErrConflict) {
 		t.Fatal(err)
 	}
-	applied, err := f.service.Apply(ctx, admin, r.Decision{ID: "reassign", ObjectID: root.ID, Revision: 1, Action: "reassign", TeacherID: "teacher-b", EvidenceRevision: preview.EvidenceRevision, Reason: "Source corrected"})
+	applied, err := f.service.Apply(ctx, admin, r.Decision{ID: "reassign", ObjectID: root.ID, Revision: 1, Action: "reassign", TeacherIDs: []string{"teacher-b"}, EvidenceRevision: preview.EvidenceRevision, Reason: "Source corrected"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestPresentationConfigAndAttributionChangesAreScopedAndVersioned(t *testing
 		t.Fatal(err)
 	}
 	history, e := f.service.History(ctx, admin, root.ID, 0, 20)
-	if e != nil || len(history) != 3 || history[0].ChangeReason != "Reviewed quality" || history[2].Input.TeacherID != "" {
+	if e != nil || len(history) != 3 || history[0].ChangeReason != "Reviewed quality" || len(history[2].Input.TeacherIDs) != 0 {
 		t.Fatal("history lost original attribution or reason", history, e)
 	}
 	if _, e = f.service.History(ctx, student, root.ID, 0, 20); !errors.Is(e, r.ErrForbidden) {

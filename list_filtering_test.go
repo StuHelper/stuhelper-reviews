@@ -44,7 +44,7 @@ func TestRecommendedSortFiltersBoundedRefillAndCoTeachers(t *testing.T) {
 	rMid := create(t, f, "r-mid", input("course", "autumn", 3))
 	f.now = f.now.Add(time.Minute)
 	inSingle := input("course", "autumn", 5)
-	inSingle.TeacherID = "teacher-a"
+	inSingle.TeacherIDs = []string{"teacher-a"}
 	rHigh := create(t, f, "r-high", inSingle)
 	f.now = f.now.Add(time.Minute)
 	rHighPlain := create(t, f, "r-high-plain", input("course", "autumn", 4))
@@ -73,11 +73,11 @@ func TestRecommendedSortFiltersBoundedRefillAndCoTeachers(t *testing.T) {
 
 	// B-09.2: Co-taught review without single TeacherID returns full snapshot TeacherIDs in View.
 	coView, err := f.service.GetWithOptions(ctx, r.Principal{Subject: "reader"}, rHighPlain.ID, r.ViewOptions{IncludeTeacherIDs: true})
-	if err != nil || coView.TeacherID != "" || !slices.Equal(coView.TeacherIDs, []string{"teacher-a", "teacher-b"}) {
+	if err != nil || len(coView.TeacherIDs) != 0 || !slices.Equal(coView.AttributedTeacherIDs, []string{"teacher-a", "teacher-b"}) {
 		t.Fatalf("expected co-teaching teacher_ids [teacher-a teacher-b], got %+v %v", coView, err)
 	}
 	singleView, err := f.service.GetWithOptions(ctx, r.Principal{Subject: "reader"}, rHigh.ID, r.ViewOptions{IncludeTeacherIDs: true})
-	if err != nil || singleView.TeacherID != "teacher-a" || !slices.Equal(singleView.TeacherIDs, []string{"teacher-a"}) {
+	if err != nil || !slices.Equal(singleView.TeacherIDs, []string{"teacher-a"}) || !slices.Equal(singleView.AttributedTeacherIDs, []string{"teacher-a"}) {
 		t.Fatalf("expected single teacher_ids [teacher-a], got %+v %v", singleView, err)
 	}
 	mentor := create(t, f, "mentor-no-teachers", r.Input{Kind: "mentor", TargetID: "teacher-a", Title: "Guide", Body: "Mentor comment"})
@@ -234,7 +234,7 @@ func TestTeacherIDsRequireExplicitHTTPOption(t *testing.T) {
 				}
 				view = items[0]
 			}
-			raw, ok := view["teacher_ids"]
+			raw, ok := view["attributed_teacher_ids"]
 			if ok != (param == "include_teacher_ids=true") {
 				t.Errorf("%s %s: unexpected teacher_ids presence %v", route.path, param, ok)
 			}

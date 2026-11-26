@@ -46,6 +46,14 @@ func (c *catalog) Evidence(_ context.Context, p r.Principal, course, term string
 	if c.missing || p.Subject == "unregistered" {
 		return []r.Evidence{}, nil
 	}
+	if term == "" {
+		term = "autumn"
+	}
+	teachers, _ := c.CourseTermTeachers(context.Background(), course, term)
+	return []r.Evidence{{ID: "enrollment-" + term, TermID: term, TeacherIDs: teachers, SourceID: "approved", Revision: 2, FetchedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}, nil
+}
+
+func (c *catalog) CourseTermTeachers(_ context.Context, course, term string) ([]string, error) {
 	teachers := []string{"teacher-a", "teacher-b"}
 	if school := c.schools[course]; school != "" && school != "school" {
 		teachers = []string{school + ":teacher-a", school + ":teacher-b"}
@@ -53,11 +61,17 @@ func (c *catalog) Evidence(_ context.Context, p r.Principal, course, term string
 	if term == "spring" {
 		teachers = []string{"teacher-a", "teacher-c"}
 	}
-	return []r.Evidence{{ID: "enrollment-" + term, TermID: term, TeacherIDs: teachers, SourceID: "approved", Revision: 2, FetchedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}, nil
+	return teachers, nil
 }
 
-func (c *catalog) CourseTermTeachers(context.Context, string, string) ([]string, error) {
-	return []string{"public-teacher"}, nil
+func (c *catalog) CourseOfferingTerms(context.Context, string) ([]r.CourseOfferingTerm, error) {
+	if c.failed {
+		return nil, r.ErrUnavailable
+	}
+	return []r.CourseOfferingTerm{
+		{ID: "autumn", Name: "Autumn", TermOrderKey: 20263},
+		{ID: "spring", Name: "Spring", TermOrderKey: 20261},
+	}, nil
 }
 
 type access struct{ revoked, failed bool }
@@ -199,7 +213,7 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 	f := fixture(t)
 	ctx := context.Background()
 	bad := input("course", "autumn", 4)
-	bad.TeacherID = "teacher-c"
+	bad.TeacherIDs = []string{"teacher-c"}
 	if _, e := f.service.Create(ctx, student, "bad", bad); !errors.Is(e, r.ErrForbidden) {
 		t.Fatal("other term teacher accepted")
 	}
@@ -234,8 +248,8 @@ func TestCourseTermEligibilityAndImmutableTeacherAttribution(t *testing.T) {
 		t.Fatal(e)
 	}
 	s, e = f.service.ReadStatsPage(ctx, student, "teacher", "teacher-a", nil, nil, "", 20)
-	if e != nil || s.Dimensions[0].Samples != 0 {
-		t.Fatal("optional missing evidence invented teachers")
+	if e != nil || s.Dimensions[0].Samples != 2 {
+		t.Fatal("public teachers did not receive both reviews without enrollment", s, e)
 	}
 }
 func TestContentAdmissionAndCurrentAccessCannotLeakIdentity(t *testing.T) {
@@ -602,12 +616,9 @@ func TestReviewEnrollmentStatusUsesOnlyCompleteReadsAndPreservesSnapshot(t *test
 		}
 		f.service.Catalog = schoolDataReviewCatalog{f.catalog, r.ErrForbidden, false}
 		view, err := f.service.GetWithOptions(ctx, student, out.ID, r.ViewOptions{IncludeTeacherIDs: true})
-		teachers := []string{"public-teacher"}
-		if tc.matched {
-			teachers = []string{"teacher-a", "teacher-b"}
-		}
-		if err != nil || view.EnrollmentStatus != tc.status || !slices.Equal(view.TeacherIDs, teachers) {
-			t.Fatal(tc.name, view.EnrollmentStatus, view.TeacherIDs, err)
+		teachers := []string{"teacher-a", "teacher-b"}
+		if err != nil || view.EnrollmentStatus != tc.status || !slices.Equal(view.AttributedTeacherIDs, teachers) {
+			t.Fatal(tc.name, view.EnrollmentStatus, view.AttributedTeacherIDs, err)
 		}
 	}
 }

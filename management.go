@@ -178,52 +178,56 @@ type AttributionPreview struct {
 	PreviousTeacherIDs []string `json:"previous_teacher_ids"`
 }
 
-func (s *Service) attribution(ctx context.Context, p Principal, id, teacher string) (AttributionPreview, []Evidence, error) {
+func (s *Service) attribution(ctx context.Context, p Principal, id string, selected []string) (AttributionPreview, error) {
 	out := AttributionPreview{}
-	if !validID(id) || (teacher != "" && !validID(teacher)) {
-		return out, nil, ErrInput
+	if !validID(id) || selected == nil {
+		return out, ErrInput
+	}
+	if err := validateTeacherSelection(selected); err != nil {
+		return out, err
 	}
 	var entry Entry
 	err := s.Repo.Transaction(ctx, func(t Transaction) error { var e error; entry, e = t.Entry(id); return e })
 	if err != nil {
-		return out, nil, err
+		return out, err
 	}
 	if _, err = s.authorize(ctx, p, "moderate", entry.SchoolID); err != nil {
-		return out, nil, err
+		return out, err
 	}
 	if entry.ExpiresAt != nil && !s.now().Before(*entry.ExpiresAt) {
-		return out, nil, ErrNotFound
+		return out, ErrNotFound
 	}
 	if entry.Input.Kind != "course" || entry.State == "withdrawn" {
-		return out, nil, ErrConflict
+		return out, ErrConflict
 	}
 	target, err := s.catalogTarget(ctx, "course", entry.Input.TargetID)
 	if err != nil {
-		return out, nil, err
+		return out, err
 	}
 	if target.SchoolID != entry.SchoolID || target.Inactive {
-		return out, nil, ErrForbidden
+		return out, ErrForbidden
 	}
-	evidence, ids, _, err := s.reviewEnrollment(ctx, Principal{Subject: entry.Owner}, entry.Input.TargetID, entry.Input.TermID)
+	next := entry.Input
+	next.TeacherIDs = selected
+	next = next.sortedTeachers()
+	ids, term, err := s.courseAttribution(ctx, target, next)
 	if err != nil {
-		return out, nil, err
+		return out, err
 	}
-	ids, err = s.selectedTeachers(ctx, teacher, ids)
-	if err != nil {
-		return out, nil, err
-	}
-	ids, err = s.activityTeacherIDs(ctx, entry.SchoolID, ids)
-	if err != nil {
-		return out, nil, err
-	}
-	out = AttributionPreview{entry.Revision, hash(struct {
-		Evidence []Evidence
-		Teachers []string
-	}{evidence, ids}), ids, entry.TeacherIDs}
-	return out, evidence, nil
+	// The preview fences the requested selection and its public attribution.
+	// Corrections do not re-read the author's private enrollment evidence.
+	return AttributionPreview{
+		Revision: entry.Revision,
+		EvidenceRevision: hash(struct {
+			Course, Term         string
+			Selected, Attributed []string
+		}{target.ID, term, next.TeacherIDs, ids}),
+		TeacherIDs:         append([]string{}, ids...),
+		PreviousTeacherIDs: append([]string{}, entry.TeacherIDs...),
+	}, nil
 }
-func (s *Service) PreviewAttribution(ctx context.Context, p Principal, id, teacher string) (AttributionPreview, error) {
-	v, _, err := s.attribution(ctx, p, id, teacher)
+func (s *Service) PreviewAttribution(ctx context.Context, p Principal, id string, teachers []string) (AttributionPreview, error) {
+	v, err := s.attribution(ctx, p, id, teachers)
 	if err != nil {
 		return AttributionPreview{}, err
 	}
