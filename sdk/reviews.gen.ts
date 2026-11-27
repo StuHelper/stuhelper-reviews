@@ -376,7 +376,7 @@ export interface components {
     schemas: {
         Error: {
             code: string;
-            /** @description 稳定的机器可读细分子错误码，直接映射前端八种语言（含阿拉伯语 RTL）翻译键。 */
+            /** @description 稳定的机器可读细分子错误码，直接映射前端八种语言（含阿拉伯语 RTL）翻译键。评课提交或草稿指定早于平台起始学期的学期时，返回 invalid_input、term_before_start 和字段 term_id。 */
             subcode?: string;
             /** @description 出错的请求字段或参数名称，用于表单焦点定位与 aria-invalid/aria-describedby 无障碍播报。 */
             field?: string;

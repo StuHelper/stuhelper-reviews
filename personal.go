@@ -36,7 +36,7 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 		Input    Input
 		Revision int64
 	}{in, revision})
-	if len(in.TeacherIDs) != 0 {
+	if in.Kind == "course" && in.TermID != "" {
 		var replayed bool
 		err := s.Repo.Transaction(ctx, func(t Transaction) error {
 			var err error
@@ -46,19 +46,27 @@ func (s *Service) SaveDraft(ctx context.Context, p Principal, id, key string, in
 		if err != nil || replayed {
 			return out, err
 		}
-		school, err := s.contentScope(ctx, p, "")
-		if err != nil {
-			return out, err
-		}
-		target, err := s.catalogTarget(ctx, "course", in.TargetID)
-		if err != nil {
-			return out, err
-		}
-		if target.SchoolID != school {
-			return out, ErrForbidden
-		}
-		if _, _, err := s.courseAttribution(ctx, target, in); err != nil {
-			return out, err
+		if len(in.TeacherIDs) == 0 {
+			// Saving text can retain an unverified reference, but a known earlier
+			// term is rejected even when the author selects no teachers.
+			if _, err := s.catalogTargetFor(ctx, "prepare_term", "term", in.TermID); err != nil && !errors.Is(err, ErrNotFound) {
+				return out, err
+			}
+		} else {
+			school, err := s.contentScope(ctx, p, "")
+			if err != nil {
+				return out, err
+			}
+			target, err := s.catalogTarget(ctx, "course", in.TargetID)
+			if err != nil {
+				return out, err
+			}
+			if target.SchoolID != school {
+				return out, ErrForbidden
+			}
+			if _, _, err := s.courseAttribution(ctx, target, in); err != nil {
+				return out, err
+			}
 		}
 	}
 	var draftRootID string
