@@ -136,3 +136,27 @@ func (d principalDisclosuresForErrors) Facts(ctx context.Context, p r.Principal,
 	}
 	return ordinaryDisclosures{}.Facts(ctx, p, school, course, term)
 }
+
+type missingRequirement struct {
+	r.Access
+	key string
+}
+
+func (m missingRequirement) Authorize(ctx context.Context, p r.Principal, action, school string) (r.Grant, error) {
+	if action == "publish_course" || action == "publish_mentor" {
+		return r.Grant{Requirements: []r.Requirement{{Key: m.key, State: "missing"}}}, r.ErrForbidden
+	}
+	return m.Access.Authorize(ctx, p, action, school)
+}
+
+func TestPublishReturnsMissingRequirement(t *testing.T) {
+	for key, expected := range map[string]string{"phone_bound": "phone_binding_required", "campus_eligibility": "campus_verification_required", "identity_verified": "identity_verification_required", "content_access": "content_admission_required", "unknown": "eligibility_missing"} {
+		f := fixture(t)
+		f.service.Access = missingRequirement{f.service.Access, key}
+		_, err := f.service.Create(t.Context(), student, "missing-requirement", input("course", "autumn", 4))
+		var detail r.ErrorDetail
+		if !errors.Is(err, r.ErrForbidden) || !errors.As(err, &detail) || detail.Subcode != expected {
+			t.Fatalf("requirement %s: want %s, got %+v", key, expected, detail)
+		}
+	}
+}

@@ -196,7 +196,7 @@ func (s *Service) publicationTarget(ctx context.Context, p Principal, in Input) 
 	}
 	g, e := s.authorize(ctx, p, publishAction(in.Kind), target.SchoolID)
 	if errors.Is(e, ErrForbidden) {
-		e = forbiddenErr("eligibility_missing", "")
+		e = eligibilityError(g, "eligibility_missing")
 	}
 	return target, g, e
 }
