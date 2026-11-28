@@ -64,6 +64,7 @@ scenario_tests:
   REV-SPORTS-01:
     - sports_project_test.go#TestModeratedProjectTeacherAndPreviewAudit
     - sports_project_test.go#TestSportsProjectUsesPublicTeachersAndKeepsAttribution
+    - structured_errors_test.go#TestPublishReturnsMissingRequirement
     - structured_errors_test.go#TestStructuredErrorSubcodesFieldsAndConflictRevisions
   IQ-02:
     - accountquery/query_test.go#TestAccountQueryAuthorizationAndFailures
