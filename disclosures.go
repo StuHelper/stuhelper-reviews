@@ -157,7 +157,7 @@ func (s *Service) replyGrant(ctx context.Context, p Principal, root Entry, c dis
 	}
 	g, err := s.authorize(ctx, p, action, root.SchoolID)
 	if err != nil && errors.Is(err, ErrForbidden) {
-		return g, forbiddenErr("eligibility_missing", "")
+		return g, eligibilityError(g, "eligibility_missing")
 	}
 	return g, err
 }

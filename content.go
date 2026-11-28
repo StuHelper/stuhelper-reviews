@@ -16,7 +16,7 @@ func (s *Service) contentScope(ctx context.Context, p Principal, school string) 
 	grant, e := s.authorize(ctx, p, "read_full", school)
 	if e != nil {
 		if errors.Is(e, ErrForbidden) {
-			return "", forbiddenErr("admission_required", "")
+			return "", eligibilityError(grant, "admission_required")
 		}
 		return "", e
 	}

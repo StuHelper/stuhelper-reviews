@@ -52,6 +52,26 @@ func forbiddenErr(subcode, field string) error {
 	return NewErrorDetail(ErrForbidden, subcode, field, nil)
 }
 
+// Only report conditions that the active rule explicitly found missing.
+func eligibilityError(grant Grant, fallback string) error {
+	for _, requirement := range grant.Requirements {
+		if requirement.State != "missing" {
+			continue
+		}
+		switch requirement.Key {
+		case "phone_bound":
+			return forbiddenErr("phone_binding_required", "")
+		case "campus_eligibility":
+			return forbiddenErr("campus_verification_required", "")
+		case "identity_verified":
+			return forbiddenErr("identity_verification_required", "")
+		case "content_access":
+			return forbiddenErr("content_admission_required", "")
+		}
+	}
+	return forbiddenErr(fallback, "")
+}
+
 func conflictStateErr(subcode, field string) error {
 	return NewErrorDetail(ErrConflict, subcode, field, nil)
 }
